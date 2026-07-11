@@ -814,7 +814,7 @@ export interface FullTaxSummary {
   russiaEmployerSocialInBase: number
   spainSchedule?: {
     year: number
-    quarterlyGross: [number, number, number, number]
+    quarterlyGross?: [number, number, number, number]
     payments: ScheduledTaxPayment[]
   }
 }
@@ -842,15 +842,17 @@ export function getTaxSummary(incomes: RecurringItem[], settings: BudgetSettings
   let spainSchedule: FullTaxSummary['spainSchedule']
   if (calculator?.countryCode === 'ES' && calculator.buildTaxSchedule) {
     const year = new Date().getFullYear()
-    const quarterlyGross = getQuarterlyGrossFromIncomes(
-      residenceIncomes,
-      settings.baseCurrency,
-      year,
-    )
+    const quarterlyGross =
+      calculator.id === 'es-standard'
+        ? getQuarterlyGrossFromIncomes(residenceIncomes, settings.baseCurrency, year)
+        : undefined
     spainSchedule = {
       year,
-      quarterlyGross,
-      payments: calculator.buildTaxSchedule(input, residence!.result, { year, quarterlyGross }),
+      ...(quarterlyGross ? { quarterlyGross } : {}),
+      payments: calculator.buildTaxSchedule(input, residence!.result, {
+        year,
+        quarterlyGross: quarterlyGross ?? [0, 0, 0, 0],
+      }),
     }
   }
 

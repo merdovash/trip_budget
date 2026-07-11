@@ -18,8 +18,8 @@ import {
 } from './countries'
 
 export const TAX_CALCULATORS: TaxCalculator[] = [
-  spainStandard,
   spainEmployed,
+  spainStandard,
   spainBeckham,
   thailandStandard,
   malaysiaStandard,

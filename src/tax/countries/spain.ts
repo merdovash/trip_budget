@@ -22,6 +22,8 @@ export const SPAIN_IRPF_BRACKETS: TaxBracket[] = [
 
 /** Cotización Seguridad Social — работник (доля работника, ~6,35%). */
 export const SPAIN_EMPLOYEE_SS_RATE = 0.0635
+/** Взносы работодателя (информ., упрощённо ~29,9%). */
+export const SPAIN_EMPLOYER_SS_RATE = 0.299
 export const SPAIN_SS_ANNUAL_CAP = 58_914
 
 /** Autónomo / digital nomad — упрощённые константы. */
@@ -86,28 +88,37 @@ function getAutonomoCuotaTramoLabel(annualGross: number): string {
   return 'доход > €5 000/мес.'
 }
 
+function getEmployerSocialContributions(gross: number): number {
+  return Math.min(gross, SPAIN_SS_ANNUAL_CAP) * SPAIN_EMPLOYER_SS_RATE
+}
+
 /** Сотрудник: SS уменьшает базу IRPF, затем прогрессивная шкала. */
 export function calculateSpainEmployeeTax(input: TaxInput): TaxResult {
   const gross = input.grossAnnualIncome
   const ssBase = Math.min(gross, SPAIN_SS_ANNUAL_CAP)
   const socialContributions = ssBase * SPAIN_EMPLOYEE_SS_RATE
+  const employerSocial = getEmployerSocialContributions(gross)
   const allowances = personalAllowance(input)
   const taxableBase = Math.max(0, gross - socialContributions - allowances)
   const bracketLines = breakdownProgressiveTax(taxableBase, SPAIN_IRPF_BRACKETS)
   const incomeTax = bracketLines.reduce((sum, line) => sum + line.tax, 0)
+  const monthlySS = socialContributions / 12
+  const monthlyIRPF = incomeTax / 12
+  const monthlyNet = (gross - incomeTax - socialContributions) / 12
 
   const breakdown: TaxBreakdownItem[] = [
     {
-      label: 'Валовой доход (bruto)',
+      label: 'Валовой доход (bruto anual)',
       amount: gross,
-      description: 'Сумма налогооблагаемых поступлений за год в Испании.',
+      description:
+        'Годовая сумма по nómina: bruto до удержаний IRPF и взносов работника в Seguridad Social.',
       kind: 'gross',
     },
     {
       label: 'Соцвзносы работника (Seguridad Social)',
       amount: socialContributions,
       description:
-        'Взносы работника уменьшают налоговую базу IRPF (Art. 19 Ley 35/2006). Удерживаются работодателем.',
+        'Cuota obrera (~6,35%): уменьшает базу IRPF (Art. 19 Ley 35/2006). Удерживается работодателем из bruto.',
       formula: `min(${formatEuro(gross)}, ${formatEuro(SPAIN_SS_ANNUAL_CAP)}) × ${(SPAIN_EMPLOYEE_SS_RATE * 100).toFixed(2)}% = ${formatEuro(socialContributions)}`,
       kind: 'deduction',
     },
@@ -125,33 +136,153 @@ export function calculateSpainEmployeeTax(input: TaxInput): TaxResult {
     {
       label: 'Налоговая база IRPF',
       amount: taxableBase,
-      description: 'База после вычетов, к которой применяется прогрессивная шкала.',
+      description: 'База после cuota obrera и mínimo personal — к ней применяется прогрессивная шкала.',
       formula: `${formatEuro(gross)} − ${formatEuro(socialContributions)} − ${formatEuro(allowances)} = ${formatEuro(taxableBase)}`,
       kind: 'base',
     },
     ...bracketBreakdownItems(bracketLines),
     {
-      label: 'IRPF итого (год)',
+      label: 'Retención IRPF (год)',
       amount: incomeTax,
-      description: 'Сумма налога по всем ступеням. Удерживается ежемесячно с зарплаты (retenciones).',
+      description:
+        'Сумма IRPF по ступеням. Удерживается ежемесячно с nómina (retención a cuenta).',
       kind: 'tax',
     },
     {
-      label: 'Соцвзносы итого (год)',
+      label: 'Cuota obrera SS (год)',
       amount: socialContributions,
-      description: 'Отдельный платёж работника в Seguridad Social, не входит в IRPF.',
+      description: 'Годовая сумма взносов работника — удерживается из bruto вместе с IRPF.',
       kind: 'tax',
     },
     {
-      label: 'Чистый доход после налогов',
+      label: 'Retención IRPF (среднемесячно)',
+      amount: monthlyIRPF,
+      description: 'Оценка удержания IRPF с одной nómina при равном bruto по месяцам.',
+      formula: `${formatEuro(incomeTax)} / 12 = ${formatEuro(monthlyIRPF)}`,
+      kind: 'info',
+    },
+    {
+      label: 'Cuota obrera SS (среднемесячно)',
+      amount: monthlySS,
+      description: 'Удержание взноса работника с каждой выплаты.',
+      formula: `${formatEuro(socialContributions)} / 12 = ${formatEuro(monthlySS)}`,
+      kind: 'info',
+    },
+    {
+      label: 'Neto mensual (оценка)',
+      amount: monthlyNet,
+      description: 'Bruto − IRPF − cuota obrera, среднее «на руки» в месяц.',
+      formula: `(${formatEuro(gross)} − ${formatEuro(incomeTax)} − ${formatEuro(socialContributions)}) / 12 = ${formatEuro(monthlyNet)}`,
+      kind: 'info',
+    },
+    {
+      label: 'Cuota patronal SS (информ., год)',
+      amount: employerSocial,
+      description:
+        'Взносы работодателя (~29,9%, упрощ.). Не удерживаются из зарплаты, но влияют на полную стоимость найма.',
+      formula: `min(${formatEuro(gross)}, ${formatEuro(SPAIN_SS_ANNUAL_CAP)}) × ${(SPAIN_EMPLOYER_SS_RATE * 100).toFixed(1)}% = ${formatEuro(employerSocial)}`,
+      kind: 'info',
+    },
+    {
+      label: 'Neto anual (на руки)',
       amount: gross - incomeTax - socialContributions,
-      description: 'Оценка «на руки» после IRPF и взносов работника.',
+      description: 'Bruto − retención IRPF − cuota obrera SS.',
       formula: `${formatEuro(gross)} − ${formatEuro(incomeTax)} − ${formatEuro(socialContributions)}`,
       kind: 'total',
     },
   ]
 
   return buildTaxResult(gross, incomeTax, socialContributions, breakdown, bracketLines)
+}
+
+export interface SpainSalaryPaymentDisplay {
+  id?: string
+  gross: number
+  social: number
+  irpf: number
+  net: number
+  dayOfMonth?: number
+}
+
+export interface SpainSalaryMonthlyDisplay {
+  byId: Record<string, SpainSalaryPaymentDisplay>
+  payments: SpainSalaryPaymentDisplay[]
+  totalGross: number
+  totalSocial: number
+  totalIrpf: number
+  totalNet: number
+  employerSocialMonthly: number
+}
+
+/** Помесячный расчёт nómina для формы дохода (пропорциональное распределение годового IRPF/SS). */
+export function calculateSpainSalaryMonthlyDisplay(
+  payments: { id?: string; amount: number; dayOfMonth?: number }[],
+  dependents: number,
+): SpainSalaryMonthlyDisplay | null {
+  const totalGross = payments.reduce((sum, p) => sum + p.amount, 0)
+  if (totalGross <= 0) return null
+
+  const annual = calculateSpainEmployeeTax({
+    grossAnnualIncome: totalGross * 12,
+    familySize: 2,
+    dependents,
+  })
+  const sorted = [...payments].sort(
+    (a, b) => (a.dayOfMonth ?? 1) - (b.dayOfMonth ?? 1),
+  )
+
+  const resultPayments: SpainSalaryPaymentDisplay[] = sorted.map((payment) => {
+    const share = payment.amount / totalGross
+    const social = (annual.socialContributions / 12) * share
+    const irpf = (annual.incomeTax / 12) * share
+    return {
+      id: payment.id,
+      gross: payment.amount,
+      social,
+      irpf,
+      net: payment.amount - social - irpf,
+      dayOfMonth: payment.dayOfMonth,
+    }
+  })
+
+  const byId = Object.fromEntries(
+    resultPayments.filter((p) => p.id).map((p) => [p.id!, p]),
+  )
+
+  return {
+    byId,
+    payments: resultPayments,
+    totalGross,
+    totalSocial: resultPayments.reduce((sum, p) => sum + p.social, 0),
+    totalIrpf: resultPayments.reduce((sum, p) => sum + p.irpf, 0),
+    totalNet: resultPayments.reduce((sum, p) => sum + p.net, 0),
+    employerSocialMonthly: getEmployerSocialContributions(totalGross * 12) / 12,
+  }
+}
+
+/** Ежемесячные retenciones с nómina (для детализации, не modelo 130). */
+export function buildSpainEmployeeSchedule(
+  input: TaxInput,
+  context: TaxScheduleContext,
+): ScheduledTaxPayment[] {
+  const result = calculateSpainEmployeeTax(input)
+  const monthlySS = result.socialContributions / 12
+  const monthlyIRPF = result.incomeTax / 12
+
+  return Array.from({ length: 12 }, (_, index) => {
+    const month = index + 1
+    return {
+      month,
+      day: 28,
+      year: context.year,
+      social: monthlySS,
+      incomeTax: monthlyIRPF,
+      label: 'Retenciones nómina',
+      description:
+        'Удержание cuota obrera SS и retención IRPF с bruto при выплате nómina (оценка).',
+      formula: `SS ${formatEuro(monthlySS)} + IRPF ${formatEuro(monthlyIRPF)} = ${formatEuro(monthlySS + monthlyIRPF)}`,
+    }
+  })
 }
 
 /** Autónomo / digital nomad: расходы 30%, SS как вычет, IRPF по шкале. */
@@ -295,25 +426,26 @@ export function buildSpainDigitalNomadSchedule(
   return payments
 }
 
-export const spainStandard: TaxCalculator = {
-  id: 'es-standard',
-  countryCode: 'ES',
-  name: 'Стандартный IRPF (autónomo)',
-  description:
-    'Autónomo / digital nomad: соцвзносы уменьшают базу, прогрессивный IRPF, авансы modelo 130 ежеквартально (20%).',
-  taxDistribution: 'scheduled',
-  calculate: calculateSpainDigitalNomadTax,
-  buildTaxSchedule: (input, _result, context) => buildSpainDigitalNomadSchedule(input, context),
-}
-
 export const spainEmployed: TaxCalculator = {
   id: 'es-employed',
   countryCode: 'ES',
-  name: 'IRPF (наёмный работник)',
+  name: 'IRPF (наёмный работник / nómina)',
   description:
-    'Соцвзносы работника (~6,35%) уменьшают налоговую базу, затем прогрессивный IRPF. Удержание с зарплаты.',
+    'Digital nomad по контракту с испанским работодателем: cuota obrera SS (~6,35%) уменьшает базу IRPF, retención удерживается с bruto ежемесячно. Без modelo 130.',
   taxDistribution: 'with_income',
   calculate: calculateSpainEmployeeTax,
+  buildTaxSchedule: (input, _result, context) => buildSpainEmployeeSchedule(input, context),
+}
+
+export const spainStandard: TaxCalculator = {
+  id: 'es-standard',
+  countryCode: 'ES',
+  name: 'IRPF (autónomo / фриланс)',
+  description:
+    'Autónomo: gastos deducibles, cotización RETA, прогрессивный IRPF, авансы modelo 130 ежеквартально (20%).',
+  taxDistribution: 'scheduled',
+  calculate: calculateSpainDigitalNomadTax,
+  buildTaxSchedule: (input, _result, context) => buildSpainDigitalNomadSchedule(input, context),
 }
 
 export const spainBeckham: TaxCalculator = {

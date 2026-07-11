@@ -72,7 +72,7 @@ export type AppSection = 'dashboard' | 'settings' | 'income' | 'expenses' | 'one
 export const DEFAULT_SETTINGS: BudgetSettings = {
   baseCurrency: 'EUR',
   countryCode: 'ES',
-  taxRegimeId: 'es-standard',
+  taxRegimeId: 'es-employed',
   familySize: 2,
   dependents: 0,
   horizonMonths: 12,

@@ -86,6 +86,7 @@ export function Dashboard() {
         <SpainTaxDetailPanel
           regimeName={taxSummary.residence.calculator.name}
           regimeDescription={taxSummary.residence.calculator.description}
+          taxRegimeId={taxSummary.residence.calculator.id}
           result={taxSummary.residence.result}
           currency={settings.baseCurrency}
           paymentSchedule={taxSummary.spainSchedule?.payments}

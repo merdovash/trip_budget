@@ -20,7 +20,10 @@ export interface IncomeCategoryDef {
   showSalaryCountry?: boolean
 }
 
-export const SALARY_SOURCE_COUNTRIES = [{ code: 'RU', label: 'Россия' }] as const
+export const SALARY_SOURCE_COUNTRIES = [
+  { code: 'ES', label: 'Испания' },
+  { code: 'RU', label: 'Россия' },
+] as const
 
 export const INCOME_CATEGORY_DEFS: IncomeCategoryDef[] = [
   {
@@ -115,7 +118,7 @@ export function createInitialIncomeForm(baseCurrency: string): IncomeFormState {
     frequency: 'monthly',
     startDate: todayIsoDate(),
     endDate: '',
-    salaryCountryCode: 'RU',
+    salaryCountryCode: 'ES',
     includeInResidenceTax: true,
   }
 }
@@ -155,7 +158,7 @@ export function incomeItemToFormState(item: RecurringItem): IncomeFormState {
     frequency: item.frequency,
     startDate: item.startDate,
     endDate: item.endDate ?? '',
-    salaryCountryCode: item.salaryCountryCode ?? 'RU',
+    salaryCountryCode: item.salaryCountryCode ?? 'ES',
     includeInResidenceTax: isIncludedInResidenceTax(item),
   }
 }

@@ -125,6 +125,7 @@ interface SpainTaxDetailPanelProps {
   title?: string
   regimeName: string
   regimeDescription?: string
+  taxRegimeId?: string
   result: TaxResult
   currency: string
   paymentSchedule?: ScheduledTaxPayment[]
@@ -135,16 +136,21 @@ export function SpainTaxDetailPanel({
   title = 'Налоги Испании — подробная расшифровка',
   regimeName,
   regimeDescription,
+  taxRegimeId,
   result,
   currency,
   paymentSchedule,
   quarterlyGross,
 }: SpainTaxDetailPanelProps) {
+  const isEmployed = taxRegimeId === 'es-employed'
+  const panelTitle = isEmployed
+    ? 'Налоги Испании — nómina (наёмный работник)'
+    : title
   const grouped = groupByKind(result.breakdown)
 
   return (
     <Card>
-      <h2 className="mb-2 text-lg font-semibold">{title}</h2>
+      <h2 className="mb-2 text-lg font-semibold">{panelTitle}</h2>
       <p className="text-sm text-slate-500">
         Режим: <span className="font-medium text-slate-700">{regimeName}</span>
         {' · '}
@@ -174,7 +180,7 @@ export function SpainTaxDetailPanel({
         })}
       </div>
 
-      {quarterlyGross && (
+      {quarterlyGross && taxRegimeId === 'es-standard' && (
         <section className="mt-5">
           <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">
             Доход по кварталам
@@ -196,7 +202,7 @@ export function SpainTaxDetailPanel({
       {paymentSchedule && paymentSchedule.length > 0 && (
         <section className="mt-5">
           <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">
-            График платежей (кассовый)
+            {isEmployed ? 'Удержания с nómina (оценка)' : 'График платежей (кассовый)'}
           </h3>
           <ul className="space-y-2">
             {collapseRecurringPayments(paymentSchedule, currency)

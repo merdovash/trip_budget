@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildSpainDigitalNomadSchedule,
+  buildSpainEmployeeSchedule,
   calculateSpainDigitalNomadTax,
   calculateSpainEmployeeTax,
+  calculateSpainSalaryMonthlyDisplay,
   SPAIN_IRPF_BRACKETS,
 } from '../tax/countries/spain'
 import { calculateProgressiveTax } from '../tax/types'
@@ -24,8 +26,30 @@ describe('Spain employee tax', () => {
   it('includes detailed breakdown with bracket lines', () => {
     const result = calculateSpainEmployeeTax(baseInput)
     expect(result.bracketLines?.length).toBeGreaterThan(0)
-    expect(result.breakdown.some((item) => item.kind === 'bracket')).toBe(true)
-    expect(result.breakdown.some((item) => item.formula)).toBe(true)
+    expect(result.breakdown.some((item) => item.label.includes('Neto mensual'))).toBe(true)
+    expect(result.breakdown.some((item) => item.label.includes('patronal'))).toBe(true)
+  })
+
+  it('schedules monthly payroll withholdings', () => {
+    const schedule = buildSpainEmployeeSchedule(baseInput, { year: 2026, quarterlyGross: [0, 0, 0, 0] })
+    expect(schedule).toHaveLength(12)
+    expect(schedule[0].social).toBeGreaterThan(0)
+    expect(schedule[0].incomeTax).toBeGreaterThan(0)
+    expect(schedule[0].formula).toBeTruthy()
+  })
+
+  it('calculates monthly nómina display with SS and IRPF', () => {
+    const display = calculateSpainSalaryMonthlyDisplay(
+      [
+        { id: 'advance', amount: 2000, dayOfMonth: 25 },
+        { id: 'payroll', amount: 3000, dayOfMonth: 10 },
+      ],
+      0,
+    )
+    expect(display?.totalGross).toBe(5000)
+    expect(display?.totalNet).toBeLessThan(display!.totalGross)
+    expect(display?.totalSocial).toBeGreaterThan(0)
+    expect(display?.totalIrpf).toBeGreaterThan(0)
   })
 })
 

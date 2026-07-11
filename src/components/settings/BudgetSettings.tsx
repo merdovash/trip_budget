@@ -10,6 +10,7 @@ import { todayIsoDate } from '../../lib/format'
 import { Button, Card, Field, Input, Select, DateInput } from '../ui/FormControls'
 import { CurrencySelect } from '../ui/CurrencySelect'
 import { CurrencyConversionHint } from '../ui/CurrencyConversionHint'
+import { SavedSettingsPanel } from './SavedSettingsPanel'
 
 export function BudgetSettingsPanel() {
   const settings = useBudgetStore((s) => s.settings)
@@ -200,6 +201,8 @@ export function BudgetSettingsPanel() {
           Сбросить настройки
         </Button>
       </div>
+
+      <SavedSettingsPanel />
     </Card>
   )
 }

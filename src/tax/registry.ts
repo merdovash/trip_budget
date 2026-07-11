@@ -10,6 +10,7 @@ import {
   mexicoStandard,
   portugalStandard,
   spainBeckham,
+  spainEmployed,
   spainStandard,
   thailandStandard,
   uaeNoTax,
@@ -18,6 +19,7 @@ import {
 
 export const TAX_CALCULATORS: TaxCalculator[] = [
   spainStandard,
+  spainEmployed,
   spainBeckham,
   thailandStandard,
   malaysiaStandard,

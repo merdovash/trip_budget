@@ -15,8 +15,16 @@ import type {
 import { FOOD_EXPENSE_CATEGORY } from '../config/foodBudget'
 
 import { convertCurrency } from '../lib/currency'
-
 import { getTaxCalculator } from '../tax/registry'
+import type { ScheduledTaxPayment, TaxResult } from '../tax/types'
+import {
+  createRussiaYtdTracker,
+  filterResidenceTaxableIncomes,
+  russiaEmployerSocialAnnualInBase,
+  russiaSourceTaxForDay,
+  russiaSourceTaxForMonth,
+  summarizeRussiaSalaries,
+} from '../tax/incomeSourceTax'
 
 
 
@@ -527,6 +535,76 @@ export function calculateAnnualGrossIncome(
 
 
 
+export function getQuarterlyGrossFromIncomes(
+  incomes: RecurringItem[],
+  baseCurrency: string,
+  year: number,
+): [number, number, number, number] {
+  const quarters: [number, number, number, number] = [0, 0, 0, 0]
+  for (let q = 0; q < 4; q++) {
+    for (let m = 0; m < 3; m++) {
+      const month = q * 3 + m + 1
+      const monthKey = `${year}-${String(month).padStart(2, '0')}`
+      quarters[q] += sumRecurringForMonth(incomes, monthKey, baseCurrency)
+    }
+  }
+  return quarters
+}
+
+function collectYearsFromDayKeys(dayKeys: string[]): number[] {
+  return [...new Set(dayKeys.map((d) => parseIsoDate(d).year))]
+}
+
+function buildScheduledTaxByDate(
+  incomes: RecurringItem[],
+  settings: BudgetSettings,
+  taxResult: TaxResult,
+  years: number[],
+): Map<string, { social: number; incomeTax: number }> {
+  const calculator = getTaxCalculator(settings.taxRegimeId)
+  const map = new Map<string, { social: number; incomeTax: number }>()
+  if (!calculator?.buildTaxSchedule || calculator.taxDistribution !== 'scheduled') {
+    return map
+  }
+
+  const residenceIncomes = filterResidenceTaxableIncomes(incomes)
+  const input = {
+    grossAnnualIncome: calculateAnnualGrossIncome(residenceIncomes, settings.baseCurrency),
+    familySize: settings.familySize,
+    dependents: settings.dependents,
+  }
+
+  for (const year of years) {
+    const quarterlyGross = getQuarterlyGrossFromIncomes(residenceIncomes, settings.baseCurrency, year)
+    const payments = calculator.buildTaxSchedule(input, taxResult, { year, quarterlyGross })
+    for (const payment of payments) {
+      const y = payment.year ?? year
+      const dateKey = `${y}-${String(payment.month).padStart(2, '0')}-${String(payment.day).padStart(2, '0')}`
+      const existing = map.get(dateKey) ?? { social: 0, incomeTax: 0 }
+      map.set(dateKey, {
+        social: existing.social + payment.social,
+        incomeTax: existing.incomeTax + payment.incomeTax,
+      })
+    }
+  }
+
+  return map
+}
+
+function scheduledTaxTotalForMonth(
+  monthKey: string,
+  scheduledTaxMap: Map<string, { social: number; incomeTax: number }>,
+): number {
+  const prefix = `${monthKey}-`
+  let total = 0
+  for (const [date, amounts] of scheduledTaxMap) {
+    if (date.startsWith(prefix)) {
+      total += amounts.social + amounts.incomeTax
+    }
+  }
+  return total
+}
+
 function getEffectiveTaxRate(grossAnnualIncome: number, settings: BudgetSettings): number {
 
   if (grossAnnualIncome <= 0) return 0
@@ -567,56 +645,70 @@ export function calculateDailyBudgetProjection(
 
   const dayKeys = generateDayKeys(getProjectionStartDate(settings), settings.horizonMonths)
 
-  const grossAnnualIncome = calculateAnnualGrossIncome(incomes, baseCurrency)
-
+  const residenceIncomes = filterResidenceTaxableIncomes(incomes)
+  const grossAnnualIncome = calculateAnnualGrossIncome(residenceIncomes, baseCurrency)
+  const calculator = getTaxCalculator(settings.taxRegimeId)
+  const taxResult = calculator?.calculate({
+    grossAnnualIncome,
+    familySize: settings.familySize,
+    dependents: settings.dependents,
+  })
   const taxRate = getEffectiveTaxRate(grossAnnualIncome, settings)
+  const scheduledTaxMap = taxResult
+    ? buildScheduledTaxByDate(incomes, settings, taxResult, collectYearsFromDayKeys(dayKeys))
+    : new Map()
+  const useScheduled = calculator?.taxDistribution === 'scheduled'
 
-
+  let russiaTracker = createRussiaYtdTracker()
+  let trackerYear = -1
 
   let cumulativeBalance = getInitialBalanceInBase(settings)
 
-
-
   return dayKeys.map((date) => {
+    const { year } = parseIsoDate(date)
+    if (year !== trackerYear) {
+      russiaTracker = createRussiaYtdTracker()
+      trackerYear = year
+    }
 
     const grossIncome = incomeForDay(incomes, date, baseCurrency)
-
     const recurringExpenses = expenseForDay(expenses, date, baseCurrency)
-
     const oneTimeTotal = sumOneTimeForDay(oneTimeExpenses, date, baseCurrency)
 
-    const taxes = grossIncome * taxRate
+    const russiaTax = russiaSourceTaxForDay(
+      incomes,
+      date,
+      settings.dependents,
+      russiaTracker,
+      baseCurrency,
+    )
 
+    const scheduled = scheduledTaxMap.get(date)
+    let residenceTax = 0
+    if (scheduled) {
+      residenceTax = scheduled.social + scheduled.incomeTax
+    } else if (!useScheduled) {
+      const residenceGross = incomeForDay(residenceIncomes, date, baseCurrency)
+      residenceTax = residenceGross * taxRate
+    }
+
+    const taxes = russiaTax + residenceTax
     const netIncome = grossIncome - taxes
 
     const balance = netIncome - recurringExpenses - oneTimeTotal
-
     cumulativeBalance += balance
 
-
-
     return {
-
       date,
-
       grossIncome,
-
       netIncome,
-
       recurringExpenses,
-
       oneTimeExpenses: oneTimeTotal,
-
       taxes,
-
       balance,
-
       cumulativeBalance,
-
     }
-
   })
-
 }
 
 
@@ -637,48 +729,47 @@ export function calculateBudgetProjection(
 
   const monthKeys = generateMonthKeys(getProjectionStartDate(settings), settings.horizonMonths)
 
-  const grossAnnualIncome = calculateAnnualGrossIncome(incomes, baseCurrency)
+  const residenceIncomes = filterResidenceTaxableIncomes(incomes)
+  const grossAnnualIncome = calculateAnnualGrossIncome(residenceIncomes, baseCurrency)
 
   const calculator = getTaxCalculator(settings.taxRegimeId)
 
   const taxResult = calculator?.calculate({
-
     grossAnnualIncome,
-
     familySize: settings.familySize,
-
     dependents: settings.dependents,
-
   })
 
-
-
   const monthlyGross = grossAnnualIncome / 12
+  const monthlyTax =
+    taxResult && calculator?.taxDistribution !== 'scheduled'
+      ? taxResult.incomeTax / 12 + taxResult.socialContributions / 12
+      : 0
 
-  const monthlyTax = taxResult ? taxResult.incomeTax / 12 + taxResult.socialContributions / 12 : 0
-
-
+  const projectionYears = monthKeys.map((m) => Number(m.split('-')[0]))
+  const scheduledTaxMap = taxResult
+    ? buildScheduledTaxByDate(incomes, settings, taxResult, [...new Set(projectionYears)])
+    : new Map()
+  const useScheduled = calculator?.taxDistribution === 'scheduled'
 
   let cumulativeBalance = getInitialBalanceInBase(settings)
 
-
-
   return monthKeys.map((month) => {
-
     const grossIncome = sumRecurringForMonth(incomes, month, baseCurrency)
-
     const recurringExpenses = sumRecurringForMonth(expenses, month, baseCurrency)
-
     const oneTimeTotal = sumOneTimeForMonth(oneTimeExpenses, month, baseCurrency)
 
-
-
     const grossForTax = grossIncome > 0 ? grossIncome : monthlyGross
-
-    const taxRatio = grossAnnualIncome > 0 ? grossForTax / (grossAnnualIncome / 12) : 1
-
-    const taxes = monthlyTax * taxRatio
-
+    const residenceTax = useScheduled
+      ? scheduledTaxTotalForMonth(month, scheduledTaxMap)
+      : monthlyTax * (grossAnnualIncome > 0 ? grossForTax / (grossAnnualIncome / 12) : 1)
+    const russiaTax = russiaSourceTaxForMonth(
+      incomes,
+      month,
+      settings.dependents,
+      baseCurrency,
+    )
+    const taxes = residenceTax + russiaTax
     const netIncome = grossForTax - taxes
 
     const balance = netIncome - recurringExpenses - oneTimeTotal
@@ -713,30 +804,65 @@ export function calculateBudgetProjection(
 
 
 
-export function getTaxSummary(incomes: RecurringItem[], settings: BudgetSettings) {
+export interface FullTaxSummary {
+  residence: {
+    calculator: NonNullable<ReturnType<typeof getTaxCalculator>>
+    result: TaxResult
+  } | null
+  russiaSalary: ReturnType<typeof summarizeRussiaSalaries>
+  russiaNdflInBase: number
+  russiaEmployerSocialInBase: number
+  spainSchedule?: {
+    year: number
+    quarterlyGross: [number, number, number, number]
+    payments: ScheduledTaxPayment[]
+  }
+}
 
-  const grossAnnualIncome = calculateAnnualGrossIncome(incomes, settings.baseCurrency)
-
+export function getTaxSummary(incomes: RecurringItem[], settings: BudgetSettings): FullTaxSummary {
+  const residenceIncomes = filterResidenceTaxableIncomes(incomes)
+  const grossAnnualIncome = calculateAnnualGrossIncome(residenceIncomes, settings.baseCurrency)
   const calculator = getTaxCalculator(settings.taxRegimeId)
+  const russiaSalary = summarizeRussiaSalaries(incomes, settings.dependents)
 
-  if (!calculator) return null
-
-  return {
-
-    calculator,
-
-    result: calculator.calculate({
-
-      grossAnnualIncome,
-
-      familySize: settings.familySize,
-
-      dependents: settings.dependents,
-
-    }),
-
+  const input = {
+    grossAnnualIncome,
+    familySize: settings.familySize,
+    dependents: settings.dependents,
   }
 
+  const residence =
+    calculator
+      ? {
+          calculator,
+          result: calculator.calculate(input),
+        }
+      : null
+
+  let spainSchedule: FullTaxSummary['spainSchedule']
+  if (calculator?.countryCode === 'ES' && calculator.buildTaxSchedule) {
+    const year = new Date().getFullYear()
+    const quarterlyGross = getQuarterlyGrossFromIncomes(
+      residenceIncomes,
+      settings.baseCurrency,
+      year,
+    )
+    spainSchedule = {
+      year,
+      quarterlyGross,
+      payments: calculator.buildTaxSchedule(input, residence!.result, { year, quarterlyGross }),
+    }
+  }
+
+  return {
+    residence,
+    russiaSalary,
+    russiaNdflInBase: russiaSalary
+      ? convertCurrency(russiaSalary.ndfl, 'RUB', settings.baseCurrency)
+      : 0,
+    russiaEmployerSocialInBase: russiaEmployerSocialAnnualInBase(incomes, settings.baseCurrency),
+    spainSchedule,
+  }
 }
 
 

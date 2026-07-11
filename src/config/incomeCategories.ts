@@ -16,7 +16,10 @@ export interface IncomeCategoryDef {
   defaultFrequency: Frequency
   showFrequency?: boolean
   showCustomName?: boolean
+  showSalaryCountry?: boolean
 }
+
+export const SALARY_SOURCE_COUNTRIES = [{ code: 'RU', label: 'Россия' }] as const
 
 export const INCOME_CATEGORY_DEFS: IncomeCategoryDef[] = [
   {
@@ -28,6 +31,7 @@ export const INCOME_CATEGORY_DEFS: IncomeCategoryDef[] = [
     ],
     defaultFrequency: 'monthly',
     showFrequency: false,
+    showSalaryCountry: true,
   },
   {
     id: 'freelance',
@@ -97,6 +101,7 @@ export interface IncomeFormState {
   frequency: Frequency
   startDate: string
   endDate: string
+  salaryCountryCode: string
 }
 
 export function createInitialIncomeForm(baseCurrency: string): IncomeFormState {
@@ -108,6 +113,7 @@ export function createInitialIncomeForm(baseCurrency: string): IncomeFormState {
     frequency: 'monthly',
     startDate: todayIsoDate(),
     endDate: '',
+    salaryCountryCode: 'RU',
   }
 }
 
@@ -146,5 +152,6 @@ export function incomeItemToFormState(item: RecurringItem): IncomeFormState {
     frequency: item.frequency,
     startDate: item.startDate,
     endDate: item.endDate ?? '',
+    salaryCountryCode: item.salaryCountryCode ?? 'RU',
   }
 }

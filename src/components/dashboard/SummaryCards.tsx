@@ -62,33 +62,51 @@ export function SummaryCards({
 }
 
 interface TaxBreakdownProps {
+  title?: string
   regimeName: string
   effectiveRate: number
-  breakdown: { label: string; amount: number }[]
+  breakdown: { label: string; amount: number; description?: string; formula?: string }[]
   currency: string
+  footer?: string
 }
 
 export function TaxBreakdown({
+  title = 'Налоговая детализация',
   regimeName,
   effectiveRate,
   breakdown,
   currency,
+  footer,
 }: TaxBreakdownProps) {
+  const hasDetails = breakdown.some((item) => item.description || item.formula)
+
   return (
     <Card>
-      <h2 className="mb-3 text-lg font-semibold">Налоговая детализация</h2>
+      <h2 className="mb-3 text-lg font-semibold">{title}</h2>
       <p className="text-sm text-slate-500">
         Режим: <span className="font-medium text-slate-700">{regimeName}</span> · Эффективная
         ставка: <span className="font-medium text-slate-700">{formatPercent(effectiveRate)}</span>
       </p>
-      <ul className="mt-4 space-y-2">
+      <ul className={`mt-4 space-y-2 ${hasDetails ? '' : ''}`}>
         {breakdown.map((item) => (
-          <li key={item.label} className="flex justify-between text-sm">
-            <span className="text-slate-600">{item.label}</span>
-            <span className="font-medium">{formatCurrency(item.amount, currency)}</span>
+          <li
+            key={item.label}
+            className={hasDetails ? 'rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-2' : ''}
+          >
+            <div className="flex justify-between text-sm">
+              <span className="text-slate-600">{item.label}</span>
+              <span className="font-medium">{formatCurrency(item.amount, currency)}</span>
+            </div>
+            {item.description && (
+              <p className="mt-1 text-xs text-slate-500">{item.description}</p>
+            )}
+            {item.formula && (
+              <p className="mt-0.5 font-mono text-xs text-slate-600">{item.formula}</p>
+            )}
           </li>
         ))}
       </ul>
+      {footer && <p className="mt-3 text-xs text-slate-500">{footer}</p>}
     </Card>
   )
 }

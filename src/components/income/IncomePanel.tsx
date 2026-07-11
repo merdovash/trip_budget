@@ -8,9 +8,11 @@ import {
   getIncomeCategoryDef,
   incomeItemToFormState,
   INCOME_CATEGORY_DEFS,
+  SALARY_SOURCE_COUNTRIES,
   type IncomeFormState,
   type IncomePaymentEntry,
 } from '../../config/incomeCategories'
+import { calculateRussiaSalaryMonthlyDisplay } from '../../tax/countries/russia'
 import { useBudgetStore } from '../../store/budgetStore'
 import { FREQUENCY_LABELS, type Frequency, type IncomePayment, type RecurringItem } from '../../types/budget'
 import { Button, Card, EmptyState, Field, Input, Select, DateInput } from '../ui/FormControls'
@@ -34,6 +36,19 @@ function IncomeForm({ initialItem, onSubmit, onCancel }: IncomeFormProps) {
   const totalAmount = Object.values(form.payments).reduce((sum, entry) => sum + (entry.amount || 0), 0)
   const hasMultiplePayments = (categoryDef?.paymentFields.length ?? 0) > 1
   const isEditing = Boolean(initialItem)
+  const isRussiaSalary =
+    categoryDef?.showSalaryCountry && form.salaryCountryCode === 'RU'
+
+  const salaryDisplay = isRussiaSalary
+    ? calculateRussiaSalaryMonthlyDisplay(
+        categoryDef?.paymentFields.map((field) => ({
+          id: field.id,
+          amount: form.payments[field.id]?.amount ?? 0,
+          dayOfMonth: form.payments[field.id]?.dayOfMonth,
+        })) ?? [],
+        settings.dependents,
+      )
+    : null
 
   function handleCategoryChange(categoryId: string) {
     const def = getIncomeCategoryDef(categoryId)
@@ -43,6 +58,7 @@ function IncomeForm({ initialItem, onSubmit, onCancel }: IncomeFormProps) {
       name: '',
       payments: createEmptyPaymentEntries(categoryId),
       frequency: def?.defaultFrequency ?? 'monthly',
+      salaryCountryCode: def?.showSalaryCountry ? 'RU' : form.salaryCountryCode,
     })
     setErrors({})
   }
@@ -118,6 +134,7 @@ function IncomeForm({ initialItem, onSubmit, onCancel }: IncomeFormProps) {
       payments: hasMultiplePayments ? payments : undefined,
       startDate: form.startDate,
       endDate: form.endDate || undefined,
+      ...(categoryDef.showSalaryCountry ? { salaryCountryCode: form.salaryCountryCode } : {}),
     }
   }
 
@@ -151,6 +168,21 @@ function IncomeForm({ initialItem, onSubmit, onCancel }: IncomeFormProps) {
         </Select>
       </Field>
 
+      {categoryDef?.showSalaryCountry && (
+        <Field label="Страна выплаты зарплаты">
+          <Select
+            value={form.salaryCountryCode}
+            onChange={(e) => setForm({ ...form, salaryCountryCode: e.target.value })}
+          >
+            {SALARY_SOURCE_COUNTRIES.map((c) => (
+              <option key={c.code} value={c.code}>
+                {c.label}
+              </option>
+            ))}
+          </Select>
+        </Field>
+      )}
+
       {categoryDef && (
         <>
           {categoryDef.showCustomName && (
@@ -165,6 +197,7 @@ function IncomeForm({ initialItem, onSubmit, onCancel }: IncomeFormProps) {
               const amountError = errors[`payment_${field.id}`]
               const dayError = errors[`day_${field.id}`]
               const combinedError = [amountError, dayError].filter(Boolean).join(' · ')
+              const paymentTax = salaryDisplay?.byId[field.id]
 
               return (
                 <Field key={field.id} label={field.label} error={combinedError || undefined}>
@@ -182,7 +215,7 @@ function IncomeForm({ initialItem, onSubmit, onCancel }: IncomeFormProps) {
                       type="number"
                       min={0}
                       step={0.01}
-                      placeholder="Сумма"
+                      placeholder="Gross"
                       className="min-w-0 flex-1"
                       value={entry.amount || ''}
                       onChange={(e) => updatePayment(field.id, { amount: Number(e.target.value) })}
@@ -202,7 +235,17 @@ function IncomeForm({ initialItem, onSubmit, onCancel }: IncomeFormProps) {
                     ) : null}
                   </div>
                   {field.hint && <span className="text-xs text-slate-500">{field.hint}</span>}
-                  {!hasMultiplePayments && (
+                  {paymentTax && paymentTax.gross > 0 && (
+                    <SalaryPaymentTaxLines
+                      gross={paymentTax.gross}
+                      ndfl={paymentTax.ndfl}
+                      net={paymentTax.net}
+                      currency={form.currency}
+                      showEmployerSocial={!hasMultiplePayments}
+                      employerSocial={salaryDisplay?.employerSocialMonthly}
+                    />
+                  )}
+                  {!hasMultiplePayments && !isRussiaSalary && (
                     <CurrencyConversionHint
                       amount={entry.amount}
                       currency={form.currency}
@@ -214,17 +257,48 @@ function IncomeForm({ initialItem, onSubmit, onCancel }: IncomeFormProps) {
             })}
           </div>
 
-          {hasMultiplePayments && totalAmount > 0 && (
+          {(hasMultiplePayments || isRussiaSalary) && totalAmount > 0 && (
             <div>
-              <CurrencyConversionHint
-                amount={totalAmount}
-                currency={form.currency}
-                baseCurrency={settings.baseCurrency}
-              />
-              <p className="mt-1 text-sm text-slate-600">
-                Итого за месяц:{' '}
-                <span className="font-medium">{formatCurrency(totalAmount, form.currency)}</span>
-              </p>
+              {!isRussiaSalary && (
+                <CurrencyConversionHint
+                  amount={totalAmount}
+                  currency={form.currency}
+                  baseCurrency={settings.baseCurrency}
+                />
+              )}
+              {isRussiaSalary && salaryDisplay ? (
+                <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
+                  <p className="font-medium text-slate-800">Итого за месяц</p>
+                  <dl className="mt-2 space-y-1 text-slate-600">
+                    <div className="flex justify-between gap-4">
+                      <dt>Gross (до вычетов)</dt>
+                      <dd className="font-medium">{formatCurrency(salaryDisplay.totalGross, form.currency)}</dd>
+                    </div>
+                    <div className="flex justify-between gap-4 text-red-700">
+                      <dt>НДФЛ</dt>
+                      <dd>−{formatCurrency(salaryDisplay.totalNdfl, form.currency)}</dd>
+                    </div>
+                    <div className="flex justify-between gap-4 border-t border-slate-200 pt-1 font-medium text-emerald-700">
+                      <dt>На руки</dt>
+                      <dd>{formatCurrency(salaryDisplay.totalNet, form.currency)}</dd>
+                    </div>
+                    <div className="flex justify-between gap-4 text-slate-500">
+                      <dt>Соцвзносы работодателя</dt>
+                      <dd>{formatCurrency(salaryDisplay.employerSocialMonthly, form.currency)}/мес.</dd>
+                    </div>
+                  </dl>
+                  <CurrencyConversionHint
+                    amount={salaryDisplay.totalNet}
+                    currency={form.currency}
+                    baseCurrency={settings.baseCurrency}
+                  />
+                </div>
+              ) : (
+                <p className="mt-1 text-sm text-slate-600">
+                  Итого за месяц:{' '}
+                  <span className="font-medium">{formatCurrency(totalAmount, form.currency)}</span>
+                </p>
+              )}
             </div>
           )}
 
@@ -283,19 +357,91 @@ function IncomeForm({ initialItem, onSubmit, onCancel }: IncomeFormProps) {
   )
 }
 
-function AmountCell({ item, baseCurrency }: { item: RecurringItem; baseCurrency: string }) {
+function SalaryPaymentTaxLines({
+  gross,
+  ndfl,
+  net,
+  currency,
+  showEmployerSocial,
+  employerSocial,
+}: {
+  gross: number
+  ndfl: number
+  net: number
+  currency: string
+  showEmployerSocial?: boolean
+  employerSocial?: number
+}) {
+  return (
+    <div className="mt-1.5 space-y-0.5 text-xs">
+      <div className="flex justify-between gap-2 text-slate-500">
+        <span>Gross</span>
+        <span>{formatCurrency(gross, currency)}</span>
+      </div>
+      <div className="flex justify-between gap-2 text-red-600">
+        <span>НДФЛ</span>
+        <span>−{formatCurrency(ndfl, currency)}</span>
+      </div>
+      <div className="flex justify-between gap-2 font-medium text-emerald-700">
+        <span>На руки</span>
+        <span>{formatCurrency(net, currency)}</span>
+      </div>
+      {showEmployerSocial && employerSocial !== undefined && employerSocial > 0 && (
+        <div className="flex justify-between gap-2 text-slate-500">
+          <span>Соцвзносы работодателя</span>
+          <span>{formatCurrency(employerSocial, currency)}/мес.</span>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function AmountCell({
+  item,
+  baseCurrency,
+  dependents,
+}: {
+  item: RecurringItem
+  baseCurrency: string
+  dependents: number
+}) {
   useExchangeRateStore((s) => s.rateDate)
+
+  const ruDisplay =
+    item.categoryId === 'salary' && item.salaryCountryCode === 'RU'
+      ? calculateRussiaSalaryMonthlyDisplay(
+          (item.payments ?? [{ amount: item.amount, dayOfMonth: undefined }]).map((p, i) => ({
+            id: String(i),
+            amount: p.amount,
+            dayOfMonth: 'dayOfMonth' in p ? p.dayOfMonth : undefined,
+          })),
+          dependents,
+        )
+      : null
 
   if (item.payments && item.payments.length > 1) {
     return (
       <td className="py-2 pr-4">
-        {item.payments.map((payment) => {
-          const converted = convertCurrency(payment.amount, item.currency, baseCurrency)
+        {item.payments.map((payment, index) => {
+          const tax = ruDisplay?.payments.find(
+            (p) => p.dayOfMonth === payment.dayOfMonth && p.gross === payment.amount,
+          ) ?? ruDisplay?.payments[index]
           const showConversion = item.currency !== baseCurrency
+          const displayAmount = tax?.net ?? payment.amount
+          const converted = convertCurrency(displayAmount, item.currency, baseCurrency)
+
           return (
             <div key={payment.label} className="text-sm">
               <span className="text-slate-500">{payment.label}: </span>
-              {formatCurrency(payment.amount, item.currency)}
+              <span className="font-medium text-emerald-700">
+                {formatCurrency(displayAmount, item.currency)}
+              </span>
+              {tax && (
+                <span className="text-xs text-slate-400">
+                  {' '}
+                  (gross {formatCurrency(payment.amount, item.currency)})
+                </span>
+              )}
               {payment.dayOfMonth && (
                 <span className="text-slate-500"> · {formatDayOfMonth(payment.dayOfMonth)}</span>
               )}
@@ -307,19 +453,40 @@ function AmountCell({ item, baseCurrency }: { item: RecurringItem; baseCurrency:
             </div>
           )
         })}
-        <div className="mt-1 border-t border-slate-100 pt-1 font-medium">
-          Итого: {formatCurrency(item.amount, item.currency)}
+        <div className="mt-1 border-t border-slate-100 pt-1">
+          <div className="font-medium text-emerald-700">
+            На руки: {formatCurrency(ruDisplay?.totalNet ?? item.amount, item.currency)}
+          </div>
+          {ruDisplay && (
+            <div className="text-xs text-slate-500">
+              НДФЛ −{formatCurrency(ruDisplay.totalNdfl, item.currency)} · взносы{' '}
+              {formatCurrency(ruDisplay.employerSocialMonthly, item.currency)}/мес.
+            </div>
+          )}
         </div>
       </td>
     )
   }
 
-  const converted = convertCurrency(item.amount, item.currency, baseCurrency)
+  const converted = convertCurrency(
+    ruDisplay?.totalNet ?? item.amount,
+    item.currency,
+    baseCurrency,
+  )
   const showConversion = item.currency !== baseCurrency
 
   return (
     <td className="py-2 pr-4">
-      <div>{formatCurrency(item.amount, item.currency)}</div>
+      <div className="font-medium text-emerald-700">
+        {formatCurrency(ruDisplay?.totalNet ?? item.amount, item.currency)}
+      </div>
+      {ruDisplay && (
+        <div className="text-xs text-slate-500">
+          gross {formatCurrency(item.amount, item.currency)} · НДФЛ −
+          {formatCurrency(ruDisplay.totalNdfl, item.currency)} · взносы{' '}
+          {formatCurrency(ruDisplay.employerSocialMonthly, item.currency)}/мес.
+        </div>
+      )}
       {showConversion && (
         <div className="text-xs text-slate-500">≈ {formatCurrency(converted, baseCurrency)}</div>
       )}
@@ -366,8 +533,19 @@ function IncomeList({
               key={item.id}
               className={`border-b border-slate-100 ${editingId === item.id ? 'bg-blue-50' : ''}`}
             >
-              <td className="py-2 pr-4 font-medium">{item.name}</td>
-              <AmountCell item={item} baseCurrency={settings.baseCurrency} />
+              <td className="py-2 pr-4 font-medium">
+                {item.name}
+                {item.salaryCountryCode === 'RU' && (
+                  <span className="ml-2 rounded bg-slate-100 px-1.5 py-0.5 text-xs font-normal text-slate-500">
+                    РФ
+                  </span>
+                )}
+              </td>
+              <AmountCell
+                item={item}
+                baseCurrency={settings.baseCurrency}
+                dependents={settings.dependents}
+              />
               <td className="py-2 pr-4">{FREQUENCY_LABELS[item.frequency]}</td>
               <td className="py-2 pr-4 text-slate-500">{item.category ?? '—'}</td>
               <td className="py-2 text-right">

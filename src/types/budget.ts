@@ -16,6 +16,8 @@ export interface RecurringItem {
   frequency: Frequency
   category?: string
   categoryId?: string
+  /** Страна, где выплачивается зарплата (для categoryId === 'salary'). */
+  salaryCountryCode?: string
   payments?: IncomePayment[]
   startDate: string
   endDate?: string

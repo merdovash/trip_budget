@@ -12,6 +12,7 @@ import { useExchangeRateStore } from '../../store/exchangeRateStore'
 import { EmptyState } from '../ui/FormControls'
 import { CashFlowChart } from './CashFlowChart'
 import { MonthlyTable } from './MonthlyTable'
+import { SpainTaxDetailPanel } from './SpainTaxDetailPanel'
 import { SummaryCards, TaxBreakdown } from './SummaryCards'
 
 export function Dashboard() {
@@ -54,7 +55,9 @@ export function Dashboard() {
   }
 
   const annualTaxes =
-    (taxSummary?.result.incomeTax ?? 0) + (taxSummary?.result.socialContributions ?? 0)
+    (taxSummary.residence?.result.incomeTax ?? 0) +
+    (taxSummary.residence?.result.socialContributions ?? 0) +
+    taxSummary.russiaNdflInBase
   const initialBalance = getInitialBalanceInBase(settings)
 
   return (
@@ -79,12 +82,40 @@ export function Dashboard() {
           </p>
         </div>
       )}
-      {taxSummary && (
-        <TaxBreakdown
-          regimeName={taxSummary.calculator.name}
-          effectiveRate={taxSummary.result.effectiveRate}
-          breakdown={taxSummary.result.breakdown}
+      {taxSummary.residence && taxSummary.residence.calculator.countryCode === 'ES' ? (
+        <SpainTaxDetailPanel
+          regimeName={taxSummary.residence.calculator.name}
+          regimeDescription={taxSummary.residence.calculator.description}
+          result={taxSummary.residence.result}
           currency={settings.baseCurrency}
+          paymentSchedule={taxSummary.spainSchedule?.payments}
+          quarterlyGross={taxSummary.spainSchedule?.quarterlyGross}
+        />
+      ) : taxSummary.residence ? (
+        <TaxBreakdown
+          title="Налоги страны проживания"
+          regimeName={taxSummary.residence.calculator.name}
+          effectiveRate={taxSummary.residence.result.effectiveRate}
+          breakdown={taxSummary.residence.result.breakdown}
+          currency={settings.baseCurrency}
+        />
+      ) : null}
+      {taxSummary.russiaSalary && (
+        <TaxBreakdown
+          title="Зарплата в России"
+          regimeName="НДФЛ и страховые взносы"
+          effectiveRate={
+            taxSummary.russiaSalary.grossAnnual > 0
+              ? taxSummary.russiaSalary.ndfl / taxSummary.russiaSalary.grossAnnual
+              : 0
+          }
+          breakdown={taxSummary.russiaSalary.breakdown}
+          currency="RUB"
+          footer={
+            taxSummary.russiaEmployerSocialInBase > 0
+              ? `Взносы работодателя ≈ ${formatCurrency(taxSummary.russiaEmployerSocialInBase, settings.baseCurrency)} (информ.)`
+              : undefined
+          }
         />
       )}
       <MonthlyTable snapshots={snapshots} currency={settings.baseCurrency} />

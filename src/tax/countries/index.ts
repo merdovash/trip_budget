@@ -1,5 +1,8 @@
 import type { TaxBracket, TaxCalculator, TaxInput } from '../types'
 import { buildTaxResult, calculateProgressiveTax } from '../types'
+import { spainBeckham, spainEmployed, spainStandard } from './spain'
+
+export { spainBeckham, spainEmployed, spainStandard }
 
 function progressiveCalculator(
   id: string,
@@ -15,6 +18,7 @@ function progressiveCalculator(
     countryCode,
     name,
     description,
+    taxDistribution: 'with_income',
     calculate(input: TaxInput) {
       const incomeTax = calculateProgressiveTax(input.grossAnnualIncome, brackets)
       const socialContributions = input.grossAnnualIncome * socialRate
@@ -25,39 +29,6 @@ function progressiveCalculator(
       return buildTaxResult(input.grossAnnualIncome, incomeTax, socialContributions, breakdown)
     },
   }
-}
-
-export const spainStandard: TaxCalculator = progressiveCalculator(
-  'es-standard',
-  'ES',
-  'Стандартный IRPF',
-  'Прогрессивная шкала подоходного налога Испании (упрощённо, без региональных надбавок).',
-  [
-    { upTo: 12450, rate: 0.19 },
-    { upTo: 20200, rate: 0.24 },
-    { upTo: 35200, rate: 0.3 },
-    { upTo: 60000, rate: 0.37 },
-    { upTo: 300000, rate: 0.45 },
-    { upTo: null, rate: 0.47 },
-  ],
-  0.065,
-)
-
-export const spainBeckham: TaxCalculator = {
-  id: 'es-beckham',
-  countryCode: 'ES',
-  name: 'Beckham Law (упрощ.)',
-  description: 'Фиксированная ставка 24% на доход до €600 000 для новых резидентов (упрощённая модель).',
-  calculate(input: TaxInput) {
-    const threshold = 600_000
-    const incomeTax =
-      input.grossAnnualIncome <= threshold
-        ? input.grossAnnualIncome * 0.24
-        : threshold * 0.24 + (input.grossAnnualIncome - threshold) * 0.47
-    return buildTaxResult(input.grossAnnualIncome, incomeTax, 0, [
-      { label: 'Подоходный налог (Beckham Law)', amount: incomeTax },
-    ])
-  },
 }
 
 export const thailandStandard: TaxCalculator = progressiveCalculator(

@@ -130,6 +130,7 @@ interface SpainTaxDetailPanelProps {
   currency: string
   paymentSchedule?: ScheduledTaxPayment[]
   quarterlyGross?: [number, number, number, number]
+  embedded?: boolean
 }
 
 export function SpainTaxDetailPanel({
@@ -141,6 +142,7 @@ export function SpainTaxDetailPanel({
   currency,
   paymentSchedule,
   quarterlyGross,
+  embedded,
 }: SpainTaxDetailPanelProps) {
   const isEmployed = taxRegimeId === 'es-employed'
   const panelTitle = isEmployed
@@ -148,9 +150,9 @@ export function SpainTaxDetailPanel({
     : title
   const grouped = groupByKind(result.breakdown)
 
-  return (
-    <Card>
-      <h2 className="mb-2 text-lg font-semibold">{panelTitle}</h2>
+  const inner = (
+    <>
+      {!embedded && <h2 className="mb-2 text-lg font-semibold">{panelTitle}</h2>}
       <p className="text-sm text-slate-500">
         Режим: <span className="font-medium text-slate-700">{regimeName}</span>
         {' · '}
@@ -224,6 +226,8 @@ export function SpainTaxDetailPanel({
           </ul>
         </section>
       )}
-    </Card>
+    </>
   )
+
+  return embedded ? inner : <Card>{inner}</Card>
 }

@@ -68,6 +68,7 @@ interface TaxBreakdownProps {
   breakdown: { label: string; amount: number; description?: string; formula?: string }[]
   currency: string
   footer?: string
+  embedded?: boolean
 }
 
 export function TaxBreakdown({
@@ -77,12 +78,13 @@ export function TaxBreakdown({
   breakdown,
   currency,
   footer,
+  embedded,
 }: TaxBreakdownProps) {
   const hasDetails = breakdown.some((item) => item.description || item.formula)
 
-  return (
-    <Card>
-      <h2 className="mb-3 text-lg font-semibold">{title}</h2>
+  const inner = (
+    <>
+      {!embedded && <h2 className="mb-3 text-lg font-semibold">{title}</h2>}
       <p className="text-sm text-slate-500">
         Режим: <span className="font-medium text-slate-700">{regimeName}</span> · Эффективная
         ставка: <span className="font-medium text-slate-700">{formatPercent(effectiveRate)}</span>
@@ -107,6 +109,8 @@ export function TaxBreakdown({
         ))}
       </ul>
       {footer && <p className="mt-3 text-xs text-slate-500">{footer}</p>}
-    </Card>
+    </>
   )
+
+  return embedded ? inner : <Card>{inner}</Card>
 }

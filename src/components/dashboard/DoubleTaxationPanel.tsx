@@ -3,17 +3,18 @@ import { Card } from '../ui/FormControls'
 
 interface DoubleTaxationPanelProps {
   lines: DoubleTaxationLine[]
+  embedded?: boolean
 }
 
-export function DoubleTaxationPanel({ lines }: DoubleTaxationPanelProps) {
+export function DoubleTaxationPanel({ lines, embedded }: DoubleTaxationPanelProps) {
   if (lines.length === 0) return null
 
-  return (
-    <Card>
-      <h2 className="text-lg font-semibold">Двойное налогообложение</h2>
-      <p className="mt-1 text-sm text-slate-500">
-        Каждый доход облагается только в одной юрисдикции модели — либо у источника (РФ), либо в
-        стране проживания. Это упрощённая схема без зачёта иностранного налога.
+  const content = (
+    <>
+      {!embedded && <h2 className="text-lg font-semibold">Двойное налогообложение</h2>}
+      <p className={`text-sm text-slate-500 ${embedded ? '' : 'mt-1'}`}>
+        Каждый доход облагается в одной или двух юрисдикциях по выбранным правилам. При зачёте НДФЛ
+        применяется deducción por doble imposición internacional (упрощ.).
       </p>
 
       <div className="mt-4 space-y-3">
@@ -40,7 +41,7 @@ export function DoubleTaxationPanel({ lines }: DoubleTaxationPanelProps) {
                 className={`rounded-full px-2 py-0.5 text-xs font-medium ${
                   line.treatment === 'source_russia'
                     ? 'bg-slate-100 text-slate-700'
-                    : line.treatment === 'residence'
+                    : line.treatment === 'residence' || line.treatment === 'residence_with_credit'
                       ? 'bg-blue-50 text-blue-700'
                       : 'bg-amber-50 text-amber-700'
                 }`}
@@ -51,6 +52,8 @@ export function DoubleTaxationPanel({ lines }: DoubleTaxationPanelProps) {
           ))}
         </ul>
       </div>
-    </Card>
+    </>
   )
+
+  return embedded ? content : <Card>{content}</Card>
 }

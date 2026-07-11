@@ -63,7 +63,7 @@ export interface DailySnapshot {
   cumulativeBalance: number
 }
 
-export type AppSection = 'dashboard' | 'settings' | 'income' | 'expenses' | 'onetime'
+export type AppSection = 'dashboard' | 'settings' | 'income' | 'expenses' | 'onetime' | 'presets'
 
 export const DEFAULT_SETTINGS: BudgetSettings = {
   baseCurrency: 'EUR',

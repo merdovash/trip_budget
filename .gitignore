@@ -22,3 +22,6 @@ Thumbs.db
 
 # Vite
 node_modules/.tmp
+
+# User-saved preset data (seed file is committed)
+data/presets.json

@@ -10,6 +10,7 @@ const NAV_ITEMS: { id: AppSection; label: string; Icon: NavIcon }[] = [
   { id: 'settings', label: 'Настройки', Icon: SettingsIcon },
   { id: 'income', label: 'Доходы', Icon: IncomeIcon },
   { id: 'expenses', label: 'Расходы', Icon: ExpenseIcon },
+  { id: 'presets', label: 'Наборы', Icon: PresetsIcon },
   { id: 'onetime', label: 'Разовые траты', Icon: OneTimeIcon },
 ]
 
@@ -143,6 +144,19 @@ function OneTimeIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" {...props}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M13 2 3 14h9l-1 8 10-12h-9l1-8Z" />
+    </svg>
+  )
+}
+
+function PresetsIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" {...props}>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M4 7h16M4 12h16M4 17h10"
+      />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M18 17h2v4h-2z" />
     </svg>
   )
 }

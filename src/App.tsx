@@ -5,6 +5,7 @@ import { Disclaimer, Header } from './components/layout/Header'
 import { Sidebar } from './components/layout/Sidebar'
 import { IncomePanel } from './components/income/IncomePanel'
 import { OneTimePanel } from './components/onetime/OneTimePanel'
+import { PresetsPanel } from './components/presets/PresetsPanel'
 import { BudgetSettingsPanel } from './components/settings/BudgetSettings'
 import { useExchangeRateStore } from './store/exchangeRateStore'
 import type { AppSection } from './types/budget'
@@ -21,6 +22,8 @@ function SectionContent({ section }: { section: AppSection }) {
       return <ExpensePanel />
     case 'onetime':
       return <OneTimePanel />
+    case 'presets':
+      return <PresetsPanel />
   }
 }
 

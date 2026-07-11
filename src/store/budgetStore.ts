@@ -5,7 +5,9 @@ import type {
   OneTimeExpense,
   RecurringItem,
 } from '../types/budget'
+import type { BudgetPresetData } from '../types/preset'
 import { DEFAULT_SETTINGS } from '../types/budget'
+import { clonePresetData } from '../lib/presetsApi'
 
 interface BudgetState {
   settings: BudgetSettings
@@ -22,6 +24,8 @@ interface BudgetState {
   addOneTimeExpense: (item: Omit<OneTimeExpense, 'id'>) => void
   updateOneTimeExpense: (id: string, item: Partial<OneTimeExpense>) => void
   removeOneTimeExpense: (id: string) => void
+  exportSnapshot: () => BudgetPresetData
+  loadFromPreset: (data: BudgetPresetData) => void
 }
 
 function createId(): string {
@@ -30,7 +34,7 @@ function createId(): string {
 
 export const useBudgetStore = create<BudgetState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       settings: DEFAULT_SETTINGS,
       incomes: [],
       expenses: [],
@@ -81,6 +85,19 @@ export const useBudgetStore = create<BudgetState>()(
         set((state) => ({
           oneTimeExpenses: state.oneTimeExpenses.filter((e) => e.id !== id),
         })),
+
+      exportSnapshot: (): BudgetPresetData => {
+        const { settings, incomes, expenses, oneTimeExpenses } = get()
+        return clonePresetData({ settings, incomes, expenses, oneTimeExpenses })
+      },
+
+      loadFromPreset: (data: BudgetPresetData) =>
+        set({
+          settings: { ...data.settings },
+          incomes: data.incomes.map((item) => ({ ...item, id: createId() })),
+          expenses: data.expenses.map((item) => ({ ...item, id: createId() })),
+          oneTimeExpenses: data.oneTimeExpenses.map((item) => ({ ...item, id: createId() })),
+        }),
     }),
     { name: 'family-budget-storage' },
   ),

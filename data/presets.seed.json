@@ -1,0 +1,128 @@
+[
+  {
+    "id": "00000000-0000-4000-8000-000000000001",
+    "name": "Семья в Испании (Мадрид)",
+    "description": "Зарплата, аренда и типовый бюджет на еду для семьи из двух человек.",
+    "isPrivate": false,
+    "ownerToken": "seed-token-es-public",
+    "createdAt": "2026-01-01T00:00:00.000Z",
+    "updatedAt": "2026-01-01T00:00:00.000Z",
+    "data": {
+      "settings": {
+        "baseCurrency": "EUR",
+        "countryCode": "ES",
+        "taxRegimeId": "es-standard",
+        "familySize": 2,
+        "dependents": 0,
+        "horizonMonths": 12,
+        "initialBalance": 5000,
+        "initialBalanceCurrency": "EUR",
+        "initialBalanceDate": "2026-01-01"
+      },
+      "incomes": [
+        {
+          "id": "inc-1",
+          "name": "Зарплата",
+          "amount": 5000,
+          "currency": "EUR",
+          "frequency": "monthly",
+          "category": "Зарплата",
+          "categoryId": "salary",
+          "payments": [
+            { "label": "Аванс", "amount": 2000, "dayOfMonth": 25 },
+            { "label": "Зарплата", "amount": 3000, "dayOfMonth": 10 }
+          ],
+          "startDate": "2026-01-01"
+        }
+      ],
+      "expenses": [
+        {
+          "id": "exp-1",
+          "name": "Аренда",
+          "amount": 1200,
+          "currency": "EUR",
+          "frequency": "monthly",
+          "category": "Жильё",
+          "startDate": "2026-01-01"
+        },
+        {
+          "id": "exp-2",
+          "name": "Еда",
+          "amount": 518,
+          "currency": "EUR",
+          "frequency": "monthly",
+          "category": "Еда",
+          "startDate": "2026-01-01"
+        }
+      ],
+      "oneTimeExpenses": []
+    }
+  },
+  {
+    "id": "00000000-0000-4000-8000-000000000002",
+    "name": "Экспат в Таиланде (Бангкок)",
+    "description": "Удалённая работа в USD, расходы в THB, без подоходного налога (упрощ.).",
+    "isPrivate": false,
+    "ownerToken": "seed-token-th-public",
+    "createdAt": "2026-01-15T00:00:00.000Z",
+    "updatedAt": "2026-01-15T00:00:00.000Z",
+    "data": {
+      "settings": {
+        "baseCurrency": "THB",
+        "countryCode": "TH",
+        "taxRegimeId": "th-standard",
+        "familySize": 2,
+        "dependents": 0,
+        "horizonMonths": 12,
+        "initialBalance": 100000,
+        "initialBalanceCurrency": "THB",
+        "initialBalanceDate": "2026-01-01"
+      },
+      "incomes": [
+        {
+          "id": "inc-2",
+          "name": "Remote salary",
+          "amount": 4000,
+          "currency": "USD",
+          "frequency": "monthly",
+          "category": "Зарплата",
+          "categoryId": "salary",
+          "payments": [
+            { "label": "Зарплата", "amount": 4000, "dayOfMonth": 1 }
+          ],
+          "startDate": "2026-01-01"
+        }
+      ],
+      "expenses": [
+        {
+          "id": "exp-3",
+          "name": "Condo rent",
+          "amount": 25000,
+          "currency": "THB",
+          "frequency": "monthly",
+          "category": "Жильё",
+          "startDate": "2026-01-01"
+        },
+        {
+          "id": "exp-4",
+          "name": "Еда",
+          "amount": 13875,
+          "currency": "THB",
+          "frequency": "monthly",
+          "category": "Еда",
+          "startDate": "2026-01-01"
+        }
+      ],
+      "oneTimeExpenses": [
+        {
+          "id": "ot-1",
+          "name": "Депозит за жильё",
+          "amount": 50000,
+          "currency": "THB",
+          "date": "2026-01-05",
+          "category": "Депозит"
+        }
+      ]
+    }
+  }
+]

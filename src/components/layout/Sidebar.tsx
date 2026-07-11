@@ -1,7 +1,5 @@
-import { useEffect, useState, type SVGProps } from 'react'
+import type { SVGProps } from 'react'
 import type { AppSection } from '../../types/budget'
-
-const STORAGE_KEY = 'sidebar-collapsed'
 
 type NavIcon = (props: SVGProps<SVGSVGElement>) => React.ReactElement
 
@@ -17,83 +15,109 @@ const NAV_ITEMS: { id: AppSection; label: string; Icon: NavIcon }[] = [
 interface SidebarProps {
   active: AppSection
   onChange: (section: AppSection) => void
+  collapsed: boolean
+  onCollapsedChange: (collapsed: boolean) => void
 }
 
-export function Sidebar({ active, onChange }: SidebarProps) {
-  const [collapsed, setCollapsed] = useState(() => {
-    try {
-      return localStorage.getItem(STORAGE_KEY) === '1'
-    } catch {
-      return false
-    }
-  })
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, collapsed ? '1' : '0')
-    } catch {
-      /* ignore */
-    }
-  }, [collapsed])
-
+export function Sidebar({ active, onChange, collapsed, onCollapsedChange }: SidebarProps) {
   return (
-    <aside
-      className={`z-30 flex shrink-0 flex-col border-b border-slate-200 bg-white shadow-sm transition-[width] duration-200 md:h-full md:border-b-0 md:border-r ${
-        collapsed ? 'md:w-14' : 'w-full md:w-56'
-      }`}
-    >
-      <nav
-        className={`flex shrink-0 gap-1 overflow-x-auto p-3 md:h-full md:flex-col md:overflow-x-visible md:overflow-y-hidden ${
-          collapsed ? 'md:items-center md:px-2' : ''
+    <div className="shrink-0 md:contents">
+      {/* Mobile: горизонтальная навигация */}
+      <aside className="z-50 border-b border-slate-200 bg-white md:hidden">
+        <nav className="flex gap-1 overflow-x-auto p-2">
+          {NAV_ITEMS.map(({ id, label, Icon }) => (
+            <NavButton
+              key={id}
+              id={id}
+              label={label}
+              Icon={Icon}
+              isActive={active === id}
+              collapsed={false}
+              onChange={onChange}
+            />
+          ))}
+        </nav>
+      </aside>
+
+      {/* Desktop: фиксированная колонка поверх контента */}
+      <aside
+        className={`absolute inset-y-0 left-0 z-50 hidden flex-col border-r border-slate-200 bg-white shadow-md transition-[width] duration-200 md:flex ${
+          collapsed ? 'w-14' : 'w-56'
         }`}
       >
-        {NAV_ITEMS.map(({ id, label, Icon }) => {
-          const isActive = active === id
-          return (
-            <button
-              key={id}
-              type="button"
-              onClick={() => onChange(id)}
-              title={collapsed ? label : undefined}
-              aria-label={label}
-              className={`flex items-center rounded-lg text-sm font-medium transition ${
-                collapsed
-                  ? 'justify-center p-2.5 md:w-full'
-                  : 'gap-2.5 whitespace-nowrap px-3 py-2 text-left'
-              } ${
-                isActive
-                  ? 'bg-blue-50 text-blue-700'
-                  : 'text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              <Icon className="h-5 w-5 shrink-0" aria-hidden />
-              <span className={collapsed ? 'md:hidden' : undefined}>{label}</span>
-            </button>
-          )
-        })}
-      </nav>
-
-      <div className="hidden shrink-0 border-t border-slate-200 p-2 md:mt-auto md:block">
-        <button
-          type="button"
-          onClick={() => setCollapsed((value) => !value)}
-          title={collapsed ? 'Развернуть меню' : 'Свернуть меню'}
-          aria-label={collapsed ? 'Развернуть меню' : 'Свернуть меню'}
-          className={`flex w-full items-center rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700 ${
-            collapsed ? 'justify-center' : 'justify-start px-3'
+        <nav
+          className={`flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto overflow-x-hidden p-3 ${
+            collapsed ? 'items-center px-2' : ''
           }`}
         >
-          {collapsed ? (
-            <ChevronRightIcon className="h-5 w-5" />
-          ) : (
-            <>
-              <ChevronLeftIcon className="h-5 w-5" />
-              <span className="ml-2 text-sm">Свернуть</span>
-            </>
-          )}
-        </button>
-      </div>
-    </aside>
+          {NAV_ITEMS.map(({ id, label, Icon }) => (
+            <NavButton
+              key={id}
+              id={id}
+              label={label}
+              Icon={Icon}
+              isActive={active === id}
+              collapsed={collapsed}
+              onChange={onChange}
+            />
+          ))}
+        </nav>
+
+        <div className="shrink-0 border-t border-slate-200 bg-white p-2">
+          <button
+            type="button"
+            onClick={() => onCollapsedChange(!collapsed)}
+            title={collapsed ? 'Развернуть меню' : 'Свернуть меню'}
+            aria-label={collapsed ? 'Развернуть меню' : 'Свернуть меню'}
+            className={`flex w-full items-center rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700 ${
+              collapsed ? 'justify-center' : 'justify-start px-3'
+            }`}
+          >
+            {collapsed ? (
+              <ChevronRightIcon className="h-5 w-5" />
+            ) : (
+              <>
+                <ChevronLeftIcon className="h-5 w-5" />
+                <span className="ml-2 text-sm">Свернуть</span>
+              </>
+            )}
+          </button>
+        </div>
+      </aside>
+    </div>
+  )
+}
+
+function NavButton({
+  id,
+  label,
+  Icon,
+  isActive,
+  collapsed,
+  onChange,
+}: {
+  id: AppSection
+  label: string
+  Icon: NavIcon
+  isActive: boolean
+  collapsed: boolean
+  onChange: (section: AppSection) => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onChange(id)}
+      title={collapsed ? label : undefined}
+      aria-label={label}
+      className={`flex items-center rounded-lg text-sm font-medium transition ${
+        collapsed ? 'justify-center p-2.5 md:w-full' : 'gap-2.5 whitespace-nowrap px-3 py-2 text-left md:w-full'
+      } ${
+        isActive ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-100'
+      }`}
+    >
+      <Icon className="h-5 w-5 shrink-0" aria-hidden />
+      <span className={collapsed ? 'md:hidden' : undefined}>{label}</span>
+    </button>
   )
 }
 
@@ -151,11 +175,7 @@ function OneTimeIcon(props: SVGProps<SVGSVGElement>) {
 function PresetsIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" {...props}>
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M4 7h16M4 12h16M4 17h10"
-      />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4 7h16M4 12h16M4 17h10" />
       <path strokeLinecap="round" strokeLinejoin="round" d="M18 17h2v4h-2z" />
     </svg>
   )

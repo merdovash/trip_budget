@@ -10,6 +10,8 @@ import { BudgetSettingsPanel } from './components/settings/BudgetSettings'
 import { useExchangeRateStore } from './store/exchangeRateStore'
 import type { AppSection } from './types/budget'
 
+const SIDEBAR_STORAGE_KEY = 'sidebar-collapsed'
+
 function SectionContent({ section }: { section: AppSection }) {
   switch (section) {
     case 'dashboard':
@@ -29,19 +31,43 @@ function SectionContent({ section }: { section: AppSection }) {
 
 export default function App() {
   const [section, setSection] = useState<AppSection>('dashboard')
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem(SIDEBAR_STORAGE_KEY) === '1'
+    } catch {
+      return false
+    }
+  })
   const fetchRates = useExchangeRateStore((s) => s.fetchRates)
 
   useEffect(() => {
     fetchRates()
   }, [fetchRates])
 
+  useEffect(() => {
+    try {
+      localStorage.setItem(SIDEBAR_STORAGE_KEY, sidebarCollapsed ? '1' : '0')
+    } catch {
+      /* ignore */
+    }
+  }, [sidebarCollapsed])
+
   return (
     <div className="flex h-screen flex-col overflow-hidden">
       <Header />
       <Disclaimer />
-      <div className="flex min-h-0 flex-1 overflow-hidden md:flex-row">
-        <Sidebar active={section} onChange={setSection} />
-        <main className="min-h-0 flex-1 overflow-y-auto p-4 md:p-6">
+      <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+        <Sidebar
+          active={section}
+          onChange={setSection}
+          collapsed={sidebarCollapsed}
+          onCollapsedChange={setSidebarCollapsed}
+        />
+        <main
+          className={`min-h-0 flex-1 overflow-y-auto p-4 transition-[margin] duration-200 md:p-6 ${
+            sidebarCollapsed ? 'md:ml-14' : 'md:ml-56'
+          }`}
+        >
           <SectionContent section={section} />
         </main>
       </div>

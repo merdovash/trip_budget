@@ -1,10 +1,15 @@
-import { useState, type FormEvent } from 'react'
+import { useMemo, useState, type FormEvent } from 'react'
 import { todayIsoDate, formatCurrency } from '../../lib/format'
 import { convertCurrency } from '../../lib/currency'
+import {
+  buildLoanExpense,
+  isLoanExpense,
+  loanMonthlyPayment,
+} from '../../lib/loanAmortization'
 import { useExchangeRateStore } from '../../store/exchangeRateStore'
-import { recurringItemSchema, type RecurringItemFormData } from '../../lib/validation'
+import { expenseFormSchema, type ExpenseFormData } from '../../lib/validation'
 import { useBudgetStore } from '../../store/budgetStore'
-import { FREQUENCY_LABELS, type RecurringItem } from '../../types/budget'
+import { FREQUENCY_LABELS, LOAN_EXPENSE_CATEGORY, type RecurringItem } from '../../types/budget'
 import {
   FOOD_EXPENSE_CATEGORY,
   getCountryLocalCurrency,
@@ -27,8 +32,35 @@ const EXPENSE_CATEGORIES = [
   'Другое',
 ]
 
-function expenseToFormData(item: RecurringItem): RecurringItemFormData {
+function formatRateInput(rate: number): string {
+  return String(rate)
+}
+
+function parseRateInput(value: string): number | null {
+  const normalized = value.trim().replace(',', '.')
+  if (normalized === '' || normalized === '.') return 0
+  const num = Number(normalized)
+  return Number.isFinite(num) ? num : null
+}
+
+function loanAnnualRateFromItem(item: RecurringItem): string {
+  return formatRateInput(item.annualRate ?? 0)
+}
+
+function expenseToFormData(item: RecurringItem): ExpenseFormData {
+  if (isLoanExpense(item)) {
+    return {
+      kind: 'loan',
+      name: item.name,
+      principal: item.principal ?? item.amount,
+      currency: item.currency,
+      termMonths: item.termMonths ?? 1,
+      annualRate: item.annualRate ?? 0,
+      startDate: item.startDate,
+    }
+  }
   return {
+    kind: 'regular',
     name: item.name,
     amount: item.amount,
     currency: item.currency,
@@ -39,22 +71,42 @@ function expenseToFormData(item: RecurringItem): RecurringItemFormData {
   }
 }
 
+function formDataToExpense(data: ExpenseFormData): Omit<RecurringItem, 'id'> {
+  if (data.kind === 'loan') {
+    return buildLoanExpense(data)
+  }
+  return {
+    expenseKind: 'regular',
+    name: data.name,
+    amount: data.amount,
+    currency: data.currency,
+    frequency: data.frequency,
+    category: data.category || undefined,
+    startDate: data.startDate,
+    endDate: data.endDate || undefined,
+  }
+}
+
 function AmountCell({
-  amount,
-  currency,
+  item,
   baseCurrency,
 }: {
-  amount: number
-  currency: string
+  item: RecurringItem
   baseCurrency: string
 }) {
   useExchangeRateStore((s) => s.rateDate)
-  const converted = convertCurrency(amount, currency, baseCurrency)
-  const showConversion = currency !== baseCurrency
+  const amount = isLoanExpense(item) ? loanMonthlyPayment(item) : item.amount
+  const converted = convertCurrency(amount, item.currency, baseCurrency)
+  const showConversion = item.currency !== baseCurrency
 
   return (
     <td className="py-2 pr-4">
-      <div>{formatCurrency(amount, currency)}</div>
+      <div>{formatCurrency(amount, item.currency)}</div>
+      {isLoanExpense(item) && (
+        <div className="text-xs text-slate-500">
+          кредит {formatCurrency(item.principal ?? item.amount, item.currency)}
+        </div>
+      )}
       {showConversion && (
         <div className="text-xs text-slate-500">≈ {formatCurrency(converted, baseCurrency)}</div>
       )}
@@ -64,16 +116,17 @@ function AmountCell({
 
 interface ExpenseFormProps {
   initialItem?: RecurringItem
-  onSubmit: (data: RecurringItemFormData) => void
+  onSubmit: (data: ExpenseFormData) => void
   onCancel?: () => void
 }
 
 function ExpenseForm({ initialItem, onSubmit, onCancel }: ExpenseFormProps) {
   const settings = useBudgetStore((s) => s.settings)
-  const [form, setForm] = useState<RecurringItemFormData>(() =>
+  const [form, setForm] = useState<ExpenseFormData>(() =>
     initialItem
       ? expenseToFormData(initialItem)
       : {
+          kind: 'regular',
           name: '',
           amount: 0,
           currency: settings.baseCurrency,
@@ -84,37 +137,76 @@ function ExpenseForm({ initialItem, onSubmit, onCancel }: ExpenseFormProps) {
         },
   )
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [annualRateInput, setAnnualRateInput] = useState(() =>
+    initialItem && isLoanExpense(initialItem) ? loanAnnualRateFromItem(initialItem) : '0',
+  )
   const isEditing = Boolean(initialItem)
 
+  const loanPreviewPayment = useMemo(() => {
+    if (form.kind !== 'loan' || form.principal <= 0 || form.termMonths <= 0) return null
+    const annualRate = parseRateInput(annualRateInput)
+    if (annualRate === null) return null
+    return loanMonthlyPayment({
+      id: '',
+      name: '',
+      expenseKind: 'loan',
+      principal: form.principal,
+      currency: form.currency,
+      termMonths: form.termMonths,
+      annualRate,
+      amount: form.principal,
+      frequency: 'monthly',
+      startDate: form.startDate,
+    })
+  }, [form, annualRateInput])
+
   function handleCategoryChange(category: string) {
+    if (form.kind !== 'regular') return
     if (category === FOOD_EXPENSE_CATEGORY) {
       const amount = getTypicalFoodBudget(settings.countryCode, settings.familySize)
       const currency = getCountryLocalCurrency(settings.countryCode)
-      setForm((prev) => ({
-        ...prev,
-        category,
-        amount,
-        currency,
-        frequency: 'monthly',
-        name: prev.name.trim() ? prev.name : FOOD_EXPENSE_CATEGORY,
-      }))
+      setForm((prev) => {
+        if (prev.kind !== 'regular') return prev
+        return {
+          ...prev,
+          category,
+          amount,
+          currency,
+          frequency: 'monthly',
+          name: prev.name.trim() ? prev.name : FOOD_EXPENSE_CATEGORY,
+        }
+      })
       return
     }
-    setForm((prev) => ({ ...prev, category }))
+    setForm((prev) => {
+      if (prev.kind !== 'regular') return prev
+      return { ...prev, category }
+    })
   }
 
   const foodBudgetHint =
-    form.category === FOOD_EXPENSE_CATEGORY
+    form.kind === 'regular' && form.category === FOOD_EXPENSE_CATEGORY
       ? `Типовой бюджет на ${settings.familySize} чел. в ${COUNTRY_LABELS[settings.countryCode] ?? settings.countryCode}`
       : null
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault()
-    const result = recurringItemSchema.safeParse(form)
+
+    let payload: ExpenseFormData = form
+    if (form.kind === 'loan') {
+      const annualRate = parseRateInput(annualRateInput)
+      if (annualRate === null) {
+        setErrors({ annualRate: 'Укажите число, например 5.25' })
+        return
+      }
+      payload = { ...form, annualRate }
+    }
+
+    const result = expenseFormSchema.safeParse(payload)
     if (!result.success) {
       const next: Record<string, string> = {}
       for (const issue of result.error.issues) {
-        const key = issue.path[0]?.toString()
+        const key = issue.path.join('.')
         if (key) next[key] = issue.message
       }
       setErrors(next)
@@ -124,6 +216,7 @@ function ExpenseForm({ initialItem, onSubmit, onCancel }: ExpenseFormProps) {
     onSubmit(result.data)
     if (!isEditing) {
       setForm({
+        kind: 'regular',
         name: '',
         amount: 0,
         currency: settings.baseCurrency,
@@ -132,75 +225,200 @@ function ExpenseForm({ initialItem, onSubmit, onCancel }: ExpenseFormProps) {
         startDate: todayIsoDate(),
         endDate: '',
       })
+      setAnnualRateInput('0')
     }
   }
 
   return (
     <form onSubmit={handleSubmit} className="grid gap-3 md:grid-cols-2">
+      <Field label="Вид расхода" className="md:col-span-2">
+        <Select
+          value={form.kind}
+          onChange={(e) => {
+            const kind = e.target.value as ExpenseFormData['kind']
+            if (kind === 'loan') {
+              setAnnualRateInput('0')
+              setForm({
+                kind: 'loan',
+                name: form.name,
+                principal: 0,
+                currency: settings.baseCurrency,
+                termMonths: 12,
+                annualRate: 0,
+                startDate: todayIsoDate(),
+              })
+            } else {
+              setAnnualRateInput('0')
+              setForm({
+                kind: 'regular',
+                name: form.name,
+                amount: 0,
+                currency: settings.baseCurrency,
+                frequency: 'monthly',
+                category: '',
+                startDate: todayIsoDate(),
+                endDate: '',
+              })
+            }
+            setErrors({})
+          }}
+        >
+          <option value="regular">Обычный</option>
+          <option value="loan">Кредит</option>
+        </Select>
+      </Field>
+
       <Field label="Название" error={errors.name}>
         <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
       </Field>
-      <Field label="Сумма" error={errors.amount}>
-        <div className="flex gap-2">
-          <CurrencySelect
-            value={form.currency}
-            onChange={(currency) => setForm({ ...form, currency })}
-            className="w-24 shrink-0"
-          />
-          <Input
-            type="number"
-            min={0}
-            step={0.01}
-            placeholder="Сумма"
-            className="min-w-0 flex-1"
-            value={form.amount || ''}
-            onChange={(e) => setForm({ ...form, amount: Number(e.target.value) })}
-          />
-        </div>
-        <CurrencyConversionHint
-          amount={form.amount}
-          currency={form.currency}
-          baseCurrency={settings.baseCurrency}
-        />
-        {foodBudgetHint && (
-          <p className="mt-1 text-xs text-slate-500">{foodBudgetHint}</p>
-        )}
-      </Field>
-      <Field label="Периодичность">
-        <Select
-          value={form.frequency}
-          onChange={(e) =>
-            setForm({ ...form, frequency: e.target.value as RecurringItem['frequency'] })
-          }
-        >
-          {Object.entries(FREQUENCY_LABELS)
-            .filter(([k]) => k !== 'once')
-            .map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-        </Select>
-      </Field>
-      <Field label="Категория">
-        <Select value={form.category} onChange={(e) => handleCategoryChange(e.target.value)}>
-          <option value="">—</option>
-          {EXPENSE_CATEGORIES.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </Select>
-      </Field>
-      <Field label="Дата начала" error={errors.startDate}>
-        <DateInput
-          value={form.startDate}
-          onChange={(startDate) => setForm({ ...form, startDate })}
-        />
-      </Field>
-      <Field label="Дата окончания (опц.)" error={errors.endDate}>
-        <DateInput value={form.endDate ?? ''} onChange={(endDate) => setForm({ ...form, endDate })} />
-      </Field>
+
+      {form.kind === 'regular' ? (
+        <>
+          <Field label="Сумма" error={errors.amount}>
+            <div className="flex gap-2">
+              <CurrencySelect
+                value={form.currency}
+                onChange={(currency) => setForm({ ...form, currency })}
+                className="w-24 shrink-0"
+              />
+              <Input
+                type="number"
+                min={0}
+                step={0.01}
+                placeholder="Сумма"
+                className="min-w-0 flex-1"
+                value={form.amount || ''}
+                onChange={(e) => setForm({ ...form, amount: Number(e.target.value) })}
+              />
+            </div>
+            <CurrencyConversionHint
+              amount={form.amount}
+              currency={form.currency}
+              baseCurrency={settings.baseCurrency}
+            />
+            {foodBudgetHint && (
+              <p className="mt-1 text-xs text-slate-500">{foodBudgetHint}</p>
+            )}
+          </Field>
+          <Field label="Периодичность">
+            <Select
+              value={form.frequency}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  frequency: e.target.value as Extract<ExpenseFormData, { kind: 'regular' }>['frequency'],
+                })
+              }
+            >
+              {Object.entries(FREQUENCY_LABELS)
+                .filter(([k]) => k !== 'once')
+                .map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+            </Select>
+          </Field>
+          <Field label="Категория">
+            <Select value={form.category} onChange={(e) => handleCategoryChange(e.target.value)}>
+              <option value="">—</option>
+              {EXPENSE_CATEGORIES.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="Дата начала" error={errors.startDate}>
+            <DateInput
+              value={form.startDate}
+              onChange={(startDate) => setForm({ ...form, startDate })}
+            />
+          </Field>
+          <Field label="Дата окончания (опц.)" error={errors.endDate}>
+            <DateInput value={form.endDate ?? ''} onChange={(endDate) => setForm({ ...form, endDate })} />
+          </Field>
+        </>
+      ) : (
+        <>
+          <Field label="Сумма кредита" error={errors.principal}>
+            <div className="flex gap-2">
+              <CurrencySelect
+                value={form.currency}
+                onChange={(currency) => setForm({ ...form, currency })}
+                className="w-24 shrink-0"
+              />
+              <Input
+                type="number"
+                min={0}
+                step={0.01}
+                placeholder="Сумма"
+                className="min-w-0 flex-1"
+                value={form.principal || ''}
+                onChange={(e) => setForm({ ...form, principal: Number(e.target.value) })}
+              />
+            </div>
+            <CurrencyConversionHint
+              amount={form.principal}
+              currency={form.currency}
+              baseCurrency={settings.baseCurrency}
+            />
+          </Field>
+          <Field label="Срок, месяцев" error={errors.termMonths}>
+            <Input
+              type="number"
+              min={1}
+              step={1}
+              value={form.termMonths || ''}
+              onChange={(e) => setForm({ ...form, termMonths: Number(e.target.value) })}
+            />
+          </Field>
+          <Field label="Ставка, % годовых" error={errors.annualRate}>
+            <Input
+              type="text"
+              inputMode="decimal"
+              placeholder="0"
+              value={annualRateInput}
+              onChange={(e) => {
+                const raw = e.target.value
+                if (raw !== '' && !/^\d*[,.]?\d*$/.test(raw)) return
+                setAnnualRateInput(raw)
+                const parsed = parseRateInput(raw)
+                if (parsed !== null && form.kind === 'loan') {
+                  setForm({ ...form, annualRate: parsed })
+                }
+              }}
+            />
+          </Field>
+          <Field label="Дата выдачи и первого платежа" error={errors.startDate}>
+            <DateInput
+              value={form.startDate}
+              onChange={(startDate) => setForm({ ...form, startDate })}
+            />
+            <p className="mt-1 text-xs text-slate-500">
+              В этот день номинал кредита поступает в бюджет и списывается первый платёж.
+            </p>
+          </Field>
+          {loanPreviewPayment !== null && (
+            <div className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600 md:col-span-2">
+              Ежемесячный платёж:{' '}
+              <span className="font-medium text-slate-800">
+                {formatCurrency(loanPreviewPayment, form.currency)}
+              </span>
+              {form.currency !== settings.baseCurrency && (
+                <span className="ml-2 text-slate-500">
+                  ≈{' '}
+                  {formatCurrency(
+                    convertCurrency(loanPreviewPayment, form.currency, settings.baseCurrency),
+                    settings.baseCurrency,
+                  )}
+                </span>
+              )}
+            </div>
+          )}
+        </>
+      )}
+
       <div className="flex flex-wrap gap-2 md:col-span-2">
         <Button type="submit">{isEditing ? 'Сохранить' : 'Добавить расход'}</Button>
         {onCancel && (
@@ -229,7 +447,7 @@ function ExpenseList({
     return (
       <EmptyState
         title="Нет расходов"
-        description="Добавьте аренду, еду, транспорт и другие регулярные траты."
+        description="Добавьте аренду, еду, кредиты и другие регулярные траты."
       />
     )
   }
@@ -253,13 +471,15 @@ function ExpenseList({
               className={`border-b border-slate-100 ${editingId === item.id ? 'bg-blue-50' : ''}`}
             >
               <td className="py-2 pr-4 font-medium">{item.name}</td>
-              <AmountCell
-                amount={item.amount}
-                currency={item.currency}
-                baseCurrency={settings.baseCurrency}
-              />
-              <td className="py-2 pr-4">{FREQUENCY_LABELS[item.frequency]}</td>
-              <td className="py-2 pr-4 text-slate-500">{item.category ?? '—'}</td>
+              <AmountCell item={item} baseCurrency={settings.baseCurrency} />
+              <td className="py-2 pr-4">
+                {isLoanExpense(item)
+                  ? `${item.termMonths} мес. (кредит)`
+                  : FREQUENCY_LABELS[item.frequency]}
+              </td>
+              <td className="py-2 pr-4 text-slate-500">
+                {isLoanExpense(item) ? LOAN_EXPENSE_CATEGORY : (item.category ?? '—')}
+              </td>
               <td className="py-2 text-right">
                 <div className="flex justify-end gap-2">
                   <Button variant="secondary" type="button" onClick={() => onEdit(item.id)}>
@@ -297,11 +517,12 @@ export function ExpensePanel() {
           key={editingId ?? 'new'}
           initialItem={editingItem}
           onSubmit={(data) => {
+            const expense = formDataToExpense(data)
             if (editingId) {
-              updateExpense(editingId, data)
+              updateExpense(editingId, expense)
               setEditingId(null)
             } else {
-              addExpense(data)
+              addExpense(expense)
             }
           }}
           onCancel={editingId ? () => setEditingId(null) : undefined}

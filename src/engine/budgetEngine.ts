@@ -14,6 +14,7 @@ import type {
 
 import { FOOD_EXPENSE_CATEGORY } from '../config/foodBudget'
 
+import { loanMonthlyPayment, isLoanExpense, isLoanPaymentInMonth, isLoanPaymentOnDay, loanDisbursementForDay, loanDisbursementForMonth } from '../lib/loanAmortization'
 import { convertCurrency } from '../lib/currency'
 import { buildDoubleTaxationLines, type DoubleTaxationLine } from '../tax/doubleTaxation'
 import { getTaxCalculator } from '../tax/registry'
@@ -281,6 +282,9 @@ function recurringAmountForMonth(
   item: RecurringItem,
   monthKey: string,
 ): number {
+  if (isLoanExpense(item)) {
+    return isLoanPaymentInMonth(item, monthKey) ? loanMonthlyPayment(item) : 0
+  }
   if (item.frequency === 'once') return item.amount
   if (isFoodExpense(item) && item.frequency === 'monthly') {
     return foodMonthlyAmount(item.amount, monthKey)
@@ -439,6 +443,20 @@ function expenseForDay(
   return items.reduce((sum, item) => {
 
     if (!isActiveOnDay(item, dateStr)) return sum
+
+
+
+    if (isLoanExpense(item)) {
+
+      if (isLoanPaymentOnDay(item, dateStr)) {
+
+        return sum + toBaseCurrency(loanMonthlyPayment(item), item.currency, baseCurrency)
+
+      }
+
+      return sum
+
+    }
 
 
 
@@ -689,8 +707,9 @@ export function calculateDailyBudgetProjection(
 
     const taxes = russiaTax + residenceTax
     const netIncome = grossIncome - taxes
+    const loanDisbursement = loanDisbursementForDay(expenses, date, baseCurrency)
 
-    const balance = netIncome - recurringExpenses - oneTimeTotal
+    const balance = netIncome - recurringExpenses - oneTimeTotal + loanDisbursement
     cumulativeBalance += balance
 
     return {
@@ -767,8 +786,9 @@ export function calculateBudgetProjection(
     )
     const taxes = residenceTax + russiaTax
     const netIncome = grossIncome - taxes
+    const loanDisbursement = loanDisbursementForMonth(expenses, month, baseCurrency)
 
-    const balance = netIncome - recurringExpenses - oneTimeTotal
+    const balance = netIncome - recurringExpenses - oneTimeTotal + loanDisbursement
 
     cumulativeBalance += balance
 

@@ -7,6 +7,7 @@ import type {
 } from '../types/budget'
 import type { BudgetPresetData } from '../types/preset'
 import { DEFAULT_SETTINGS } from '../types/budget'
+import { migrateLegacyLoan } from '../lib/loanAmortization'
 import { clonePresetData } from '../lib/presetsApi'
 
 interface BudgetState {
@@ -28,8 +29,41 @@ interface BudgetState {
   loadFromPreset: (data: BudgetPresetData) => void
 }
 
+type PersistedBudgetState = Partial<BudgetState> & {
+  loans?: Array<{
+    id: string
+    name: string
+    principal: number
+    currency: string
+    termMonths: number
+    annualRate: number
+    startDate: string
+  }>
+}
+
 function createId(): string {
   return crypto.randomUUID()
+}
+
+function migratePersistedState(persisted: PersistedBudgetState, current: BudgetState): BudgetState {
+  const merged: BudgetState = {
+    ...current,
+    ...persisted,
+    settings: { ...current.settings, ...persisted.settings },
+    incomes: persisted.incomes ?? current.incomes,
+    expenses: persisted.expenses ?? current.expenses,
+    oneTimeExpenses: persisted.oneTimeExpenses ?? current.oneTimeExpenses,
+  }
+
+  if (persisted.loans?.length) {
+    const migrated = persisted.loans.map((loan) => ({
+      ...migrateLegacyLoan(loan),
+      id: loan.id || createId(),
+    }))
+    merged.expenses = [...merged.expenses, ...migrated]
+  }
+
+  return merged
 }
 
 export const useBudgetStore = create<BudgetState>()(
@@ -91,14 +125,26 @@ export const useBudgetStore = create<BudgetState>()(
         return clonePresetData({ settings, incomes, expenses, oneTimeExpenses })
       },
 
-      loadFromPreset: (data: BudgetPresetData) =>
+      loadFromPreset: (data: BudgetPresetData) => {
+        const migratedLoans = (data.loans ?? []).map((loan) => ({
+          ...migrateLegacyLoan(loan),
+          id: createId(),
+        }))
         set({
           settings: { ...data.settings },
           incomes: data.incomes.map((item) => ({ ...item, id: createId() })),
-          expenses: data.expenses.map((item) => ({ ...item, id: createId() })),
+          expenses: [
+            ...data.expenses.map((item) => ({ ...item, id: createId() })),
+            ...migratedLoans,
+          ],
           oneTimeExpenses: data.oneTimeExpenses.map((item) => ({ ...item, id: createId() })),
-        }),
+        })
+      },
     }),
-    { name: 'family-budget-storage' },
+    {
+      name: 'family-budget-storage',
+      merge: (persisted, current) =>
+        migratePersistedState(persisted as PersistedBudgetState, current as BudgetState),
+    },
   ),
 )

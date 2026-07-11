@@ -2,6 +2,10 @@ import { todayIsoDate } from '../lib/format'
 
 export type Frequency = 'monthly' | 'yearly' | 'weekly' | 'once'
 
+export type ExpenseKind = 'regular' | 'loan'
+
+export const LOAN_EXPENSE_CATEGORY = 'Кредит'
+
 export interface IncomePayment {
   label: string
   amount: number
@@ -25,6 +29,14 @@ export interface RecurringItem {
   payments?: IncomePayment[]
   startDate: string
   endDate?: string
+  /** Вид расхода (только для статей расходов). */
+  expenseKind?: ExpenseKind
+  /** Сумма кредита (для expenseKind === 'loan'). */
+  principal?: number
+  /** Срок кредита в месяцах. */
+  termMonths?: number
+  /** Годовая процентная ставка, %. */
+  annualRate?: number
 }
 export interface OneTimeExpense {
   id: string

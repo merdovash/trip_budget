@@ -4,6 +4,15 @@ export interface BudgetPresetData {
   settings: BudgetSettings
   incomes: RecurringItem[]
   expenses: RecurringItem[]
+  /** @deprecated Кредиты хранятся в expenses с expenseKind === 'loan'. */
+  loans?: Array<{
+    name: string
+    principal: number
+    currency: string
+    termMonths: number
+    annualRate: number
+    startDate: string
+  }>
   oneTimeExpenses: OneTimeExpense[]
 }
 

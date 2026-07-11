@@ -12,6 +12,7 @@ import {
   toMonthlyAmount,
 } from './budgetEngine'
 import { DEFAULT_SETTINGS, type RecurringItem } from '../types/budget'
+import { buildLoanExpense } from '../lib/loanAmortization'
 
 describe('toMonthlyAmount', () => {
   it('converts yearly to monthly', () => {
@@ -276,5 +277,60 @@ describe('calculateDailyBudgetProjection', () => {
     })[0].taxes
 
     expect(combinedTax).toBeCloseTo(ruOnly + esOnly, 0)
+  })
+})
+
+describe('loan expenses in projection', () => {
+  const loan: RecurringItem = {
+    ...buildLoanExpense({
+      name: 'Автокредит',
+      principal: 12000,
+      currency: 'EUR',
+      termMonths: 3,
+      annualRate: 0,
+      startDate: '2026-01-15',
+    }),
+    id: 'loan-1',
+  }
+
+  it('includes loan payments in monthly recurring expenses', () => {
+    const snapshots = calculateBudgetProjection([], [loan], [], {
+      ...DEFAULT_SETTINGS,
+      taxRegimeId: 'ae-none',
+      horizonMonths: 4,
+      initialBalanceDate: '2026-01-01',
+    })
+    expect(snapshots[0].recurringExpenses).toBeCloseTo(4000)
+    expect(snapshots[1].recurringExpenses).toBeCloseTo(4000)
+    expect(snapshots[2].recurringExpenses).toBeCloseTo(4000)
+    expect(snapshots[3]?.recurringExpenses ?? 0).toBe(0)
+  })
+
+  it('charges loan on payment day in daily projection', () => {
+    const days = calculateDailyBudgetProjection([], [loan], [], {
+      ...DEFAULT_SETTINGS,
+      taxRegimeId: 'ae-none',
+      horizonMonths: 2,
+      initialBalanceDate: '2026-01-01',
+    })
+
+    const disbursementDay = days.find((d) => d.date === '2026-01-15')
+    expect(disbursementDay?.recurringExpenses).toBeCloseTo(4000)
+    expect(disbursementDay?.balance).toBeCloseTo(12000 - 4000)
+
+    const paymentDay = days.find((d) => d.date === '2026-02-15')
+    expect(paymentDay?.recurringExpenses).toBeCloseTo(4000)
+    expect(days.find((d) => d.date === '2026-02-14')?.recurringExpenses).toBe(0)
+  })
+
+  it('adds loan principal to monthly balance on disbursement month', () => {
+    const snapshots = calculateBudgetProjection([], [loan], [], {
+      ...DEFAULT_SETTINGS,
+      taxRegimeId: 'ae-none',
+      horizonMonths: 2,
+      initialBalanceDate: '2026-01-01',
+    })
+    expect(snapshots[0].balance).toBeCloseTo(12000 - 4000)
+    expect(snapshots[1].balance).toBeCloseTo(-4000)
   })
 })

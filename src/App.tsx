@@ -36,12 +36,12 @@ export default function App() {
   }, [fetchRates])
 
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="flex h-screen flex-col overflow-hidden">
       <Header />
       <Disclaimer />
-      <div className="flex flex-1 flex-col md:flex-row">
+      <div className="flex min-h-0 flex-1 overflow-hidden md:flex-row">
         <Sidebar active={section} onChange={setSection} />
-        <main className="flex-1 overflow-auto p-4 md:p-6">
+        <main className="min-h-0 flex-1 overflow-y-auto p-4 md:p-6">
           <SectionContent section={section} />
         </main>
       </div>

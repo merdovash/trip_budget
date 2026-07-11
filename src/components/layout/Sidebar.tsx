@@ -38,12 +38,12 @@ export function Sidebar({ active, onChange }: SidebarProps) {
 
   return (
     <aside
-      className={`flex shrink-0 flex-col border-b border-slate-200 bg-white transition-[width] duration-200 md:border-b-0 md:border-r ${
+      className={`z-30 flex shrink-0 flex-col border-b border-slate-200 bg-white shadow-sm transition-[width] duration-200 md:h-full md:border-b-0 md:border-r ${
         collapsed ? 'md:w-14' : 'w-full md:w-56'
       }`}
     >
       <nav
-        className={`flex flex-1 gap-1 overflow-x-auto p-3 md:flex-col md:overflow-x-visible ${
+        className={`flex shrink-0 gap-1 overflow-x-auto p-3 md:h-full md:flex-col md:overflow-x-visible md:overflow-y-hidden ${
           collapsed ? 'md:items-center md:px-2' : ''
         }`}
       >
@@ -73,7 +73,7 @@ export function Sidebar({ active, onChange }: SidebarProps) {
         })}
       </nav>
 
-      <div className="hidden border-t border-slate-200 p-2 md:block">
+      <div className="hidden shrink-0 border-t border-slate-200 p-2 md:mt-auto md:block">
         <button
           type="button"
           onClick={() => setCollapsed((value) => !value)}

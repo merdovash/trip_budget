@@ -12,6 +12,7 @@ import { useExchangeRateStore } from '../../store/exchangeRateStore'
 import { EmptyState } from '../ui/FormControls'
 import { CashFlowChart } from './CashFlowChart'
 import { MonthlyTable } from './MonthlyTable'
+import { DoubleTaxationPanel } from './DoubleTaxationPanel'
 import { SpainTaxDetailPanel } from './SpainTaxDetailPanel'
 import { SummaryCards, TaxBreakdown } from './SummaryCards'
 
@@ -82,6 +83,7 @@ export function Dashboard() {
           </p>
         </div>
       )}
+      {incomes.length > 0 && <DoubleTaxationPanel lines={taxSummary.doubleTaxation} />}
       {taxSummary.residence && taxSummary.residence.calculator.countryCode === 'ES' ? (
         <SpainTaxDetailPanel
           regimeName={taxSummary.residence.calculator.name}

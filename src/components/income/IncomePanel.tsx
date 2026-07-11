@@ -13,6 +13,7 @@ import {
   type IncomePaymentEntry,
 } from '../../config/incomeCategories'
 import { calculateRussiaSalaryMonthlyDisplay } from '../../tax/countries/russia'
+import { isIncludedInResidenceTax } from '../../tax/incomeSourceTax'
 import { useBudgetStore } from '../../store/budgetStore'
 import { FREQUENCY_LABELS, type Frequency, type IncomePayment, type RecurringItem } from '../../types/budget'
 import { Button, Card, EmptyState, Field, Input, Select, DateInput } from '../ui/FormControls'
@@ -52,13 +53,15 @@ function IncomeForm({ initialItem, onSubmit, onCancel }: IncomeFormProps) {
 
   function handleCategoryChange(categoryId: string) {
     const def = getIncomeCategoryDef(categoryId)
+    const salaryCountryCode = def?.showSalaryCountry ? 'RU' : form.salaryCountryCode
     setForm({
       ...form,
       categoryId,
       name: '',
       payments: createEmptyPaymentEntries(categoryId),
       frequency: def?.defaultFrequency ?? 'monthly',
-      salaryCountryCode: def?.showSalaryCountry ? 'RU' : form.salaryCountryCode,
+      salaryCountryCode,
+      includeInResidenceTax: def?.showSalaryCountry && salaryCountryCode === 'RU' ? false : true,
     })
     setErrors({})
   }
@@ -134,6 +137,7 @@ function IncomeForm({ initialItem, onSubmit, onCancel }: IncomeFormProps) {
       payments: hasMultiplePayments ? payments : undefined,
       startDate: form.startDate,
       endDate: form.endDate || undefined,
+      includeInResidenceTax: form.includeInResidenceTax,
       ...(categoryDef.showSalaryCountry ? { salaryCountryCode: form.salaryCountryCode } : {}),
     }
   }
@@ -172,7 +176,15 @@ function IncomeForm({ initialItem, onSubmit, onCancel }: IncomeFormProps) {
         <Field label="Страна выплаты зарплаты">
           <Select
             value={form.salaryCountryCode}
-            onChange={(e) => setForm({ ...form, salaryCountryCode: e.target.value })}
+            onChange={(e) => {
+              const salaryCountryCode = e.target.value
+              setForm({
+                ...form,
+                salaryCountryCode,
+                includeInResidenceTax:
+                  salaryCountryCode === 'RU' ? false : form.includeInResidenceTax,
+              })
+            }}
           >
             {SALARY_SOURCE_COUNTRIES.map((c) => (
               <option key={c.code} value={c.code}>
@@ -180,6 +192,24 @@ function IncomeForm({ initialItem, onSubmit, onCancel }: IncomeFormProps) {
               </option>
             ))}
           </Select>
+        </Field>
+      )}
+
+      {categoryDef && (
+        <Field label="Налоги страны проживания">
+          <Select
+            value={form.includeInResidenceTax ? 'include' : 'exclude'}
+            onChange={(e) =>
+              setForm({ ...form, includeInResidenceTax: e.target.value === 'include' })
+            }
+          >
+            <option value="include">Учитывать</option>
+            <option value="exclude">Не учитывать</option>
+          </Select>
+          <p className="text-xs text-slate-500">
+            Исключённые доходы не попадают в IRPF и налоговую детализацию страны релокации, но
+            остаются в денежном потоке.
+          </p>
         </Field>
       )}
 
@@ -538,6 +568,11 @@ function IncomeList({
                 {item.salaryCountryCode === 'RU' && (
                   <span className="ml-2 rounded bg-slate-100 px-1.5 py-0.5 text-xs font-normal text-slate-500">
                     РФ
+                  </span>
+                )}
+                {!isIncludedInResidenceTax(item) && (
+                  <span className="ml-2 rounded bg-amber-50 px-1.5 py-0.5 text-xs font-normal text-amber-700">
+                    вне налогов проживания
                   </span>
                 )}
               </td>

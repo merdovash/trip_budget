@@ -18,6 +18,8 @@ export interface RecurringItem {
   categoryId?: string
   /** Страна, где выплачивается зарплата (для categoryId === 'salary'). */
   salaryCountryCode?: string
+  /** Учитывать доход в налогах страны проживания. По умолчанию: да, кроме зарплаты из РФ. */
+  includeInResidenceTax?: boolean
   payments?: IncomePayment[]
   startDate: string
   endDate?: string

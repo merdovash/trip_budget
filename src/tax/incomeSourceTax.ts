@@ -26,8 +26,16 @@ export function isRussiaSalary(item: RecurringItem): boolean {
   return item.categoryId === 'salary' && item.salaryCountryCode === 'RU'
 }
 
+/** Доход участвует в расчёте налогов страны проживания. */
+export function isIncludedInResidenceTax(item: RecurringItem): boolean {
+  if (item.includeInResidenceTax !== undefined) {
+    return item.includeInResidenceTax
+  }
+  return !isRussiaSalary(item)
+}
+
 export function filterResidenceTaxableIncomes(incomes: RecurringItem[]): RecurringItem[] {
-  return incomes.filter((item) => !isRussiaSalary(item))
+  return incomes.filter(isIncludedInResidenceTax)
 }
 
 export function annualGrossInCurrency(

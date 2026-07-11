@@ -1,5 +1,6 @@
 import type { Frequency, RecurringItem } from '../types/budget'
 import { todayIsoDate } from '../lib/format'
+import { isIncludedInResidenceTax } from '../tax/incomeSourceTax'
 
 export interface IncomePaymentFieldDef {
   id: string
@@ -102,6 +103,7 @@ export interface IncomeFormState {
   startDate: string
   endDate: string
   salaryCountryCode: string
+  includeInResidenceTax: boolean
 }
 
 export function createInitialIncomeForm(baseCurrency: string): IncomeFormState {
@@ -114,6 +116,7 @@ export function createInitialIncomeForm(baseCurrency: string): IncomeFormState {
     startDate: todayIsoDate(),
     endDate: '',
     salaryCountryCode: 'RU',
+    includeInResidenceTax: true,
   }
 }
 
@@ -153,5 +156,6 @@ export function incomeItemToFormState(item: RecurringItem): IncomeFormState {
     startDate: item.startDate,
     endDate: item.endDate ?? '',
     salaryCountryCode: item.salaryCountryCode ?? 'RU',
+    includeInResidenceTax: isIncludedInResidenceTax(item),
   }
 }

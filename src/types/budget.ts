@@ -20,6 +20,8 @@ export interface RecurringItem {
   salaryCountryCode?: string
   /** Учитывать доход в налогах страны проживания. По умолчанию: да, кроме зарплаты из РФ. */
   includeInResidenceTax?: boolean
+  /** Зачёт уплаченного НДФЛ в РФ при декларации в Испании (для salaryCountryCode === 'RU'). */
+  foreignTaxCredit?: boolean
   payments?: IncomePayment[]
   startDate: string
   endDate?: string

@@ -48,6 +48,13 @@ export function annualGrossInCurrency(
   return convertCurrency(annual, item.currency, currency)
 }
 
+export function sumAnnualGrossIncomes(
+  incomes: RecurringItem[],
+  baseCurrency: string,
+): number {
+  return incomes.reduce((sum, item) => sum + annualGrossInCurrency(item, baseCurrency), 0)
+}
+
 export function annualGrossInRub(item: RecurringItem): number {
   return annualGrossInCurrency(item, 'RUB')
 }

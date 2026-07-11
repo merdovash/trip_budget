@@ -80,6 +80,7 @@ function IncomeForm({ initialItem, onSubmit, onCancel }: IncomeFormProps) {
       frequency: def?.defaultFrequency ?? 'monthly',
       salaryCountryCode,
       includeInResidenceTax: def?.showSalaryCountry && salaryCountryCode === 'RU' ? false : true,
+      foreignTaxCredit: true,
     })
     setErrors({})
   }
@@ -156,6 +157,9 @@ function IncomeForm({ initialItem, onSubmit, onCancel }: IncomeFormProps) {
       startDate: form.startDate,
       endDate: form.endDate || undefined,
       includeInResidenceTax: form.includeInResidenceTax,
+      ...(isRussiaSalary && form.includeInResidenceTax
+        ? { foreignTaxCredit: form.foreignTaxCredit }
+        : {}),
       ...(categoryDef.showSalaryCountry ? { salaryCountryCode: form.salaryCountryCode } : {}),
     }
   }
@@ -201,6 +205,7 @@ function IncomeForm({ initialItem, onSubmit, onCancel }: IncomeFormProps) {
                 salaryCountryCode,
                 includeInResidenceTax:
                   salaryCountryCode === 'RU' ? false : form.includeInResidenceTax,
+                foreignTaxCredit: salaryCountryCode === 'RU' ? true : form.foreignTaxCredit,
               })
             }}
           >
@@ -218,17 +223,33 @@ function IncomeForm({ initialItem, onSubmit, onCancel }: IncomeFormProps) {
           <Select
             value={form.includeInResidenceTax ? 'include' : 'exclude'}
             onChange={(e) =>
-              setForm({ ...form, includeInResidenceTax: e.target.value === 'include' })
+              setForm({
+                ...form,
+                includeInResidenceTax: e.target.value === 'include',
+                foreignTaxCredit: e.target.value === 'include',
+              })
             }
           >
             <option value="include">Учитывать</option>
             <option value="exclude">Не учитывать</option>
           </Select>
           <p className="text-xs text-slate-500">
-            Исключённые доходы не попадают в IRPF страны проживания. Зарплата РФ по умолчанию
-            облагается только НДФЛ в России; при «Учитывать» — только IRPF проживания (без
-            двойного налога).
+            Исключённые доходы не попадают в IRPF страны проживания. Зарплата РФ по умолчанию —
+            только НДФЛ в России. При «Учитывать» применяются вычеты Испании (mínimo personal); при
+            включённом зачёте НДФЛ — deducción por doble imposición.
           </p>
+        </Field>
+      )}
+
+      {isRussiaSalary && form.includeInResidenceTax && (
+        <Field label="Зачёт НДФЛ в Испании">
+          <Select
+            value={form.foreignTaxCredit ? 'yes' : 'no'}
+            onChange={(e) => setForm({ ...form, foreignTaxCredit: e.target.value === 'yes' })}
+          >
+            <option value="yes">Да — НДФЛ в РФ + зачёт против IRPF</option>
+            <option value="no">Нет — только IRPF в стране проживания</option>
+          </Select>
         </Field>
       )}
 

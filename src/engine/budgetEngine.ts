@@ -17,7 +17,13 @@ import { FOOD_EXPENSE_CATEGORY } from '../config/foodBudget'
 import { convertCurrency } from '../lib/currency'
 import { buildDoubleTaxationLines, type DoubleTaxationLine } from '../tax/doubleTaxation'
 import { getTaxCalculator } from '../tax/registry'
+import {
+  adjustResidenceTaxResult,
+  computeAnnualTaxBurden,
+  type SpainForeignSalaryBreakdown,
+} from '../tax/spainForeignSalary'
 import type { ScheduledTaxPayment, TaxResult } from '../tax/types'
+import { isRussiaSourceTaxable } from '../tax/doubleTaxation'
 import {
   createRussiaYtdTracker,
   filterResidenceTaxableIncomes,
@@ -606,26 +612,14 @@ function scheduledTaxTotalForMonth(
   return total
 }
 
-function getEffectiveTaxRate(grossAnnualIncome: number, settings: BudgetSettings): number {
-
+function getEffectiveTaxRate(incomes: RecurringItem[], settings: BudgetSettings): number {
+  const residenceIncomes = filterResidenceTaxableIncomes(incomes)
+  const grossAnnualIncome = calculateAnnualGrossIncome(residenceIncomes, settings.baseCurrency)
   if (grossAnnualIncome <= 0) return 0
 
   const calculator = getTaxCalculator(settings.taxRegimeId)
-
-  const taxResult = calculator?.calculate({
-
-    grossAnnualIncome,
-
-    familySize: settings.familySize,
-
-    dependents: settings.dependents,
-
-  })
-
-  if (!taxResult) return 0
-
-  return (taxResult.incomeTax + taxResult.socialContributions) / grossAnnualIncome
-
+  const burden = computeAnnualTaxBurden(incomes, settings, calculator)
+  return (burden.residenceIncomeTax + burden.residenceSocial) / grossAnnualIncome
 }
 
 
@@ -654,7 +648,7 @@ export function calculateDailyBudgetProjection(
     familySize: settings.familySize,
     dependents: settings.dependents,
   })
-  const taxRate = getEffectiveTaxRate(grossAnnualIncome, settings)
+  const taxRate = getEffectiveTaxRate(incomes, settings)
   const scheduledTaxMap = taxResult
     ? buildScheduledTaxByDate(incomes, settings, taxResult, collectYearsFromDayKeys(dayKeys))
     : new Map()
@@ -820,13 +814,18 @@ export interface FullTaxSummary {
     payments: ScheduledTaxPayment[]
   }
   doubleTaxation: DoubleTaxationLine[]
+  spainForeignSalary?: SpainForeignSalaryBreakdown
+  foreignTaxCredit: number
 }
 
 export function getTaxSummary(incomes: RecurringItem[], settings: BudgetSettings): FullTaxSummary {
   const residenceIncomes = filterResidenceTaxableIncomes(incomes)
   const grossAnnualIncome = calculateAnnualGrossIncome(residenceIncomes, settings.baseCurrency)
   const calculator = getTaxCalculator(settings.taxRegimeId)
-  const russiaSalary = summarizeRussiaSalaries(incomes, settings.dependents)
+  const russiaSalary = summarizeRussiaSalaries(
+    incomes.filter((item) => isRussiaSourceTaxable(item)),
+    settings.dependents,
+  )
 
   const input = {
     grossAnnualIncome,
@@ -834,13 +833,20 @@ export function getTaxSummary(incomes: RecurringItem[], settings: BudgetSettings
     dependents: settings.dependents,
   }
 
-  const residence =
+  const adjusted =
     calculator
+      ? adjustResidenceTaxResult(residenceIncomes, settings, calculator)
+      : null
+
+  const residence =
+    calculator && adjusted
       ? {
           calculator,
-          result: calculator.calculate(input),
+          result: adjusted.result,
         }
       : null
+
+  const taxBurden = computeAnnualTaxBurden(incomes, settings, calculator)
 
   let spainSchedule: FullTaxSummary['spainSchedule']
   if (calculator?.countryCode === 'ES' && calculator.buildTaxSchedule) {
@@ -862,12 +868,12 @@ export function getTaxSummary(incomes: RecurringItem[], settings: BudgetSettings
   return {
     residence,
     russiaSalary,
-    russiaNdflInBase: russiaSalary
-      ? convertCurrency(russiaSalary.ndfl, 'RUB', settings.baseCurrency)
-      : 0,
+    russiaNdflInBase: taxBurden.russiaNdflInBase,
     russiaEmployerSocialInBase: russiaEmployerSocialAnnualInBase(incomes, settings.baseCurrency),
     spainSchedule,
     doubleTaxation: buildDoubleTaxationLines(incomes),
+    spainForeignSalary: adjusted?.spainForeignSalary,
+    foreignTaxCredit: taxBurden.foreignTaxCredit,
   }
 }
 

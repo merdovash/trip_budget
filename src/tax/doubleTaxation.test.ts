@@ -25,14 +25,25 @@ describe('double taxation rules', () => {
     expect(isRussiaSourceTaxable(item)).toBe(true)
   })
 
-  it('taxes RU salary at residence when explicitly included', () => {
+  it('taxes RU salary at residence without NDFL when credit disabled', () => {
+    const item = income({
+      categoryId: 'salary',
+      salaryCountryCode: 'RU',
+      includeInResidenceTax: true,
+      foreignTaxCredit: false,
+    })
+    expect(getIncomeTaxTreatment(item)).toBe('residence')
+    expect(isRussiaSourceTaxable(item)).toBe(false)
+  })
+
+  it('uses foreign tax credit when included with default credit flag', () => {
     const item = income({
       categoryId: 'salary',
       salaryCountryCode: 'RU',
       includeInResidenceTax: true,
     })
-    expect(getIncomeTaxTreatment(item)).toBe('residence')
-    expect(isRussiaSourceTaxable(item)).toBe(false)
+    expect(getIncomeTaxTreatment(item)).toBe('residence_with_credit')
+    expect(isRussiaSourceTaxable(item)).toBe(true)
   })
 
   it('taxes ES freelance only at residence', () => {

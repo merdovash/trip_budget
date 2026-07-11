@@ -225,8 +225,9 @@ function IncomeForm({ initialItem, onSubmit, onCancel }: IncomeFormProps) {
             <option value="exclude">Не учитывать</option>
           </Select>
           <p className="text-xs text-slate-500">
-            Исключённые доходы не попадают в IRPF и налоговую детализацию страны релокации, но
-            остаются в денежном потоке.
+            Исключённые доходы не попадают в IRPF страны проживания. Зарплата РФ по умолчанию
+            облагается только НДФЛ в России; при «Учитывать» — только IRPF проживания (без
+            двойного налога).
           </p>
         </Field>
       )}

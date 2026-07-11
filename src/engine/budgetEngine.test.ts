@@ -229,4 +229,52 @@ describe('calculateDailyBudgetProjection', () => {
     expect(keys.at(-1)).toBe('2026-07-31')
     expect(keys).toHaveLength(47)
   })
+
+  it('does not apply residence tax to excluded RU salary in monthly projection', () => {
+    const incomes: RecurringItem[] = [
+      {
+        id: 'ru',
+        name: 'RU Salary',
+        amount: 500_000,
+        currency: 'RUB',
+        frequency: 'monthly',
+        categoryId: 'salary',
+        salaryCountryCode: 'RU',
+        includeInResidenceTax: false,
+        startDate: '2026-01-01',
+      },
+      {
+        id: 'es',
+        name: 'Freelance',
+        amount: 3000,
+        currency: 'EUR',
+        frequency: 'monthly',
+        categoryId: 'freelance',
+        startDate: '2026-01-01',
+      },
+    ]
+
+    const snapshots = calculateBudgetProjection(incomes, [], [], {
+      ...DEFAULT_SETTINGS,
+      taxRegimeId: 'es-employed',
+      horizonMonths: 1,
+      initialBalanceDate: '2026-01-01',
+    })
+
+    const combinedTax = snapshots[0].taxes
+    const ruOnly = calculateBudgetProjection([incomes[0]], [], [], {
+      ...DEFAULT_SETTINGS,
+      taxRegimeId: 'es-employed',
+      horizonMonths: 1,
+      initialBalanceDate: '2026-01-01',
+    })[0].taxes
+    const esOnly = calculateBudgetProjection([incomes[1]], [], [], {
+      ...DEFAULT_SETTINGS,
+      taxRegimeId: 'es-employed',
+      horizonMonths: 1,
+      initialBalanceDate: '2026-01-01',
+    })[0].taxes
+
+    expect(combinedTax).toBeCloseTo(ruOnly + esOnly, 0)
+  })
 })

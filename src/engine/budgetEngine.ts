@@ -15,6 +15,7 @@ import type {
 import { FOOD_EXPENSE_CATEGORY } from '../config/foodBudget'
 
 import { convertCurrency } from '../lib/currency'
+import { buildDoubleTaxationLines, type DoubleTaxationLine } from '../tax/doubleTaxation'
 import { getTaxCalculator } from '../tax/registry'
 import type { ScheduledTaxPayment, TaxResult } from '../tax/types'
 import {
@@ -740,7 +741,6 @@ export function calculateBudgetProjection(
     dependents: settings.dependents,
   })
 
-  const monthlyGross = grossAnnualIncome / 12
   const monthlyTax =
     taxResult && calculator?.taxDistribution !== 'scheduled'
       ? taxResult.incomeTax / 12 + taxResult.socialContributions / 12
@@ -756,13 +756,15 @@ export function calculateBudgetProjection(
 
   return monthKeys.map((month) => {
     const grossIncome = sumRecurringForMonth(incomes, month, baseCurrency)
+    const residenceGross = sumRecurringForMonth(residenceIncomes, month, baseCurrency)
     const recurringExpenses = sumRecurringForMonth(expenses, month, baseCurrency)
     const oneTimeTotal = sumOneTimeForMonth(oneTimeExpenses, month, baseCurrency)
 
-    const grossForTax = grossIncome > 0 ? grossIncome : monthlyGross
     const residenceTax = useScheduled
       ? scheduledTaxTotalForMonth(month, scheduledTaxMap)
-      : monthlyTax * (grossAnnualIncome > 0 ? grossForTax / (grossAnnualIncome / 12) : 1)
+      : grossAnnualIncome > 0
+        ? monthlyTax * (residenceGross / (grossAnnualIncome / 12))
+        : 0
     const russiaTax = russiaSourceTaxForMonth(
       incomes,
       month,
@@ -770,7 +772,7 @@ export function calculateBudgetProjection(
       baseCurrency,
     )
     const taxes = residenceTax + russiaTax
-    const netIncome = grossForTax - taxes
+    const netIncome = grossIncome - taxes
 
     const balance = netIncome - recurringExpenses - oneTimeTotal
 
@@ -782,7 +784,7 @@ export function calculateBudgetProjection(
 
       month,
 
-      grossIncome: grossForTax,
+      grossIncome,
 
       netIncome,
 
@@ -817,6 +819,7 @@ export interface FullTaxSummary {
     quarterlyGross?: [number, number, number, number]
     payments: ScheduledTaxPayment[]
   }
+  doubleTaxation: DoubleTaxationLine[]
 }
 
 export function getTaxSummary(incomes: RecurringItem[], settings: BudgetSettings): FullTaxSummary {
@@ -864,6 +867,7 @@ export function getTaxSummary(incomes: RecurringItem[], settings: BudgetSettings
       : 0,
     russiaEmployerSocialInBase: russiaEmployerSocialAnnualInBase(incomes, settings.baseCurrency),
     spainSchedule,
+    doubleTaxation: buildDoubleTaxationLines(incomes),
   }
 }
 

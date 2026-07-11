@@ -5,6 +5,7 @@ import {
   calculateRussiaNdflForPayment,
   calculateRussiaSalaryTax,
 } from './countries/russia'
+import { isRussiaSourceTaxable } from './doubleTaxation'
 
 export const SALARY_SOURCE_COUNTRIES = [{ code: 'RU', label: 'Россия' }] as const
 export type SalarySourceCountryCode = (typeof SALARY_SOURCE_COUNTRIES)[number]['code']
@@ -113,7 +114,7 @@ export function summarizeRussiaSalaries(
   incomes: RecurringItem[],
   dependents: number,
 ): ReturnType<typeof calculateRussiaSalaryTax> | null {
-  const ruSalaries = incomes.filter(isRussiaSalary)
+  const ruSalaries = incomes.filter(isRussiaSourceTaxable)
   if (ruSalaries.length === 0) return null
 
   const grossAnnualRub = ruSalaries.reduce((sum, item) => sum + annualGrossInRub(item), 0)
@@ -131,7 +132,7 @@ export function russiaSourceTaxForDay(
   let total = 0
 
   for (const item of incomes) {
-    if (!isRussiaSalary(item)) continue
+    if (!isRussiaSourceTaxable(item)) continue
     const grossRub = paymentGrossRubOnDay(item, year, month, day)
     const ndflRub = calculateRussiaSourceTaxForPayment(item, grossRub, dependents, tracker)
     total += convertCurrency(ndflRub, 'RUB', baseCurrency)
@@ -177,7 +178,7 @@ export function russiaEmployerSocialAnnualInBase(
   baseCurrency: string,
 ): number {
   const grossRub = incomes
-    .filter(isRussiaSalary)
+    .filter(isRussiaSourceTaxable)
     .reduce((sum, item) => sum + annualGrossInRub(item), 0)
   if (grossRub === 0) return 0
   return convertCurrency(calculateRussiaEmployerSocial(grossRub), 'RUB', baseCurrency)

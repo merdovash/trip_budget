@@ -75,6 +75,12 @@ function migratePersistedState(persisted: PersistedBudgetState, current: BudgetS
   if (!mergedSettings.relocationProgramId) {
     mergedSettings.relocationProgramId = 'none'
   }
+  if (!mergedSettings.relocationMode) {
+    mergedSettings.relocationMode = 'remote_employment'
+  }
+  if (!mergedSettings.employmentCountryCode) {
+    mergedSettings.employmentCountryCode = 'RU'
+  }
 
   const merged: BudgetState = {
     ...current,

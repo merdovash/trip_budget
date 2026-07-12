@@ -48,8 +48,12 @@ describe('relocation date helpers', () => {
   })
 
   it('lists country-specific programs', () => {
-    const gePrograms = getRelocationProgramsForCountry('GE')
+    const gePrograms = getRelocationProgramsForCountry('GE', 'remote_employment')
     expect(gePrograms.some((p) => p.id === 'ge-remote-relocation')).toBe(true)
+    expect(gePrograms.some((p) => p.id === 'ge-sole-prop-setup')).toBe(false)
+
+    const geIpPrograms = getRelocationProgramsForCountry('GE', 'sole_proprietorship')
+    expect(geIpPrograms.some((p) => p.id === 'ge-sole-prop-setup')).toBe(true)
     expect(gePrograms.some((p) => p.id === 'generic-relocation')).toBe(true)
   })
 })

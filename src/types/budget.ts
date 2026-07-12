@@ -1,5 +1,7 @@
 import { todayIsoDate } from '../lib/format'
 
+export type RelocationMode = 'remote_employment' | 'sole_proprietorship'
+
 export type Frequency = 'monthly' | 'yearly' | 'weekly' | 'once'
 
 export type ExpenseKind = 'regular' | 'loan'
@@ -80,6 +82,10 @@ export interface BudgetSettings {
   relocationDate?: string
   /** Программа переезда — шаблон разовых расходов. */
   relocationProgramId?: string
+  /** Способ переезда: удалённая зарплата или ИП в стране проживания. */
+  relocationMode?: RelocationMode
+  /** Страна работодателя / источника зарплаты (при remote_employment). */
+  employmentCountryCode?: string
   horizonMonths: number
   initialBalance: number
   initialBalanceCurrency: string
@@ -122,6 +128,8 @@ export const DEFAULT_SETTINGS: BudgetSettings = {
   initialBalanceDate: todayIsoDate(),
   relocationDate: todayIsoDate(),
   relocationProgramId: 'none',
+  relocationMode: 'remote_employment',
+  employmentCountryCode: 'RU',
 }
 
 export const CURRENCIES = ['EUR', 'USD', 'RUB', 'THB', 'MYR', 'GBP', 'AED', 'GEL', 'MXN', 'IDR', 'VND'] as const

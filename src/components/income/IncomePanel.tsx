@@ -14,6 +14,7 @@ import {
 } from '../../config/incomeCategories'
 import { calculateRussiaSalaryMonthlyDisplay } from '../../tax/countries/russia'
 import { calculateSpainSalaryMonthlyDisplay } from '../../tax/countries/spain'
+import { getEmploymentCountryCode, getRelocationMode } from '../../config/relocationMode'
 import { isIncludedInResidenceTax } from '../../tax/incomeSourceTax'
 import { useBudgetStore } from '../../store/budgetStore'
 import { FREQUENCY_LABELS, type Frequency, type IncomePayment, type RecurringItem } from '../../types/budget'
@@ -94,9 +95,11 @@ function IncomeForm({ initialItem, onSubmit, onCancel }: IncomeFormProps) {
   function handleCategoryChange(categoryId: string) {
     const def = getIncomeCategoryDef(categoryId)
     const salaryCountryCode = def?.showSalaryCountry
-      ? settings.countryCode === 'RU'
-        ? 'RU'
-        : 'ES'
+      ? getRelocationMode(settings) === 'remote_employment'
+        ? getEmploymentCountryCode(settings)
+        : settings.countryCode === 'RU'
+          ? 'RU'
+          : 'ES'
       : form.salaryCountryCode
     setForm({
       ...form,

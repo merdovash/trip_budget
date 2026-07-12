@@ -15,6 +15,13 @@ import {
   getRelocationProgramsForCountry,
   RELOCATION_PROGRAM_NONE,
 } from '../../config/relocationPrograms'
+import {
+  EMPLOYMENT_COUNTRIES,
+  getRelocationMode,
+  RELOCATION_MODE_LABELS,
+  suggestTaxRegimeForMode,
+} from '../../config/relocationMode'
+import type { RelocationMode } from '../../types/budget'
 import { formatCurrency } from '../../lib/format'
 
 export function BudgetSettingsPanel() {
@@ -28,8 +35,21 @@ export function BudgetSettingsPanel() {
   const countries = getAvailableCountries()
   const regimes = getCalculatorsByCountry(settings.countryCode)
   const selectedRegime = regimes.find((r) => r.id === settings.taxRegimeId)
-  const relocationPrograms = getRelocationProgramsForCountry(settings.countryCode)
+  const relocationMode = getRelocationMode(settings)
+  const relocationPrograms = getRelocationProgramsForCountry(settings.countryCode, relocationMode)
   const selectedProgram = relocationPrograms.find((p) => p.id === settings.relocationProgramId)
+
+  function handleRelocationModeChange(mode: RelocationMode) {
+    const suggestedRegime = suggestTaxRegimeForMode(settings.countryCode, mode, settings.taxRegimeId)
+    const programs = getRelocationProgramsForCountry(settings.countryCode, mode)
+    const programStillValid = programs.some((p) => p.id === settings.relocationProgramId)
+    setSettings({
+      relocationMode: mode,
+      employmentCountryCode: mode === 'remote_employment' ? settings.employmentCountryCode ?? 'RU' : undefined,
+      ...(suggestedRegime ? { taxRegimeId: suggestedRegime } : {}),
+      ...(!programStillValid ? { relocationProgramId: RELOCATION_PROGRAM_NONE } : {}),
+    })
+  }
 
   return (
     <Card>
@@ -151,6 +171,41 @@ export function BudgetSettingsPanel() {
             График и прогноз бюджета начинаются с этого месяца.
           </p>
         </Field>
+
+        <Field label="Способ переезда">
+          <Select
+            value={relocationMode}
+            onChange={(e) => handleRelocationModeChange(e.target.value as RelocationMode)}
+          >
+            {(Object.entries(RELOCATION_MODE_LABELS) as [RelocationMode, string][]).map(
+              ([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ),
+            )}
+          </Select>
+          <p className="mt-1 text-xs text-slate-500">
+            {relocationMode === 'sole_proprietorship'
+              ? 'Доход как ИП облагается в стране проживания. Подбирается режим для самозанятых.'
+              : 'Зарплата от работодателя в выбранной стране; налоги у источника и в стране проживания.'}
+          </p>
+        </Field>
+
+        {relocationMode === 'remote_employment' && (
+          <Field label="Страна работы (источник зарплаты)">
+            <Select
+              value={settings.employmentCountryCode ?? 'RU'}
+              onChange={(e) => setSettings({ employmentCountryCode: e.target.value })}
+            >
+              {EMPLOYMENT_COUNTRIES.map((country) => (
+                <option key={country.code} value={country.code}>
+                  {country.label}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        )}
 
         <Field label="Дата переезда">
           <DateInput
@@ -387,6 +442,8 @@ export function BudgetSettingsPanel() {
               initialBalanceDate: todayIsoDate(),
               relocationDate: todayIsoDate(),
               relocationProgramId: RELOCATION_PROGRAM_NONE,
+              relocationMode: 'remote_employment',
+              employmentCountryCode: 'RU',
             })
           }
         >

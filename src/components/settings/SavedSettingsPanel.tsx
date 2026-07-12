@@ -27,9 +27,24 @@ function SettingsSnapshotDetails({ id }: { id: string }) {
     { label: 'Начальный остаток', value: `${snapshot.settings.initialBalance ?? 0} ${snapshot.settings.initialBalanceCurrency ?? snapshot.settings.baseCurrency}` },
     { label: 'Дата начального остатка', value: formatDateDisplay(snapshot.settings.initialBalanceDate) },
     {
+      label: 'Способ переезда',
+      value:
+        snapshot.settings.relocationMode === 'sole_proprietorship'
+          ? 'ИП в стране проживания'
+          : 'Работа в другой стране',
+    },
+    {
       label: 'Дата переезда',
       value: formatDateDisplay(snapshot.settings.relocationDate ?? snapshot.settings.initialBalanceDate),
     },
+    ...(snapshot.settings.relocationMode !== 'sole_proprietorship'
+      ? [
+          {
+            label: 'Страна работы',
+            value: snapshot.settings.employmentCountryCode === 'ES' ? 'Испания' : 'Россия',
+          },
+        ]
+      : []),
     { label: 'Горизонт прогноза', value: `${snapshot.settings.horizonMonths} мес.` },
     { label: 'Размер семьи', value: String(snapshot.settings.familySize) },
     { label: 'Иждивенцы', value: String(snapshot.settings.dependents) },

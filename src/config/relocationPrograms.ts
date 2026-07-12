@@ -1,4 +1,5 @@
 import type { BudgetSettings, OneTimeExpense, RecurringItem } from '../types/budget'
+import type { RelocationMode } from '../types/budget'
 
 export type ItemLifecycle = 'destination' | 'origin' | 'any'
 
@@ -86,6 +87,8 @@ export interface RelocationProgram {
   countryCode: string
   name: string
   description: string
+  /** Если задано — программа только для этих способов переезда. */
+  modes?: RelocationMode[]
   expenses: RelocationExpenseTemplate[]
 }
 
@@ -95,6 +98,7 @@ export const RELOCATION_PROGRAMS: RelocationProgram[] = [
   {
     id: 'ge-remote-relocation',
     countryCode: 'GE',
+    modes: ['remote_employment'],
     name: 'Переезд в Грузию (удалёнка)',
     description:
       'Типовые разовые расходы: перелёт, регистрация, депозит аренды. Суммы ориентировочные.',
@@ -106,8 +110,22 @@ export const RELOCATION_PROGRAMS: RelocationProgram[] = [
     ],
   },
   {
+    id: 'ge-sole-prop-setup',
+    countryCode: 'GE',
+    modes: ['sole_proprietorship'],
+    name: 'ИП в Грузии (малый бизнес)',
+    description: 'Регистрация ИП, открытие счёта, первичные расходы на старт.',
+    expenses: [
+      { name: 'Регистрация ИП', amount: 200, currency: 'GEL', category: 'Переезд', offsetDays: -7 },
+      { name: 'Юр. сопровождение', amount: 800, currency: 'GEL', category: 'Переезд', offsetDays: -3 },
+      { name: 'Авиабилеты (семья)', amount: 1_200, currency: 'EUR', category: 'Переезд', offsetDays: -5 },
+      { name: 'Депозит аренды', amount: 1_500, currency: 'GEL', category: 'Депозит', offsetDays: 0 },
+    ],
+  },
+  {
     id: 'es-employed-relocation',
     countryCode: 'ES',
+    modes: ['remote_employment'],
     name: 'Переезд в Испанию (найм)',
     description: 'Перелёт, виза/ВНЖ, депозит и мебель для старта в Испании.',
     expenses: [
@@ -118,8 +136,21 @@ export const RELOCATION_PROGRAMS: RelocationProgram[] = [
     ],
   },
   {
+    id: 'es-freelance-setup',
+    countryCode: 'ES',
+    modes: ['sole_proprietorship'],
+    name: 'ИП / autónomo в Испании',
+    description: 'Регистрация autónomo, перелёт и депозит.',
+    expenses: [
+      { name: 'Регистрация autónomo', amount: 300, currency: 'EUR', category: 'Переезд', offsetDays: -7 },
+      { name: 'Авиабилеты (семья)', amount: 1_500, currency: 'EUR', category: 'Переезд', offsetDays: -7 },
+      { name: 'Депозит аренды', amount: 2_500, currency: 'EUR', category: 'Депозит', offsetDays: 0 },
+    ],
+  },
+  {
     id: 'th-residence-relocation',
     countryCode: 'TH',
+    modes: ['remote_employment'],
     name: 'Переезд в Таиланд',
     description: 'Перелёт, виза, депозит и первичное обустройство.',
     expenses: [
@@ -141,10 +172,16 @@ export const RELOCATION_PROGRAMS: RelocationProgram[] = [
   },
 ]
 
-export function getRelocationProgramsForCountry(countryCode: string): RelocationProgram[] {
-  return RELOCATION_PROGRAMS.filter(
-    (program) => program.countryCode === countryCode || program.countryCode === '*',
-  )
+export function getRelocationProgramsForCountry(
+  countryCode: string,
+  mode?: RelocationMode,
+): RelocationProgram[] {
+  const relocationMode = mode ?? 'remote_employment'
+  return RELOCATION_PROGRAMS.filter((program) => {
+    const countryMatch = program.countryCode === countryCode || program.countryCode === '*'
+    const modeMatch = !program.modes || program.modes.includes(relocationMode)
+    return countryMatch && modeMatch
+  })
 }
 
 export function getRelocationProgram(programId: string | undefined): RelocationProgram | undefined {

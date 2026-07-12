@@ -95,6 +95,11 @@ export function addOwnerRef(ref: PresetOwnerRef): void {
   localStorage.setItem(OWNER_REFS_KEY, JSON.stringify(refs))
 }
 
+export function updateOwnerRefName(id: string, name: string): void {
+  const refs = readOwnerRefs().map((item) => (item.id === id ? { ...item, name } : item))
+  localStorage.setItem(OWNER_REFS_KEY, JSON.stringify(refs))
+}
+
 export function removeOwnerRef(id: string): void {
   const refs = readOwnerRefs().filter((item) => item.id !== id)
   localStorage.setItem(OWNER_REFS_KEY, JSON.stringify(refs))

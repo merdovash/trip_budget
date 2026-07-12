@@ -9,12 +9,23 @@ import type { BudgetPresetData } from '../types/preset'
 import { DEFAULT_SETTINGS } from '../types/budget'
 import { migrateLegacyLoan } from '../lib/loanAmortization'
 import { clonePresetData } from '../lib/presetsApi'
+import { snapshotsEqual } from '../lib/presetSnapshotCompare'
+
+export interface ActivePreset {
+  id: string
+  name: string
+  ownerToken?: string
+}
 
 interface BudgetState {
   settings: BudgetSettings
   incomes: RecurringItem[]
   expenses: RecurringItem[]
   oneTimeExpenses: OneTimeExpense[]
+  /** Набор, загруженный в текущую сессию (редактирование не сохраняется автоматически). */
+  activePreset: ActivePreset | null
+  /** Снимок на момент загрузки/сохранения набора — для индикатора несохранённых изменений. */
+  presetBaseline: BudgetPresetData | null
   setSettings: (settings: Partial<BudgetSettings>) => void
   addIncome: (item: Omit<RecurringItem, 'id'>) => void
   updateIncome: (id: string, item: Partial<RecurringItem>) => void
@@ -26,7 +37,12 @@ interface BudgetState {
   updateOneTimeExpense: (id: string, item: Partial<OneTimeExpense>) => void
   removeOneTimeExpense: (id: string) => void
   exportSnapshot: () => BudgetPresetData
-  loadFromPreset: (data: BudgetPresetData) => void
+  loadFromPreset: (data: BudgetPresetData, activePreset?: ActivePreset | null) => void
+  setActivePreset: (activePreset: ActivePreset | null) => void
+  clearActivePreset: () => void
+  markPresetSaved: () => void
+  hasUnsavedPresetChanges: () => boolean
+  canUpdateActivePreset: () => boolean
 }
 
 type PersistedBudgetState = Partial<BudgetState> & {
@@ -73,6 +89,8 @@ export const useBudgetStore = create<BudgetState>()(
       incomes: [],
       expenses: [],
       oneTimeExpenses: [],
+      activePreset: null,
+      presetBaseline: null,
 
       setSettings: (partial) =>
         set((state) => ({ settings: { ...state.settings, ...partial } })),
@@ -125,7 +143,7 @@ export const useBudgetStore = create<BudgetState>()(
         return clonePresetData({ settings, incomes, expenses, oneTimeExpenses })
       },
 
-      loadFromPreset: (data: BudgetPresetData) => {
+      loadFromPreset: (data: BudgetPresetData, activePreset = null) => {
         const migratedLoans = (data.loans ?? []).map((loan) => ({
           ...migrateLegacyLoan(loan),
           id: createId(),
@@ -138,11 +156,37 @@ export const useBudgetStore = create<BudgetState>()(
             ...migratedLoans,
           ],
           oneTimeExpenses: data.oneTimeExpenses.map((item) => ({ ...item, id: createId() })),
+          activePreset,
+          presetBaseline: clonePresetData(data),
         })
+        get().markPresetSaved()
       },
+
+      setActivePreset: (activePreset) => set({ activePreset }),
+
+      clearActivePreset: () => set({ activePreset: null, presetBaseline: null }),
+
+      markPresetSaved: () => {
+        set({ presetBaseline: clonePresetData(get().exportSnapshot()) })
+      },
+
+      hasUnsavedPresetChanges: () => {
+        const { activePreset, presetBaseline } = get()
+        if (!activePreset || !presetBaseline) return false
+        return !snapshotsEqual(get().exportSnapshot(), presetBaseline)
+      },
+
+      canUpdateActivePreset: () => Boolean(get().activePreset?.ownerToken),
     }),
     {
       name: 'family-budget-storage',
+      partialize: (state) => ({
+        settings: state.settings,
+        incomes: state.incomes,
+        expenses: state.expenses,
+        oneTimeExpenses: state.oneTimeExpenses,
+        activePreset: state.activePreset,
+      }),
       merge: (persisted, current) =>
         migratePersistedState(persisted as PersistedBudgetState, current as BudgetState),
     },

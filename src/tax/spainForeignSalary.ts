@@ -15,6 +15,7 @@ import {
 } from './incomeSourceTax'
 import type { TaxCalculator, TaxResult } from './types'
 import { breakdownProgressiveTax, calculateProgressiveTax } from './types'
+import { adjustThailandResidenceTaxResult } from './thailandResidenceTax'
 
 export function isRussiaSalaryInSpanishBase(item: RecurringItem): boolean {
   return isRussiaSalary(item) && isIncludedInResidenceTax(item)
@@ -50,6 +51,7 @@ export interface SpainForeignSalaryBreakdown {
 export interface AdjustedResidenceTax {
   result: TaxResult
   spainForeignSalary?: SpainForeignSalaryBreakdown
+  thailandForeignSalary?: import('./thailandResidenceTax').ThailandForeignSalaryBreakdown
 }
 
 function personalAllowanceAmount(dependents: number): number {
@@ -190,6 +192,10 @@ export function adjustResidenceTaxResult(
   settings: BudgetSettings,
   calculator: TaxCalculator,
 ): AdjustedResidenceTax {
+  if (calculator.countryCode === 'TH') {
+    return adjustThailandResidenceTaxResult(residenceIncomes, settings, calculator)
+  }
+
   if (calculator.countryCode === 'ES' && calculator.id === 'es-employed') {
     const mixed = calculateSpainEmployedWithForeignSalary(residenceIncomes, settings)
     if (mixed) return mixed
@@ -229,12 +235,18 @@ export function computeAnnualTaxBurden(
   const russiaFromSource = russiaSourceOnly
     ? convertCurrency(russiaSourceOnly.ndfl, 'RUB', settings.baseCurrency)
     : 0
-  const russiaFromCredit = adjusted.spainForeignSalary?.russianNdflInBase ?? 0
+  const russiaFromCredit =
+    adjusted.spainForeignSalary?.russianNdflInBase ??
+    adjusted.thailandForeignSalary?.russianNdflInBase ??
+    0
 
   return {
     residenceIncomeTax: adjusted.result.incomeTax,
     residenceSocial: adjusted.result.socialContributions,
     russiaNdflInBase: russiaFromSource + russiaFromCredit,
-    foreignTaxCredit: adjusted.spainForeignSalary?.foreignTaxCredit ?? 0,
+    foreignTaxCredit:
+      adjusted.spainForeignSalary?.foreignTaxCredit ??
+      adjusted.thailandForeignSalary?.foreignTaxCredit ??
+      0,
   }
 }

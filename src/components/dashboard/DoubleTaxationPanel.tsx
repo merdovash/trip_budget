@@ -1,24 +1,29 @@
-import { DOUBLE_TAXATION_RULES, type DoubleTaxationLine } from '../../tax/doubleTaxation'
+import { getDoubleTaxationRules, type DoubleTaxationLine } from '../../tax/doubleTaxation'
 import { Card } from '../ui/FormControls'
 
 interface DoubleTaxationPanelProps {
   lines: DoubleTaxationLine[]
+  countryCode?: string
   embedded?: boolean
 }
 
-export function DoubleTaxationPanel({ lines, embedded }: DoubleTaxationPanelProps) {
+export function DoubleTaxationPanel({ lines, countryCode = 'ES', embedded }: DoubleTaxationPanelProps) {
   if (lines.length === 0) return null
+
+  const rules = getDoubleTaxationRules(countryCode)
 
   const content = (
     <>
       {!embedded && <h2 className="text-lg font-semibold">Двойное налогообложение</h2>}
       <p className={`text-sm text-slate-500 ${embedded ? '' : 'mt-1'}`}>
-        Каждый доход облагается в одной или двух юрисдикциях по выбранным правилам. При зачёте НДФЛ
-        применяется deducción por doble imposición internacional (упрощ.).
+        Каждый доход облагается в одной или двух юрисдикциях по выбранным правилам.
+        {countryCode === 'TH'
+          ? ' При зачёте НДФЛ применяется кредит по договору РФ–Таиланд (упрощ.).'
+          : ' При зачёте НДФЛ применяется deducción por doble imposición internacional (упрощ.).'}
       </p>
 
       <div className="mt-4 space-y-3">
-        {DOUBLE_TAXATION_RULES.map((rule) => (
+        {rules.map((rule) => (
           <div key={rule.title} className="rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-2.5">
             <p className="text-sm font-medium text-slate-800">{rule.title}</p>
             <p className="mt-1 text-xs leading-relaxed text-slate-500">{rule.text}</p>

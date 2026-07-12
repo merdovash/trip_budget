@@ -835,6 +835,7 @@ export interface FullTaxSummary {
   }
   doubleTaxation: DoubleTaxationLine[]
   spainForeignSalary?: SpainForeignSalaryBreakdown
+  thailandForeignSalary?: import('../tax/thailandResidenceTax').ThailandForeignSalaryBreakdown
   foreignTaxCredit: number
 }
 
@@ -893,6 +894,7 @@ export function getTaxSummary(incomes: RecurringItem[], settings: BudgetSettings
     spainSchedule,
     doubleTaxation: buildDoubleTaxationLines(incomes),
     spainForeignSalary: adjusted?.spainForeignSalary,
+    thailandForeignSalary: adjusted?.thailandForeignSalary,
     foreignTaxCredit: taxBurden.foreignTaxCredit,
   }
 }

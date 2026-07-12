@@ -170,7 +170,132 @@ export function BudgetSettingsPanel() {
             value={settings.dependents}
             onChange={(e) => setSettings({ dependents: Number(e.target.value) })}
           />
+          {settings.countryCode === 'TH' && (
+            <p className="mt-1 text-xs text-slate-500">
+              Для PIT Таиланда: вычет ฿30 000 на каждого ребёнка.
+            </p>
+          )}
         </Field>
+
+        {settings.countryCode === 'TH' && (
+          <div className="md:col-span-2">
+            <h3 className="mb-3 text-sm font-semibold text-slate-800">
+              Вычеты PIT Таиланда (суммы в THB)
+            </h3>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <Field label="Родители 60+ (кол-во)">
+                <Input
+                  type="number"
+                  min={0}
+                  max={4}
+                  value={settings.thailandDeductions?.parentAllowances ?? 0}
+                  onChange={(e) =>
+                    setSettings({
+                      thailandDeductions: {
+                        ...settings.thailandDeductions,
+                        parentAllowances: Number(e.target.value),
+                      },
+                    })
+                  }
+                />
+              </Field>
+              <Field label="Страхование жизни">
+                <Input
+                  type="number"
+                  min={0}
+                  value={settings.thailandDeductions?.lifeInsurance ?? 0}
+                  onChange={(e) =>
+                    setSettings({
+                      thailandDeductions: {
+                        ...settings.thailandDeductions,
+                        lifeInsurance: Number(e.target.value),
+                      },
+                    })
+                  }
+                />
+              </Field>
+              <Field label="Медстрахование">
+                <Input
+                  type="number"
+                  min={0}
+                  value={settings.thailandDeductions?.healthInsurance ?? 0}
+                  onChange={(e) =>
+                    setSettings({
+                      thailandDeductions: {
+                        ...settings.thailandDeductions,
+                        healthInsurance: Number(e.target.value),
+                      },
+                    })
+                  }
+                />
+              </Field>
+              <Field label="Ипотека (проценты)">
+                <Input
+                  type="number"
+                  min={0}
+                  value={settings.thailandDeductions?.mortgageInterest ?? 0}
+                  onChange={(e) =>
+                    setSettings({
+                      thailandDeductions: {
+                        ...settings.thailandDeductions,
+                        mortgageInterest: Number(e.target.value),
+                      },
+                    })
+                  }
+                />
+              </Field>
+              <Field label="Provident Fund (PVD)">
+                <Input
+                  type="number"
+                  min={0}
+                  value={settings.thailandDeductions?.providentFund ?? 0}
+                  onChange={(e) =>
+                    setSettings({
+                      thailandDeductions: {
+                        ...settings.thailandDeductions,
+                        providentFund: Number(e.target.value),
+                      },
+                    })
+                  }
+                />
+              </Field>
+              <Field label="RMF / SSF">
+                <Input
+                  type="number"
+                  min={0}
+                  value={settings.thailandDeductions?.rmfContribution ?? 0}
+                  onChange={(e) =>
+                    setSettings({
+                      thailandDeductions: {
+                        ...settings.thailandDeductions,
+                        rmfContribution: Number(e.target.value),
+                      },
+                    })
+                  }
+                />
+              </Field>
+              <Field label="Social Security (уплачено)">
+                <Input
+                  type="number"
+                  min={0}
+                  value={settings.thailandDeductions?.socialSecurityPaid ?? 0}
+                  onChange={(e) =>
+                    setSettings({
+                      thailandDeductions: {
+                        ...settings.thailandDeductions,
+                        socialSecurityPaid: Number(e.target.value),
+                      },
+                    })
+                  }
+                />
+              </Field>
+            </div>
+            <p className="mt-2 text-xs text-slate-500">
+              Супруг(а): вычет ฿60 000 при размере семьи ≥ 2. Трудовой вычет 50% (макс. ฿100 000)
+              и личный ฿60 000 применяются автоматически.
+            </p>
+          </div>
+        )}
       </div>
 
       {selectedRegime && (

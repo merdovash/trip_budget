@@ -27,7 +27,7 @@ export function isRussiaSourceTaxable(item: RecurringItem): boolean {
   return usesForeignTaxCredit(item)
 }
 
-export const DOUBLE_TAXATION_RULES = [
+export const SPAIN_DOUBLE_TAXATION_RULES = [
   {
     title: 'Зарплата из России (по умолчанию)',
     text: 'НДФЛ удерживается в РФ. Доход исключён из IRPF страны проживания — двойного налогообложения нет.',
@@ -49,6 +49,36 @@ export const DOUBLE_TAXATION_RULES = [
     text: 'Доход остаётся в денежном потоке, но не попадает в IRPF. Подходит для уже обложенного за рубежом дохода (упрощённо).',
   },
 ] as const
+
+export const THAILAND_DOUBLE_TAXATION_RULES = [
+  {
+    title: 'Зарплата из России (по умолчанию)',
+    text: 'НДФЛ удерживается в РФ. Доход исключён из PIT Таиланда — двойного налогообложения нет, если деньги не включены в декларацию.',
+  },
+  {
+    title: 'Remittance rule (Por. 161/2566, с 2024)',
+    text: 'Иностранный доход облагается в Таиланде при переводе в страну, если он заработан в год вашего резидентства (180+ дней). Доход до 01.01.2024 и доход в годы нерезидентства — вне PIT.',
+  },
+  {
+    title: 'Зарплата РФ + «Учитывать в налогах проживания»',
+    text: 'Доход в тайской декларации: вычеты 50%/฿100k, personal ฿60k, spouse ฿60k, дети ฿30k. С зачётом НДФЛ — кредит по договору РФ–Таиланд (упрощ.).',
+  },
+  {
+    title: 'Зарплата / доход в Таиланде',
+    text: 'PIT по прогрессивной шкале + SSO 5% (режим «Наёмный работник») только на локальную зарплату.',
+  },
+  {
+    title: '«Не учитывать в налогах проживания»',
+    text: 'Доход в денежном потоке, но вне PIT. Подходит для зарплаты РФ без remittance в декларацию.',
+  },
+] as const
+
+export const DOUBLE_TAXATION_RULES = SPAIN_DOUBLE_TAXATION_RULES
+
+export function getDoubleTaxationRules(countryCode: string): readonly { title: string; text: string }[] {
+  if (countryCode === 'TH') return THAILAND_DOUBLE_TAXATION_RULES
+  return SPAIN_DOUBLE_TAXATION_RULES
+}
 
 export interface DoubleTaxationLine {
   incomeId: string

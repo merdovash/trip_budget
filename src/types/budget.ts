@@ -24,7 +24,7 @@ export interface RecurringItem {
   salaryCountryCode?: string
   /** Учитывать доход в налогах страны проживания. По умолчанию: да, кроме зарплаты из РФ. */
   includeInResidenceTax?: boolean
-  /** Зачёт уплаченного НДФЛ в РФ при декларации в Испании (для salaryCountryCode === 'RU'). */
+  /** Зачёт уплаченного НДФЛ в РФ при декларации в стране проживания (ES / TH). */
   foreignTaxCredit?: boolean
   payments?: IncomePayment[]
   startDate: string
@@ -47,12 +47,31 @@ export interface OneTimeExpense {
   category?: string
 }
 
+export interface ThailandDeductionSettings {
+  /** Родители 60+ в Таиланде (кол-во, макс. обычно 2 на налогоплательщика + супруг). */
+  parentAllowances?: number
+  /** Страхование жизни (THB), вместе с мед. макс. 100 000. */
+  lifeInsurance?: number
+  /** Медстрахование на себя (THB), макс. 25 000. */
+  healthInsurance?: number
+  /** Проценты по ипотеке первого жилья (THB), макс. 100 000. */
+  mortgageInterest?: number
+  /** Provident Fund (THB), в пределах общего потолка 500 000. */
+  providentFund?: number
+  /** RMF / SSF (THB). */
+  rmfContribution?: number
+  /** Уплаченные взносы Social Security работника (THB), макс. ~10 500. */
+  socialSecurityPaid?: number
+}
+
 export interface BudgetSettings {
   baseCurrency: string
   countryCode: string
   taxRegimeId: string
   familySize: number
   dependents: number
+  /** Доп. вычеты PIT Таиланда (суммы в THB). */
+  thailandDeductions?: ThailandDeductionSettings
   horizonMonths: number
   initialBalance: number
   initialBalanceCurrency: string

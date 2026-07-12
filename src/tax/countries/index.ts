@@ -1,8 +1,10 @@
 import type { TaxBracket, TaxCalculator, TaxInput } from '../types'
 import { buildTaxResult, calculateProgressiveTax } from '../types'
 import { spainBeckham, spainEmployed, spainStandard } from './spain'
+import { thailandEmployed, thailandStandard } from './thailand'
 
 export { spainBeckham, spainEmployed, spainStandard }
+export { thailandEmployed, thailandStandard }
 
 function progressiveCalculator(
   id: string,
@@ -30,23 +32,6 @@ function progressiveCalculator(
     },
   }
 }
-
-export const thailandStandard: TaxCalculator = progressiveCalculator(
-  'th-standard',
-  'TH',
-  'Стандартный PIT',
-  'Прогрессивный подоходный налог Таиланда.',
-  [
-    { upTo: 150_000, rate: 0 },
-    { upTo: 300_000, rate: 0.05 },
-    { upTo: 500_000, rate: 0.1 },
-    { upTo: 750_000, rate: 0.15 },
-    { upTo: 1_000_000, rate: 0.2 },
-    { upTo: 2_000_000, rate: 0.25 },
-    { upTo: 5_000_000, rate: 0.3 },
-    { upTo: null, rate: 0.35 },
-  ],
-)
 
 export const malaysiaStandard: TaxCalculator = progressiveCalculator(
   'my-standard',

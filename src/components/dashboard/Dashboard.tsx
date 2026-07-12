@@ -15,6 +15,7 @@ import { CollapsibleSection } from './CollapsibleSection'
 import { DoubleTaxationPanel } from './DoubleTaxationPanel'
 import { MonthlyTable } from './MonthlyTable'
 import { SpainTaxDetailPanel } from './SpainTaxDetailPanel'
+import { ThailandTaxDetailPanel } from './ThailandTaxDetailPanel'
 import { SummaryCards, TaxBreakdown } from './SummaryCards'
 
 export function Dashboard() {
@@ -87,7 +88,11 @@ export function Dashboard() {
       )}
       {incomes.length > 0 && (
         <CollapsibleSection title="Двойное налогообложение">
-          <DoubleTaxationPanel lines={taxSummary.doubleTaxation} embedded />
+          <DoubleTaxationPanel
+            lines={taxSummary.doubleTaxation}
+            countryCode={settings.countryCode}
+            embedded
+          />
         </CollapsibleSection>
       )}
       {taxSummary.residence && taxSummary.residence.calculator.countryCode === 'ES' ? (
@@ -100,6 +105,17 @@ export function Dashboard() {
             currency={settings.baseCurrency}
             paymentSchedule={taxSummary.spainSchedule?.payments}
             quarterlyGross={taxSummary.spainSchedule?.quarterlyGross}
+            embedded
+          />
+        </CollapsibleSection>
+      ) : taxSummary.residence && taxSummary.residence.calculator.countryCode === 'TH' ? (
+        <CollapsibleSection title="Налоги Таиланда">
+          <ThailandTaxDetailPanel
+            regimeName={taxSummary.residence.calculator.name}
+            regimeDescription={taxSummary.residence.calculator.description}
+            taxRegimeId={taxSummary.residence.calculator.id}
+            result={taxSummary.residence.result}
+            currency={settings.baseCurrency}
             embedded
           />
         </CollapsibleSection>

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   getEmploymentCountryCode,
+  getEmploymentCountryCurrency,
   getRelocationMode,
   shouldShowSourceCountryTaxes,
   suggestTaxRegimeForMode,
@@ -25,6 +26,7 @@ describe('relocationMode', () => {
     expect(getRelocationMode(baseSettings)).toBe('remote_employment')
     expect(getEmploymentCountryCode(baseSettings)).toBe('RU')
     expect(shouldShowSourceCountryTaxes(baseSettings)).toBe(true)
+    expect(getEmploymentCountryCurrency(baseSettings)).toBe('RUB')
   })
 
   it('suggests small business regime for sole proprietorship in Georgia', () => {

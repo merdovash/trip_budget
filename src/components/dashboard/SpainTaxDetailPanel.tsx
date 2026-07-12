@@ -131,6 +131,7 @@ interface SpainTaxDetailPanelProps {
   paymentSchedule?: ScheduledTaxPayment[]
   quarterlyGross?: [number, number, number, number]
   embedded?: boolean
+  footer?: string
 }
 
 export function SpainTaxDetailPanel({
@@ -143,6 +144,7 @@ export function SpainTaxDetailPanel({
   paymentSchedule,
   quarterlyGross,
   embedded,
+  footer,
 }: SpainTaxDetailPanelProps) {
   const isEmployed = taxRegimeId === 'es-employed'
   const panelTitle = isEmployed
@@ -226,6 +228,8 @@ export function SpainTaxDetailPanel({
           </ul>
         </section>
       )}
+
+      {footer && <p className="mt-5 text-xs text-slate-500">{footer}</p>}
     </>
   )
 

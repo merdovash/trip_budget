@@ -9,6 +9,7 @@ import {
 import { formatCurrency, formatDateDisplay } from '../../lib/format'
 import { useBudgetStore } from '../../store/budgetStore'
 import { useExchangeRateStore } from '../../store/exchangeRateStore'
+import { shouldShowSourceCountryTaxes } from '../../config/relocationMode'
 import { EmptyState } from '../ui/FormControls'
 import { CashFlowChart } from './CashFlowChart'
 import { CollapsibleSection } from './CollapsibleSection'
@@ -58,8 +59,7 @@ export function Dashboard() {
   const annualTaxes =
     (taxSummary.residence?.result.incomeTax ?? 0) +
     (taxSummary.residence?.result.socialContributions ?? 0) +
-    taxSummary.russiaNdflInBase -
-    taxSummary.foreignTaxCredit
+    (shouldShowSourceCountryTaxes(settings) ? taxSummary.russiaNdflInBase : 0)
   const initialBalance = getInitialBalanceInBase(settings)
 
   return (

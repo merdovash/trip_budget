@@ -51,6 +51,7 @@ interface GeorgiaTaxDetailPanelProps {
   result: TaxResult
   currency: string
   embedded?: boolean
+  footer?: string
 }
 
 export function GeorgiaTaxDetailPanel({
@@ -60,6 +61,7 @@ export function GeorgiaTaxDetailPanel({
   result,
   currency,
   embedded,
+  footer,
 }: GeorgiaTaxDetailPanelProps) {
   const panelTitle =
     taxRegimeId === 'ge-small-business'
@@ -108,8 +110,8 @@ export function GeorgiaTaxDetailPanel({
       </div>
 
       <p className="mt-5 text-xs text-slate-500">
-        PIT в Грузии — плоская ставка по выбранному режиму. Пенсионный взнос 2% начисляется только
-        на зарплату от работодателя в GE.
+        {footer ??
+          `PIT в Грузии — плоская ставка по выбранному режиму. Пенсионный взнос 2% начисляется только на зарплату от работодателя в GE.`}
       </p>
     </>
   )

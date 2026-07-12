@@ -1,13 +1,21 @@
 import type { ReactNode } from 'react'
 import { formatCurrency } from '../../lib/format'
+import { getCountryLocalCurrency } from '../../config/foodBudget'
+import {
+  convertAmountFromBase,
+  convertScheduledPaymentsFromBase,
+  convertTaxResultFromBase,
+} from '../../lib/taxCurrencyDisplay'
 import type { FullTaxSummary } from '../../engine/budgetEngine'
 import { COUNTRY_LABELS } from '../../tax/registry'
 import {
+  getEmploymentCountryCurrency,
   getEmploymentCountryLabel,
   getRelocationMode,
   shouldShowSourceCountryTaxes,
 } from '../../config/relocationMode'
 import type { BudgetSettings } from '../../types/budget'
+import { LocalCurrencyWithBaseHint, residenceTaxDisplayNote } from '../ui/LocalCurrencyWithBaseHint'
 import { DoubleTaxationPanel } from './DoubleTaxationPanel'
 import { GeorgiaTaxDetailPanel } from './GeorgiaTaxDetailPanel'
 import { SpainTaxDetailPanel } from './SpainTaxDetailPanel'
@@ -35,12 +43,34 @@ export function TaxesOverviewPanel({ taxSummary, settings, hasIncomes }: TaxesOv
   const relocationMode = getRelocationMode(settings)
   const showSourceTaxes = shouldShowSourceCountryTaxes(settings)
   const employmentLabel = getEmploymentCountryLabel(settings)
+  const sourceCurrency = getEmploymentCountryCurrency(settings)
+  const baseCurrency = settings.baseCurrency
+  const residenceLocalCurrency = getCountryLocalCurrency(settings.countryCode)
 
   const residenceIncomeTax = taxSummary.residence?.result.incomeTax ?? 0
   const residenceSocial = taxSummary.residence?.result.socialContributions ?? 0
   const residenceTaxTotal = residenceIncomeTax + residenceSocial
-  const sourceTaxTotal = showSourceTaxes ? taxSummary.russiaNdflInBase : 0
-  const grandTotal = sourceTaxTotal + residenceTaxTotal - taxSummary.foreignTaxCredit
+  const sourceTaxTotalNative =
+    showSourceTaxes && taxSummary.russiaSalary ? taxSummary.russiaSalary.ndfl : 0
+  const grandTotalInBase =
+    (showSourceTaxes ? taxSummary.russiaNdflInBase : 0) + residenceTaxTotal
+
+  const residenceResultForDisplay =
+    taxSummary.residence &&
+    convertTaxResultFromBase(taxSummary.residence.result, baseCurrency, residenceLocalCurrency)
+  const spainPaymentsForDisplay = taxSummary.spainSchedule?.payments
+    ? convertScheduledPaymentsFromBase(
+        taxSummary.spainSchedule.payments,
+        baseCurrency,
+        residenceLocalCurrency,
+      )
+    : undefined
+  const residenceDisplayNote = residenceTaxDisplayNote(residenceLocalCurrency, baseCurrency)
+  const foreignTaxCreditLocal = convertAmountFromBase(
+    taxSummary.foreignTaxCredit,
+    baseCurrency,
+    residenceLocalCurrency,
+  )
 
   const hasResidenceBlock = Boolean(taxSummary.residence)
   const hasAnyTaxBlock = hasResidenceBlock || (showSourceTaxes && taxSummary.russiaSalary) || hasIncomes
@@ -97,36 +127,40 @@ export function TaxesOverviewPanel({ taxSummary, settings, hasIncomes }: TaxesOv
                 regimeName={taxSummary.residence.calculator.name}
                 regimeDescription={taxSummary.residence.calculator.description}
                 taxRegimeId={taxSummary.residence.calculator.id}
-                result={taxSummary.residence.result}
-                currency={settings.baseCurrency}
-                paymentSchedule={taxSummary.spainSchedule?.payments}
+                result={residenceResultForDisplay!}
+                currency={residenceLocalCurrency}
+                paymentSchedule={spainPaymentsForDisplay}
                 quarterlyGross={taxSummary.spainSchedule?.quarterlyGross}
                 embedded
+                footer={residenceDisplayNote ?? undefined}
               />
             ) : taxSummary.residence?.calculator.countryCode === 'TH' ? (
               <ThailandTaxDetailPanel
                 regimeName={taxSummary.residence.calculator.name}
                 regimeDescription={taxSummary.residence.calculator.description}
                 taxRegimeId={taxSummary.residence.calculator.id}
-                result={taxSummary.residence.result}
-                currency={settings.baseCurrency}
+                result={residenceResultForDisplay!}
+                currency={residenceLocalCurrency}
                 embedded
+                footer={residenceDisplayNote ?? undefined}
               />
             ) : taxSummary.residence?.calculator.countryCode === 'GE' ? (
               <GeorgiaTaxDetailPanel
                 regimeName={taxSummary.residence.calculator.name}
                 regimeDescription={taxSummary.residence.calculator.description}
                 taxRegimeId={taxSummary.residence.calculator.id}
-                result={taxSummary.residence.result}
-                currency={settings.baseCurrency}
+                result={residenceResultForDisplay!}
+                currency={residenceLocalCurrency}
                 embedded
+                footer={residenceDisplayNote ?? undefined}
               />
             ) : (
               <TaxBreakdown
                 regimeName={taxSummary.residence!.calculator.name}
                 effectiveRate={taxSummary.residence!.result.effectiveRate}
-                breakdown={taxSummary.residence!.result.breakdown}
-                currency={settings.baseCurrency}
+                breakdown={residenceResultForDisplay!.breakdown}
+                currency={residenceLocalCurrency}
+                footer={residenceDisplayNote ?? undefined}
                 embedded
               />
             )}
@@ -155,51 +189,69 @@ export function TaxesOverviewPanel({ taxSummary, settings, hasIncomes }: TaxesOv
       {/* 4. Итоговая сумма */}
       <section>
         <SectionHeading>Итого налогов за год</SectionHeading>
-        <dl className="space-y-2 rounded-lg border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm">
-          {showSourceTaxes && sourceTaxTotal > 0 && (
-            <div className="flex justify-between gap-4">
-              <dt className="text-slate-600">НДФЛ в {employmentLabel}</dt>
-              <dd className="font-semibold text-slate-900">
-                {formatCurrency(sourceTaxTotal, settings.baseCurrency)}
+        <dl className="space-y-3">
+          {showSourceTaxes && sourceTaxTotalNative > 0 && (
+            <div className="rounded-lg border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm">
+              <dt className="font-medium text-slate-800">{employmentLabel}</dt>
+              <dd className="mt-2 flex justify-between gap-4 border-t border-slate-200 pt-2">
+                <span className="text-slate-600">Итого в стране</span>
+                <span className="font-semibold text-slate-900">
+                  {formatCurrency(sourceTaxTotalNative, sourceCurrency)}
+                </span>
               </dd>
             </div>
           )}
-          {hasResidenceBlock && (
-            <>
-              <div className="flex justify-between gap-4">
-                <dt className="text-slate-600">Подоходный налог ({residenceCountry})</dt>
-                <dd className="font-semibold text-slate-900">
-                  {formatCurrency(residenceIncomeTax, settings.baseCurrency)}
+
+          {hasResidenceBlock && residenceTaxTotal > 0 && (
+            <div className="rounded-lg border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm">
+              <dt className="font-medium text-slate-800">{residenceCountry}</dt>
+              <dd className="mt-2 flex justify-between gap-4 border-t border-slate-200 pt-2">
+                <span className="text-slate-600">Итого в стране</span>
+                <LocalCurrencyWithBaseHint
+                  amountInBase={residenceTaxTotal}
+                  localCurrency={residenceLocalCurrency}
+                  baseCurrency={baseCurrency}
+                />
+              </dd>
+              {taxSummary.foreignTaxCredit > 0 && (
+                <p className="mt-2 text-xs text-emerald-700">
+                  С учётом зачёта НДФЛ РФ (−{formatCurrency(foreignTaxCreditLocal, residenceLocalCurrency)}
+                  {residenceLocalCurrency !== baseCurrency &&
+                    ` ≈ ${formatCurrency(taxSummary.foreignTaxCredit, baseCurrency)}`}
+                  )
+                </p>
+              )}
+            </div>
+          )}
+
+          {(sourceTaxTotalNative > 0 || residenceTaxTotal > 0) &&
+            (sourceCurrency !== baseCurrency || residenceLocalCurrency !== baseCurrency) && (
+              <div className="flex justify-between gap-4 rounded-lg border border-dashed border-slate-200 bg-white px-4 py-3 text-sm">
+                <dt className="text-slate-600">
+                  Суммарно в {baseCurrency} (оценка по курсу)
+                </dt>
+                <dd className="font-semibold text-slate-800">
+                  {formatCurrency(grandTotalInBase, baseCurrency)}
                 </dd>
               </div>
-              {residenceSocial > 0 && (
-                <div className="flex justify-between gap-4">
-                  <dt className="text-slate-600">Соц. взносы ({residenceCountry})</dt>
-                  <dd className="font-semibold text-slate-900">
-                    {formatCurrency(residenceSocial, settings.baseCurrency)}
-                  </dd>
-                </div>
-              )}
-            </>
-          )}
-          {taxSummary.foreignTaxCredit > 0 && (
-            <div className="flex justify-between gap-4 text-emerald-700">
-              <dt>Зачёт НДФЛ РФ</dt>
-              <dd className="font-semibold">
-                −{formatCurrency(taxSummary.foreignTaxCredit, settings.baseCurrency)}
-              </dd>
-            </div>
-          )}
-          <div className="flex justify-between gap-4 border-t border-slate-200 pt-2 text-base">
-            <dt className="font-medium text-slate-800">Всего к уплате (оценка)</dt>
-            <dd className="font-bold text-slate-900">
-              {formatCurrency(grandTotal, settings.baseCurrency)}
-            </dd>
-          </div>
+            )}
+
+          {(sourceTaxTotalNative > 0 || residenceTaxTotal > 0) &&
+            sourceCurrency === baseCurrency &&
+            residenceLocalCurrency === baseCurrency && (
+              <div className="flex justify-between gap-4 rounded-lg border border-slate-300 bg-white px-4 py-3 text-base">
+                <dt className="font-medium text-slate-800">Всего по всем странам</dt>
+                <dd className="font-bold text-slate-900">
+                  {formatCurrency(sourceTaxTotalNative + residenceTaxTotal, baseCurrency)}
+                </dd>
+              </div>
+            )}
         </dl>
         <p className="mt-2 text-xs text-slate-500">
-          Суммы в {settings.baseCurrency}. НДФЛ конвертирован по курсу ЦБ. Взносы работодателя в
-          РФ не включены в итог.
+          Итог по каждой стране — в её валюте (налоги в {employmentLabel} — в {sourceCurrency},
+          в {residenceCountry} — в {residenceLocalCurrency}
+          {residenceLocalCurrency !== baseCurrency ? `, ≈ ${baseCurrency} по курсу` : ''}). Взносы
+          работодателя в РФ не включены.
         </p>
       </section>
     </div>

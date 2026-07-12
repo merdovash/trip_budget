@@ -8,8 +8,8 @@ export const RELOCATION_MODE_LABELS: Record<RelocationMode, string> = {
 
 /** Страны, где может выплачиваться зарплата при удалённой работе. */
 export const EMPLOYMENT_COUNTRIES = [
-  { code: 'RU', label: 'Россия' },
-  { code: 'ES', label: 'Испания' },
+  { code: 'RU', label: 'Россия', currency: 'RUB' },
+  { code: 'ES', label: 'Испания', currency: 'EUR' },
 ] as const
 
 export type EmploymentCountryCode = (typeof EMPLOYMENT_COUNTRIES)[number]['code']
@@ -39,6 +39,11 @@ export function getEmploymentCountryCode(settings: BudgetSettings): EmploymentCo
 export function getEmploymentCountryLabel(settings: BudgetSettings): string {
   const code = getEmploymentCountryCode(settings)
   return EMPLOYMENT_COUNTRIES.find((c) => c.code === code)?.label ?? COUNTRY_LABELS[code] ?? code
+}
+
+export function getEmploymentCountryCurrency(settings: BudgetSettings): string {
+  const code = getEmploymentCountryCode(settings)
+  return EMPLOYMENT_COUNTRIES.find((c) => c.code === code)?.currency ?? 'EUR'
 }
 
 export function suggestTaxRegimeForMode(

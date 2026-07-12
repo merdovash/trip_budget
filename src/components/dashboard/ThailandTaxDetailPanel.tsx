@@ -52,6 +52,7 @@ interface ThailandTaxDetailPanelProps {
   result: TaxResult
   currency: string
   embedded?: boolean
+  footer?: string
 }
 
 export function ThailandTaxDetailPanel({
@@ -61,6 +62,7 @@ export function ThailandTaxDetailPanel({
   result,
   currency,
   embedded,
+  footer,
 }: ThailandTaxDetailPanelProps) {
   const isEmployed = taxRegimeId === 'th-employed'
   const panelTitle = isEmployed
@@ -107,8 +109,8 @@ export function ThailandTaxDetailPanel({
       </div>
 
       <p className="mt-5 text-xs text-slate-500">
-        Шкала PIT и вычеты считаются в THB, в дашборде показаны в {currency}. Суммы вычетов в
-        настройках указываются в THB.
+        {footer ??
+          `Шкала PIT и вычеты считаются в THB, в дашборде показаны в ${currency}. Суммы вычетов в настройках указываются в THB.`}
       </p>
     </>
   )

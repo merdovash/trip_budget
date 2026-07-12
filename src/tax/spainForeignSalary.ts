@@ -16,6 +16,7 @@ import {
 import type { TaxCalculator, TaxResult } from './types'
 import { breakdownProgressiveTax, calculateProgressiveTax } from './types'
 import { adjustThailandResidenceTaxResult } from './thailandResidenceTax'
+import { adjustGeorgiaResidenceTaxResult } from './georgiaResidenceTax'
 
 export function isRussiaSalaryInSpanishBase(item: RecurringItem): boolean {
   return isRussiaSalary(item) && isIncludedInResidenceTax(item)
@@ -52,6 +53,7 @@ export interface AdjustedResidenceTax {
   result: TaxResult
   spainForeignSalary?: SpainForeignSalaryBreakdown
   thailandForeignSalary?: import('./thailandResidenceTax').ThailandForeignSalaryBreakdown
+  georgiaForeignSalary?: import('./georgiaResidenceTax').GeorgiaForeignSalaryBreakdown
 }
 
 function personalAllowanceAmount(dependents: number): number {
@@ -196,6 +198,10 @@ export function adjustResidenceTaxResult(
     return adjustThailandResidenceTaxResult(residenceIncomes, settings, calculator)
   }
 
+  if (calculator.countryCode === 'GE') {
+    return adjustGeorgiaResidenceTaxResult(residenceIncomes, settings, calculator)
+  }
+
   if (calculator.countryCode === 'ES' && calculator.id === 'es-employed') {
     const mixed = calculateSpainEmployedWithForeignSalary(residenceIncomes, settings)
     if (mixed) return mixed
@@ -238,6 +244,7 @@ export function computeAnnualTaxBurden(
   const russiaFromCredit =
     adjusted.spainForeignSalary?.russianNdflInBase ??
     adjusted.thailandForeignSalary?.russianNdflInBase ??
+    adjusted.georgiaForeignSalary?.russianNdflInBase ??
     0
 
   return {
@@ -247,6 +254,7 @@ export function computeAnnualTaxBurden(
     foreignTaxCredit:
       adjusted.spainForeignSalary?.foreignTaxCredit ??
       adjusted.thailandForeignSalary?.foreignTaxCredit ??
+      adjusted.georgiaForeignSalary?.foreignTaxCredit ??
       0,
   }
 }

@@ -16,6 +16,7 @@ import { DoubleTaxationPanel } from './DoubleTaxationPanel'
 import { MonthlyTable } from './MonthlyTable'
 import { SpainTaxDetailPanel } from './SpainTaxDetailPanel'
 import { ThailandTaxDetailPanel } from './ThailandTaxDetailPanel'
+import { GeorgiaTaxDetailPanel } from './GeorgiaTaxDetailPanel'
 import { SummaryCards, TaxBreakdown } from './SummaryCards'
 
 export function Dashboard() {
@@ -111,6 +112,17 @@ export function Dashboard() {
       ) : taxSummary.residence && taxSummary.residence.calculator.countryCode === 'TH' ? (
         <CollapsibleSection title="Налоги Таиланда">
           <ThailandTaxDetailPanel
+            regimeName={taxSummary.residence.calculator.name}
+            regimeDescription={taxSummary.residence.calculator.description}
+            taxRegimeId={taxSummary.residence.calculator.id}
+            result={taxSummary.residence.result}
+            currency={settings.baseCurrency}
+            embedded
+          />
+        </CollapsibleSection>
+      ) : taxSummary.residence && taxSummary.residence.calculator.countryCode === 'GE' ? (
+        <CollapsibleSection title="Налоги Грузии">
+          <GeorgiaTaxDetailPanel
             regimeName={taxSummary.residence.calculator.name}
             regimeDescription={taxSummary.residence.calculator.description}
             taxRegimeId={taxSummary.residence.calculator.id}

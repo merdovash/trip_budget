@@ -19,7 +19,9 @@ export function DoubleTaxationPanel({ lines, countryCode = 'ES', embedded }: Dou
         Каждый доход облагается в одной или двух юрисдикциях по выбранным правилам.
         {countryCode === 'TH'
           ? ' При зачёте НДФЛ применяется кредит по договору РФ–Таиланд (упрощ.).'
-          : ' При зачёте НДФЛ применяется deducción por doble imposición internacional (упрощ.).'}
+          : countryCode === 'GE'
+            ? ' При зачёте НДФЛ применяется кредит по договору РФ–Грузия (упрощ.).'
+            : ' При зачёте НДФЛ применяется deducción por doble imposición internacional (упрощ.).'}
       </p>
 
       <div className="mt-4 space-y-3">

@@ -836,6 +836,7 @@ export interface FullTaxSummary {
   doubleTaxation: DoubleTaxationLine[]
   spainForeignSalary?: SpainForeignSalaryBreakdown
   thailandForeignSalary?: import('../tax/thailandResidenceTax').ThailandForeignSalaryBreakdown
+  georgiaForeignSalary?: import('../tax/georgiaResidenceTax').GeorgiaForeignSalaryBreakdown
   foreignTaxCredit: number
 }
 
@@ -892,9 +893,10 @@ export function getTaxSummary(incomes: RecurringItem[], settings: BudgetSettings
     russiaNdflInBase: taxBurden.russiaNdflInBase,
     russiaEmployerSocialInBase: russiaEmployerSocialAnnualInBase(incomes, settings.baseCurrency),
     spainSchedule,
-    doubleTaxation: buildDoubleTaxationLines(incomes),
+    doubleTaxation: buildDoubleTaxationLines(incomes, settings.countryCode),
     spainForeignSalary: adjusted?.spainForeignSalary,
     thailandForeignSalary: adjusted?.thailandForeignSalary,
+    georgiaForeignSalary: adjusted?.georgiaForeignSalary,
     foreignTaxCredit: taxBurden.foreignTaxCredit,
   }
 }

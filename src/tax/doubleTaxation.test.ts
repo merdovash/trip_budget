@@ -59,4 +59,14 @@ describe('double taxation rules', () => {
     ])
     expect(lines.map((line) => line.treatment)).toEqual(['source_russia', 'residence'])
   })
+
+  it('uses Georgia-specific credit label', () => {
+    const item = income({
+      categoryId: 'salary',
+      salaryCountryCode: 'RU',
+      includeInResidenceTax: true,
+    })
+    const lines = buildDoubleTaxationLines([item], 'GE')
+    expect(lines[0].label).toBe('PIT GE + зачёт НДФЛ РФ')
+  })
 })

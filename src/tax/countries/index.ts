@@ -1,9 +1,11 @@
 import type { TaxBracket, TaxCalculator, TaxInput } from '../types'
 import { buildTaxResult, calculateProgressiveTax } from '../types'
 import { spainBeckham, spainEmployed, spainStandard } from './spain'
+import { georgiaSmallBusiness, georgiaStandard, georgiaVirtualZone } from './georgia'
 import { thailandEmployed, thailandStandard } from './thailand'
 
 export { spainBeckham, spainEmployed, spainStandard }
+export { georgiaSmallBusiness, georgiaStandard, georgiaVirtualZone }
 export { thailandEmployed, thailandStandard }
 
 function progressiveCalculator(
@@ -98,32 +100,6 @@ export const uaeNoTax: TaxCalculator = {
   calculate(input: TaxInput) {
     return buildTaxResult(input.grossAnnualIncome, 0, 0, [
       { label: 'Подоходный налог', amount: 0 },
-    ])
-  },
-}
-
-export const georgiaStandard: TaxCalculator = {
-  id: 'ge-standard',
-  countryCode: 'GE',
-  name: 'Стандартный (20%)',
-  description: 'Плоская ставка 20% на доход резидентов Грузии.',
-  calculate(input: TaxInput) {
-    const incomeTax = input.grossAnnualIncome * 0.2
-    return buildTaxResult(input.grossAnnualIncome, incomeTax, 0, [
-      { label: 'Подоходный налог (20%)', amount: incomeTax },
-    ])
-  },
-}
-
-export const georgiaVirtualZone: TaxCalculator = {
-  id: 'ge-virtual',
-  countryCode: 'GE',
-  name: 'Virtual Zone (упрощ.)',
-  description: 'Упрощённая модель для IT-компаний в Virtual Zone: 1% на дивиденды/распределение.',
-  calculate(input: TaxInput) {
-    const incomeTax = input.grossAnnualIncome * 0.01
-    return buildTaxResult(input.grossAnnualIncome, incomeTax, 0, [
-      { label: 'Налог Virtual Zone (1%)', amount: incomeTax },
     ])
   },
 }

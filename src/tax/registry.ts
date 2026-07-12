@@ -2,6 +2,7 @@ import type { TaxCalculator } from './types'
 import {
   cyprusNonDom,
   cyprusStandard,
+  georgiaSmallBusiness,
   georgiaStandard,
   georgiaVirtualZone,
   indonesiaStandard,
@@ -29,6 +30,7 @@ export const TAX_CALCULATORS: TaxCalculator[] = [
   portugalStandard,
   uaeNoTax,
   georgiaStandard,
+  georgiaSmallBusiness,
   georgiaVirtualZone,
   cyprusStandard,
   cyprusNonDom,

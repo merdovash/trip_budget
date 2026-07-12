@@ -1,6 +1,5 @@
 import type { RecurringItem } from '../types/budget'
 import { isIncludedInResidenceTax, isRussiaSalary } from './incomeSourceTax'
-import { isRussiaSalaryInSpanishBase, usesForeignTaxCredit } from './spainForeignSalary'
 
 /** Как облагается доход в модели избежания двойного налогообложения. */
 export type IncomeTaxTreatment =
@@ -10,21 +9,29 @@ export type IncomeTaxTreatment =
   | 'excluded'
   | 'none'
 
+export function isRussiaSalaryInResidenceBase(item: RecurringItem): boolean {
+  return isRussiaSalary(item) && isIncludedInResidenceTax(item)
+}
+
+export function usesResidenceForeignTaxCredit(item: RecurringItem): boolean {
+  return isRussiaSalaryInResidenceBase(item) && item.foreignTaxCredit !== false
+}
+
 export function getIncomeTaxTreatment(item: RecurringItem): IncomeTaxTreatment {
   if (!isIncludedInResidenceTax(item)) {
     return isRussiaSalary(item) ? 'source_russia' : 'excluded'
   }
-  if (isRussiaSalaryInSpanishBase(item)) {
-    return usesForeignTaxCredit(item) ? 'residence_with_credit' : 'residence'
+  if (isRussiaSalaryInResidenceBase(item)) {
+    return usesResidenceForeignTaxCredit(item) ? 'residence_with_credit' : 'residence'
   }
   return 'residence'
 }
 
-/** НДФЛ у источника в РФ — если доход не в декларации ES или включён с зачётом. */
+/** НДФЛ у источника в РФ — если доход не в декларации или включён с зачётом. */
 export function isRussiaSourceTaxable(item: RecurringItem): boolean {
   if (!isRussiaSalary(item)) return false
   if (!isIncludedInResidenceTax(item)) return true
-  return usesForeignTaxCredit(item)
+  return usesResidenceForeignTaxCredit(item)
 }
 
 export const SPAIN_DOUBLE_TAXATION_RULES = [
@@ -73,10 +80,34 @@ export const THAILAND_DOUBLE_TAXATION_RULES = [
   },
 ] as const
 
+export const GEORGIA_DOUBLE_TAXATION_RULES = [
+  {
+    title: 'Зарплата из России (по умолчанию)',
+    text: 'НДФЛ удерживается в РФ. Доход исключён из PIT Грузии — двойного налогообложения нет.',
+  },
+  {
+    title: 'Резидентство в Грузии',
+    text: '183+ дней в календарном году или центр жизненных интересов. Резиденты облагаются с мирового дохода: PIT 20% (или 1% по статусу малого бизнеса / Virtual Zone).',
+  },
+  {
+    title: 'Зарплата РФ + «Учитывать в налогах проживания»',
+    text: 'Доход в грузинской декларации как часть мирового дохода. С зачётом НДФЛ — кредит по договору РФ–Грузия (упрощ.). Пенсионный взнос 2% — только на зарплату от работодателя в GE.',
+  },
+  {
+    title: 'Статус малого бизнеса (1%)',
+    text: 'ИП со статусом малого бизнеса платит 1% с валового оборота (лимит 500 000 GEL в год). Подходит для фриланса и удалённой работы как ИП.',
+  },
+  {
+    title: '«Не учитывать в налогах проживания»',
+    text: 'Доход в денежном потоке, но вне PIT Грузии. Подходит для зарплаты РФ без включения в декларацию.',
+  },
+] as const
+
 export const DOUBLE_TAXATION_RULES = SPAIN_DOUBLE_TAXATION_RULES
 
 export function getDoubleTaxationRules(countryCode: string): readonly { title: string; text: string }[] {
   if (countryCode === 'TH') return THAILAND_DOUBLE_TAXATION_RULES
+  if (countryCode === 'GE') return GEORGIA_DOUBLE_TAXATION_RULES
   return SPAIN_DOUBLE_TAXATION_RULES
 }
 
@@ -87,22 +118,37 @@ export interface DoubleTaxationLine {
   label: string
 }
 
-const TREATMENT_LABELS: Record<IncomeTaxTreatment, string> = {
-  residence: 'Налоги страны проживания',
-  residence_with_credit: 'IRPF ES + зачёт НДФЛ РФ',
-  source_russia: 'НДФЛ в России (источник)',
-  excluded: 'Вне налогов проживания',
-  none: 'Без налогообложения в модели',
+export function getTreatmentLabel(
+  treatment: IncomeTaxTreatment,
+  countryCode = 'ES',
+): string {
+  switch (treatment) {
+    case 'residence':
+      return 'Налоги страны проживания'
+    case 'residence_with_credit':
+      if (countryCode === 'TH') return 'PIT TH + зачёт НДФЛ РФ'
+      if (countryCode === 'GE') return 'PIT GE + зачёт НДФЛ РФ'
+      return 'IRPF ES + зачёт НДФЛ РФ'
+    case 'source_russia':
+      return 'НДФЛ в России (источник)'
+    case 'excluded':
+      return 'Вне налогов проживания'
+    case 'none':
+      return 'Без налогообложения в модели'
+  }
 }
 
-export function buildDoubleTaxationLines(incomes: RecurringItem[]): DoubleTaxationLine[] {
+export function buildDoubleTaxationLines(
+  incomes: RecurringItem[],
+  countryCode = 'ES',
+): DoubleTaxationLine[] {
   return incomes.map((item) => {
     const treatment = getIncomeTaxTreatment(item)
     return {
       incomeId: item.id,
       incomeName: item.name,
       treatment,
-      label: TREATMENT_LABELS[treatment],
+      label: getTreatmentLabel(treatment, countryCode),
     }
   })
 }

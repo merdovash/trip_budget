@@ -13,6 +13,12 @@ import type {
 } from '../types/budget'
 
 import { FOOD_EXPENSE_CATEGORY } from '../config/foodBudget'
+import {
+  getEffectiveStartDate,
+  isItemActiveInMonth,
+  isItemActiveOnDay,
+  isResidenceLifeStarted,
+} from '../config/relocationPrograms'
 
 import { loanMonthlyPayment, isLoanExpense, isLoanPaymentInMonth, isLoanPaymentOnDay, loanDisbursementForDay, loanDisbursementForMonth } from '../lib/loanAmortization'
 import { convertCurrency } from '../lib/currency'
@@ -122,38 +128,12 @@ export function foodDailyAmount(monthlyAmount: number): number {
 
 
 
-function isActiveInMonth(item: RecurringItem, monthKey: string): boolean {
-
-  const monthStart = `${monthKey}-01`
-
-  const monthEnd = monthKey.slice(0, 7)
-
-  if (item.startDate.slice(0, 7) > monthEnd) return false
-
-  if (item.endDate && item.endDate.slice(0, 7) < monthEnd) return false
-
-  if (item.frequency === 'once') {
-
-    return item.startDate.slice(0, 7) === monthEnd
-
-  }
-
-  return item.startDate <= monthStart || item.startDate.slice(0, 7) <= monthEnd
-
+function isActiveInMonth(item: RecurringItem, monthKey: string, settings: BudgetSettings): boolean {
+  return isItemActiveInMonth(item, monthKey, settings)
 }
 
-
-
-function isActiveOnDay(item: RecurringItem, dateStr: string): boolean {
-
-  if (dateStr < item.startDate) return false
-
-  if (item.endDate && dateStr > item.endDate) return false
-
-  if (item.frequency === 'once') return dateStr === item.startDate
-
-  return true
-
+function isActiveOnDay(item: RecurringItem, dateStr: string, settings: BudgetSettings): boolean {
+  return isItemActiveOnDay(item, dateStr, settings)
 }
 
 
@@ -182,37 +162,25 @@ function paymentDayMatches(year: number, month: number, day: number, dayOfMonth:
 
 
 
-function scheduledDayOfMonth(item: RecurringItem): number {
-
-  return parseIsoDate(item.startDate).day
-
+function scheduledDayOfMonth(item: RecurringItem, settings: BudgetSettings): number {
+  return parseIsoDate(getEffectiveStartDate(item, settings)).day
 }
 
 
 
 function scheduledDayMatches(
-
   year: number,
-
   month: number,
-
   day: number,
-
   item: RecurringItem,
-
+  settings: BudgetSettings,
 ): boolean {
-
-  return paymentDayMatches(year, month, day, scheduledDayOfMonth(item))
-
+  return paymentDayMatches(year, month, day, scheduledDayOfMonth(item, settings))
 }
 
-
-
-function yearlyDayMatches(dateStr: string, item: RecurringItem): boolean {
-
+function yearlyDayMatches(dateStr: string, item: RecurringItem, settings: BudgetSettings): boolean {
   const current = parseIsoDate(dateStr)
-
-  const start = parseIsoDate(item.startDate)
+  const start = parseIsoDate(getEffectiveStartDate(item, settings))
 
   const effectiveStartDay = Math.min(start.day, getDaysInMonth(current.year, start.month))
 
@@ -296,9 +264,10 @@ function sumRecurringForMonth(
   items: RecurringItem[],
   monthKey: string,
   baseCurrency: string,
+  settings: BudgetSettings,
 ): number {
   return items.reduce((sum, item) => {
-    if (!isActiveInMonth(item, monthKey)) return sum
+    if (!isActiveInMonth(item, monthKey, settings)) return sum
     const amount = recurringAmountForMonth(item, monthKey)
     return sum + toBaseCurrency(amount, item.currency, baseCurrency)
   }, 0)
@@ -347,22 +316,16 @@ function sumOneTimeForDay(
 
 
 function incomeForDay(
-
   items: RecurringItem[],
-
   dateStr: string,
-
   baseCurrency: string,
-
+  settings: BudgetSettings,
 ): number {
-
   const { year, month, day } = parseIsoDate(dateStr)
-
-
+  const effectiveStart = (item: RecurringItem) => getEffectiveStartDate(item, settings)
 
   return items.reduce((sum, item) => {
-
-    if (!isActiveOnDay(item, dateStr)) return sum
+    if (!isActiveOnDay(item, dateStr, settings)) return sum
 
 
 
@@ -392,25 +355,25 @@ function incomeForDay(
 
       case 'monthly':
 
-        if (scheduledDayMatches(year, month, day, item)) amount = item.amount
+        if (scheduledDayMatches(year, month, day, item, settings)) amount = item.amount
 
         break
 
       case 'weekly':
 
-        if (daysBetween(item.startDate, dateStr) % 7 === 0) amount = item.amount
+        if (daysBetween(effectiveStart(item), dateStr) % 7 === 0) amount = item.amount
 
         break
 
       case 'yearly':
 
-        if (yearlyDayMatches(dateStr, item)) amount = item.amount
+        if (yearlyDayMatches(dateStr, item, settings)) amount = item.amount
 
         break
 
       case 'once':
 
-        if (dateStr === item.startDate) amount = item.amount
+        if (dateStr === effectiveStart(item)) amount = item.amount
 
         break
 
@@ -434,15 +397,19 @@ function expenseForDay(
 
   baseCurrency: string,
 
+  settings: BudgetSettings,
+
 ): number {
 
   const { year, month, day } = parseIsoDate(dateStr)
+
+  const effectiveStart = (item: RecurringItem) => getEffectiveStartDate(item, settings)
 
 
 
   return items.reduce((sum, item) => {
 
-    if (!isActiveOnDay(item, dateStr)) return sum
+    if (!isActiveOnDay(item, dateStr, settings)) return sum
 
 
 
@@ -474,25 +441,25 @@ function expenseForDay(
 
       case 'monthly':
 
-        if (scheduledDayMatches(year, month, day, item)) amount = item.amount
+        if (scheduledDayMatches(year, month, day, item, settings)) amount = item.amount
 
         break
 
       case 'weekly':
 
-        if (daysBetween(item.startDate, dateStr) % 7 === 0) amount = item.amount
+        if (daysBetween(effectiveStart(item), dateStr) % 7 === 0) amount = item.amount
 
         break
 
       case 'yearly':
 
-        if (yearlyDayMatches(dateStr, item)) amount = item.amount
+        if (yearlyDayMatches(dateStr, item, settings)) amount = item.amount
 
         break
 
       case 'once':
 
-        if (dateStr === item.startDate) amount = item.amount
+        if (dateStr === effectiveStart(item)) amount = item.amount
 
         break
 
@@ -564,13 +531,14 @@ export function getQuarterlyGrossFromIncomes(
   incomes: RecurringItem[],
   baseCurrency: string,
   year: number,
+  settings: BudgetSettings,
 ): [number, number, number, number] {
   const quarters: [number, number, number, number] = [0, 0, 0, 0]
   for (let q = 0; q < 4; q++) {
     for (let m = 0; m < 3; m++) {
       const month = q * 3 + m + 1
       const monthKey = `${year}-${String(month).padStart(2, '0')}`
-      quarters[q] += sumRecurringForMonth(incomes, monthKey, baseCurrency)
+      quarters[q] += sumRecurringForMonth(incomes, monthKey, baseCurrency, settings)
     }
   }
   return quarters
@@ -600,7 +568,7 @@ function buildScheduledTaxByDate(
   }
 
   for (const year of years) {
-    const quarterlyGross = getQuarterlyGrossFromIncomes(residenceIncomes, settings.baseCurrency, year)
+    const quarterlyGross = getQuarterlyGrossFromIncomes(residenceIncomes, settings.baseCurrency, year, settings)
     const payments = calculator.buildTaxSchedule(input, taxResult, { year, quarterlyGross })
     for (const payment of payments) {
       const y = payment.year ?? year
@@ -684,8 +652,8 @@ export function calculateDailyBudgetProjection(
       trackerYear = year
     }
 
-    const grossIncome = incomeForDay(incomes, date, baseCurrency)
-    const recurringExpenses = expenseForDay(expenses, date, baseCurrency)
+    const grossIncome = incomeForDay(incomes, date, baseCurrency, settings)
+    const recurringExpenses = expenseForDay(expenses, date, baseCurrency, settings)
     const oneTimeTotal = sumOneTimeForDay(oneTimeExpenses, date, baseCurrency)
 
     const russiaTax = russiaSourceTaxForDay(
@@ -698,11 +666,13 @@ export function calculateDailyBudgetProjection(
 
     const scheduled = scheduledTaxMap.get(date)
     let residenceTax = 0
-    if (scheduled) {
-      residenceTax = scheduled.social + scheduled.incomeTax
-    } else if (!useScheduled) {
-      const residenceGross = incomeForDay(residenceIncomes, date, baseCurrency)
-      residenceTax = residenceGross * taxRate
+    if (isResidenceLifeStarted(date, settings)) {
+      if (scheduled) {
+        residenceTax = scheduled.social + scheduled.incomeTax
+      } else if (!useScheduled) {
+        const residenceGross = incomeForDay(residenceIncomes, date, baseCurrency, settings)
+        residenceTax = residenceGross * taxRate
+      }
     }
 
     const taxes = russiaTax + residenceTax
@@ -768,16 +738,19 @@ export function calculateBudgetProjection(
   let cumulativeBalance = getInitialBalanceInBase(settings)
 
   return monthKeys.map((month) => {
-    const grossIncome = sumRecurringForMonth(incomes, month, baseCurrency)
-    const residenceGross = sumRecurringForMonth(residenceIncomes, month, baseCurrency)
-    const recurringExpenses = sumRecurringForMonth(expenses, month, baseCurrency)
+    const grossIncome = sumRecurringForMonth(incomes, month, baseCurrency, settings)
+    const residenceGross = sumRecurringForMonth(residenceIncomes, month, baseCurrency, settings)
+    const recurringExpenses = sumRecurringForMonth(expenses, month, baseCurrency, settings)
     const oneTimeTotal = sumOneTimeForMonth(oneTimeExpenses, month, baseCurrency)
 
-    const residenceTax = useScheduled
-      ? scheduledTaxTotalForMonth(month, scheduledTaxMap)
-      : grossAnnualIncome > 0
-        ? monthlyTax * (residenceGross / (grossAnnualIncome / 12))
-        : 0
+    const monthStart = `${month}-01`
+    const residenceTax = isResidenceLifeStarted(monthStart, settings)
+      ? useScheduled
+        ? scheduledTaxTotalForMonth(month, scheduledTaxMap)
+        : grossAnnualIncome > 0
+          ? monthlyTax * (residenceGross / (grossAnnualIncome / 12))
+          : 0
+      : 0
     const russiaTax = russiaSourceTaxForMonth(
       incomes,
       month,
@@ -875,7 +848,7 @@ export function getTaxSummary(incomes: RecurringItem[], settings: BudgetSettings
     const year = new Date().getFullYear()
     const quarterlyGross =
       calculator.id === 'es-standard'
-        ? getQuarterlyGrossFromIncomes(residenceIncomes, settings.baseCurrency, year)
+        ? getQuarterlyGrossFromIncomes(residenceIncomes, settings.baseCurrency, year, settings)
         : undefined
     spainSchedule = {
       year,

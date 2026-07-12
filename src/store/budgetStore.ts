@@ -10,6 +10,11 @@ import { DEFAULT_SETTINGS } from '../types/budget'
 import { migrateLegacyLoan } from '../lib/loanAmortization'
 import { clonePresetData } from '../lib/presetsApi'
 import { snapshotsEqual } from '../lib/presetSnapshotCompare'
+import {
+  buildProgramOneTimeExpenses,
+  getRelocationDate,
+  getRelocationProgram,
+} from '../config/relocationPrograms'
 
 export interface ActivePreset {
   id: string
@@ -36,6 +41,7 @@ interface BudgetState {
   addOneTimeExpense: (item: Omit<OneTimeExpense, 'id'>) => void
   updateOneTimeExpense: (id: string, item: Partial<OneTimeExpense>) => void
   removeOneTimeExpense: (id: string) => void
+  applyRelocationProgramExpenses: () => number
   exportSnapshot: () => BudgetPresetData
   loadFromPreset: (data: BudgetPresetData, activePreset?: ActivePreset | null) => void
   setActivePreset: (activePreset: ActivePreset | null) => void
@@ -62,10 +68,18 @@ function createId(): string {
 }
 
 function migratePersistedState(persisted: PersistedBudgetState, current: BudgetState): BudgetState {
+  const mergedSettings = { ...current.settings, ...persisted.settings }
+  if (!mergedSettings.relocationDate) {
+    mergedSettings.relocationDate = mergedSettings.initialBalanceDate ?? current.settings.relocationDate
+  }
+  if (!mergedSettings.relocationProgramId) {
+    mergedSettings.relocationProgramId = 'none'
+  }
+
   const merged: BudgetState = {
     ...current,
     ...persisted,
-    settings: { ...current.settings, ...persisted.settings },
+    settings: mergedSettings,
     incomes: persisted.incomes ?? current.incomes,
     expenses: persisted.expenses ?? current.expenses,
     oneTimeExpenses: persisted.oneTimeExpenses ?? current.oneTimeExpenses,
@@ -137,6 +151,25 @@ export const useBudgetStore = create<BudgetState>()(
         set((state) => ({
           oneTimeExpenses: state.oneTimeExpenses.filter((e) => e.id !== id),
         })),
+
+      applyRelocationProgramExpenses: () => {
+        const { settings, oneTimeExpenses } = get()
+        const program = getRelocationProgram(settings.relocationProgramId)
+        if (!program) return 0
+        const templates = buildProgramOneTimeExpenses(program, getRelocationDate(settings))
+        const existing = new Set(
+          oneTimeExpenses.map((item) => `${item.name}|${item.date}|${item.amount}`),
+        )
+        const toAdd = templates
+          .filter((item) => !existing.has(`${item.name}|${item.date}|${item.amount}`))
+          .map((item) => ({ ...item, id: createId() }))
+        if (toAdd.length > 0) {
+          set((state) => ({
+            oneTimeExpenses: [...state.oneTimeExpenses, ...toAdd],
+          }))
+        }
+        return toAdd.length
+      },
 
       exportSnapshot: (): BudgetPresetData => {
         const { settings, incomes, expenses, oneTimeExpenses } = get()

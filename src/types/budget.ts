@@ -12,6 +12,8 @@ export interface IncomePayment {
   dayOfMonth?: number
 }
 
+export type ItemLifecycle = 'destination' | 'origin' | 'any'
+
 export interface RecurringItem {
   id: string
   name: string
@@ -20,6 +22,8 @@ export interface RecurringItem {
   frequency: Frequency
   category?: string
   categoryId?: string
+  /** Когда статья относится к жизни в стране назначения / до переезда. */
+  lifecycle?: ItemLifecycle
   /** Страна, где выплачивается зарплата (для categoryId === 'salary'). */
   salaryCountryCode?: string
   /** Учитывать доход в налогах страны проживания. По умолчанию: да, кроме зарплаты из РФ. */
@@ -72,6 +76,10 @@ export interface BudgetSettings {
   dependents: number
   /** Доп. вычеты PIT Таиланда (суммы в THB). */
   thailandDeductions?: ThailandDeductionSettings
+  /** Дата начала жизни в стране проживания (налоги и расходы «в стране» с этой даты). */
+  relocationDate?: string
+  /** Программа переезда — шаблон разовых расходов. */
+  relocationProgramId?: string
   horizonMonths: number
   initialBalance: number
   initialBalanceCurrency: string
@@ -112,6 +120,8 @@ export const DEFAULT_SETTINGS: BudgetSettings = {
   initialBalance: 0,
   initialBalanceCurrency: 'EUR',
   initialBalanceDate: todayIsoDate(),
+  relocationDate: todayIsoDate(),
+  relocationProgramId: 'none',
 }
 
 export const CURRENCIES = ['EUR', 'USD', 'RUB', 'THB', 'MYR', 'GBP', 'AED', 'GEL', 'MXN', 'IDR', 'VND'] as const

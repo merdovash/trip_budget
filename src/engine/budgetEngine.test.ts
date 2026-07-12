@@ -334,3 +334,28 @@ describe('loan expenses in projection', () => {
     expect(snapshots[1].balance).toBeCloseTo(-4000)
   })
 })
+
+describe('relocation date in projection', () => {
+  const destinationRent: RecurringItem = {
+    id: 'rent',
+    name: 'Аренда',
+    amount: 1000,
+    currency: 'EUR',
+    frequency: 'monthly',
+    lifecycle: 'destination',
+    startDate: '2026-01-01',
+  }
+
+  it('skips destination expenses before relocation date', () => {
+    const snapshots = calculateBudgetProjection([], [destinationRent], [], {
+      ...DEFAULT_SETTINGS,
+      taxRegimeId: 'ae-none',
+      horizonMonths: 4,
+      initialBalanceDate: '2026-01-01',
+      relocationDate: '2026-03-01',
+    })
+    expect(snapshots[0].recurringExpenses).toBe(0)
+    expect(snapshots[1].recurringExpenses).toBe(0)
+    expect(snapshots[2].recurringExpenses).toBeCloseTo(1000)
+  })
+})

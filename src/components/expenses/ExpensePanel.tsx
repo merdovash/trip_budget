@@ -82,6 +82,7 @@ function formDataToExpense(data: ExpenseFormData): Omit<RecurringItem, 'id'> {
     currency: data.currency,
     frequency: data.frequency,
     category: data.category || undefined,
+    lifecycle: 'destination',
     startDate: data.startDate,
     endDate: data.endDate || undefined,
   }

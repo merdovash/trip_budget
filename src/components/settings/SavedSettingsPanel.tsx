@@ -26,6 +26,10 @@ function SettingsSnapshotDetails({ id }: { id: string }) {
     { label: 'Базовая валюта', value: snapshot.settings.baseCurrency },
     { label: 'Начальный остаток', value: `${snapshot.settings.initialBalance ?? 0} ${snapshot.settings.initialBalanceCurrency ?? snapshot.settings.baseCurrency}` },
     { label: 'Дата начального остатка', value: formatDateDisplay(snapshot.settings.initialBalanceDate) },
+    {
+      label: 'Дата переезда',
+      value: formatDateDisplay(snapshot.settings.relocationDate ?? snapshot.settings.initialBalanceDate),
+    },
     { label: 'Горизонт прогноза', value: `${snapshot.settings.horizonMonths} мес.` },
     { label: 'Размер семьи', value: String(snapshot.settings.familySize) },
     { label: 'Иждивенцы', value: String(snapshot.settings.dependents) },

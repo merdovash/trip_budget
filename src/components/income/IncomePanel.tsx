@@ -182,6 +182,10 @@ function IncomeForm({ initialItem, onSubmit, onCancel }: IncomeFormProps) {
       payments: hasMultiplePayments ? payments : undefined,
       startDate: form.startDate,
       endDate: form.endDate || undefined,
+      lifecycle:
+        categoryDef.showSalaryCountry && form.salaryCountryCode === settings.countryCode
+          ? 'destination'
+          : 'any',
       includeInResidenceTax: form.includeInResidenceTax,
       ...(isRussiaSalary && form.includeInResidenceTax
         ? { foreignTaxCredit: form.foreignTaxCredit }

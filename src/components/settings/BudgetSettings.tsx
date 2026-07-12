@@ -11,10 +11,16 @@ import { Button, Card, Field, Input, Select, DateInput } from '../ui/FormControl
 import { CurrencySelect } from '../ui/CurrencySelect'
 import { CurrencyConversionHint } from '../ui/CurrencyConversionHint'
 import { SavedSettingsPanel } from './SavedSettingsPanel'
+import {
+  getRelocationProgramsForCountry,
+  RELOCATION_PROGRAM_NONE,
+} from '../../config/relocationPrograms'
+import { formatCurrency } from '../../lib/format'
 
 export function BudgetSettingsPanel() {
   const settings = useBudgetStore((s) => s.settings)
   const setSettings = useBudgetStore((s) => s.setSettings)
+  const applyRelocationProgramExpenses = useBudgetStore((s) => s.applyRelocationProgramExpenses)
   const rateDate = useExchangeRateStore((s) => s.rateDate)
   const rateStatus = useExchangeRateStore((s) => s.status)
   const rateError = useExchangeRateStore((s) => s.error)
@@ -22,6 +28,8 @@ export function BudgetSettingsPanel() {
   const countries = getAvailableCountries()
   const regimes = getCalculatorsByCountry(settings.countryCode)
   const selectedRegime = regimes.find((r) => r.id === settings.taxRegimeId)
+  const relocationPrograms = getRelocationProgramsForCountry(settings.countryCode)
+  const selectedProgram = relocationPrograms.find((p) => p.id === settings.relocationProgramId)
 
   return (
     <Card>
@@ -143,6 +151,63 @@ export function BudgetSettingsPanel() {
             График и прогноз бюджета начинаются с этого месяца.
           </p>
         </Field>
+
+        <Field label="Дата переезда">
+          <DateInput
+            value={settings.relocationDate ?? settings.initialBalanceDate}
+            onChange={(relocationDate) => setSettings({ relocationDate })}
+          />
+          <p className="mt-1 text-xs text-slate-500">
+            С этой даты начинается жизнь в стране проживания: налоги страны, расходы с меткой
+            «в стране» и локальная зарплата.
+          </p>
+        </Field>
+
+        <Field label="Программа переезда">
+          <Select
+            value={settings.relocationProgramId ?? RELOCATION_PROGRAM_NONE}
+            onChange={(e) => setSettings({ relocationProgramId: e.target.value })}
+          >
+            <option value={RELOCATION_PROGRAM_NONE}>Без шаблона расходов</option>
+            {relocationPrograms.map((program) => (
+              <option key={program.id} value={program.id}>
+                {program.name}
+              </option>
+            ))}
+          </Select>
+        </Field>
+
+        {selectedProgram && (
+          <div className="md:col-span-2 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+            <p className="text-sm text-slate-700">{selectedProgram.description}</p>
+            <ul className="mt-3 space-y-1 text-sm text-slate-600">
+              {selectedProgram.expenses.map((expense) => (
+                <li key={expense.name} className="flex justify-between gap-4">
+                  <span>{expense.name}</span>
+                  <span className="shrink-0 font-medium">
+                    {formatCurrency(expense.amount, expense.currency)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <Button
+              type="button"
+              variant="secondary"
+              className="mt-3"
+              onClick={() => {
+                const added = applyRelocationProgramExpenses()
+                if (added === 0) {
+                  alert('Расходы программы уже добавлены или список пуст.')
+                }
+              }}
+            >
+              Добавить разовые расходы программы
+            </Button>
+            <p className="mt-2 text-xs text-slate-500">
+              Статьи появятся в разделе «Разовые расходы» с датами относительно переезда.
+            </p>
+          </div>
+        )}
 
         <Field label="Горизонт прогноза (мес.)">
           <Input
@@ -320,6 +385,8 @@ export function BudgetSettingsPanel() {
               initialBalance: 0,
               initialBalanceCurrency: 'EUR',
               initialBalanceDate: todayIsoDate(),
+              relocationDate: todayIsoDate(),
+              relocationProgramId: RELOCATION_PROGRAM_NONE,
             })
           }
         >

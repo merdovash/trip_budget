@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { todayIsoDate, formatCurrency } from '../../lib/format'
 import { convertCurrency } from '../../lib/currency'
 import {
@@ -166,17 +166,141 @@ function FolderField({
   onChange: (folderId: string) => void
 }) {
   const folders = useBudgetStore((s) => s.folders)
+  const addFolder = useBudgetStore((s) => s.addFolder)
+  const removeFolder = useBudgetStore((s) => s.removeFolder)
+  const [open, setOpen] = useState(false)
+  const [creating, setCreating] = useState(false)
+  const [newName, setNewName] = useState('')
+  const rootRef = useRef<HTMLDivElement>(null)
+
+  const selectedLabel =
+    value && folders.find((f) => f.id === value)
+      ? folders.find((f) => f.id === value)!.name
+      : 'Без папки'
+
+  useEffect(() => {
+    if (!open) return
+    function handlePointerDown(event: MouseEvent) {
+      if (!rootRef.current?.contains(event.target as Node)) {
+        setOpen(false)
+        setCreating(false)
+        setNewName('')
+      }
+    }
+    document.addEventListener('mousedown', handlePointerDown)
+    return () => document.removeEventListener('mousedown', handlePointerDown)
+  }, [open])
+
+  function selectFolder(folderId: string) {
+    onChange(folderId)
+    setOpen(false)
+    setCreating(false)
+    setNewName('')
+  }
+
+  function handleCreate() {
+    const trimmed = newName.trim()
+    if (!trimmed) return
+    const id = addFolder(trimmed)
+    onChange(id)
+    setNewName('')
+    setCreating(false)
+    setOpen(false)
+  }
+
+  function handleDelete(folderId: string) {
+    if (value === folderId) onChange('')
+    removeFolder(folderId)
+  }
 
   return (
     <Field label="Папка">
-      <Select value={value ?? ''} onChange={(e) => onChange(e.target.value)}>
-        <option value="">Без папки</option>
-        {folders.map((folder) => (
-          <option key={folder.id} value={folder.id}>
-            {folder.name}
-          </option>
-        ))}
-      </Select>
+      <div ref={rootRef} className="relative">
+        <button
+          type="button"
+          className="flex w-full items-center justify-between rounded-lg border border-slate-300 bg-white px-3 py-2 text-left text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+          onClick={() => setOpen((prev) => !prev)}
+          aria-expanded={open}
+        >
+          <span>{selectedLabel}</span>
+          <span className="text-slate-400">{open ? '▴' : '▾'}</span>
+        </button>
+        {open && (
+          <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-lg border border-slate-200 bg-white shadow-lg">
+            <button
+              type="button"
+              className={`flex w-full px-3 py-2 text-left text-sm hover:bg-slate-50 ${
+                !value ? 'bg-blue-50 text-blue-700' : 'text-slate-700'
+              }`}
+              onClick={() => selectFolder('')}
+            >
+              Без папки
+            </button>
+            {folders.map((folder) => (
+              <div
+                key={folder.id}
+                className={`flex items-center gap-1 border-t border-slate-100 ${
+                  value === folder.id ? 'bg-blue-50' : ''
+                }`}
+              >
+                <button
+                  type="button"
+                  className={`min-w-0 flex-1 px-3 py-2 text-left text-sm hover:bg-slate-50 ${
+                    value === folder.id ? 'text-blue-700' : 'text-slate-700'
+                  }`}
+                  onClick={() => selectFolder(folder.id)}
+                >
+                  {folder.name}
+                </button>
+                <button
+                  type="button"
+                  className="shrink-0 px-2 py-2 text-xs text-red-600 hover:bg-red-50"
+                  title="Удалить папку"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleDelete(folder.id)
+                  }}
+                >
+                  Удалить
+                </button>
+              </div>
+            ))}
+            <div className="border-t border-slate-100 p-2">
+              {creating ? (
+                <div className="flex gap-2">
+                  <Input
+                    className="min-w-0 flex-1"
+                    autoFocus
+                    placeholder="Название папки"
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        handleCreate()
+                      }
+                    }}
+                  />
+                  <Button type="button" variant="secondary" onClick={handleCreate}>
+                    OK
+                  </Button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className="w-full rounded-md px-2 py-1.5 text-left text-sm text-blue-700 hover:bg-blue-50"
+                  onClick={() => setCreating(true)}
+                >
+                  + Создать папку
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+      <p className="mt-1 text-xs text-slate-500">
+        Удаление папки не удаляет расходы — они переходят в «Без папки».
+      </p>
     </Field>
   )
 }
@@ -614,57 +738,6 @@ function ExpenseForm({ initialItem, onSubmit, onCancel }: ExpenseFormProps) {
   )
 }
 
-function FoldersManager() {
-  const folders = useBudgetStore((s) => s.folders)
-  const addFolder = useBudgetStore((s) => s.addFolder)
-  const updateFolder = useBudgetStore((s) => s.updateFolder)
-  const removeFolder = useBudgetStore((s) => s.removeFolder)
-  const [newName, setNewName] = useState('')
-
-  return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap gap-2">
-        <Input
-          className="min-w-[12rem] flex-1"
-          placeholder="Название папки"
-          value={newName}
-          onChange={(e) => setNewName(e.target.value)}
-        />
-        <Button
-          type="button"
-          variant="secondary"
-          onClick={() => {
-            if (!newName.trim()) return
-            addFolder(newName)
-            setNewName('')
-          }}
-        >
-          Создать папку
-        </Button>
-      </div>
-      {folders.length > 0 && (
-        <ul className="space-y-2">
-          {folders.map((folder) => (
-            <li key={folder.id} className="flex flex-wrap items-center gap-2">
-              <Input
-                className="min-w-[12rem] flex-1"
-                value={folder.name}
-                onChange={(e) => updateFolder(folder.id, { name: e.target.value })}
-              />
-              <Button type="button" variant="danger" onClick={() => removeFolder(folder.id)}>
-                Удалить
-              </Button>
-            </li>
-          ))}
-        </ul>
-      )}
-      <p className="text-xs text-slate-500">
-        Удаление папки не удаляет расходы — они переходят в «Без папки».
-      </p>
-    </div>
-  )
-}
-
 function ExpenseRows({
   items,
   editingId,
@@ -856,10 +929,6 @@ export function ExpensePanel() {
 
   return (
     <div className="space-y-4">
-      <Card>
-        <h2 className="mb-4 text-lg font-semibold">Папки расходов</h2>
-        <FoldersManager />
-      </Card>
       <Card>
         <h2 className="mb-4 text-lg font-semibold">
           {editingId ? 'Редактировать расход' : 'Добавить расход'}

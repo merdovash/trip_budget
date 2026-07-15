@@ -10,6 +10,8 @@ import {
   foodMonthlyAmount,
   generateDayKeys,
   generateMonthKeys,
+  getDayLedger,
+  shiftIsoDate,
   toMonthlyAmount,
 } from './budgetEngine'
 import { DEFAULT_SETTINGS, type RecurringItem } from '../types/budget'
@@ -432,5 +434,60 @@ describe('relocation date in projection', () => {
     expect(snapshots[0].recurringExpenses).toBe(0)
     expect(snapshots[1].recurringExpenses).toBe(0)
     expect(snapshots[2].recurringExpenses).toBeCloseTo(1000)
+  })
+})
+
+describe('getDayLedger', () => {
+  it('lists day articles and totals match daily projection', () => {
+    const incomes: RecurringItem[] = [
+      {
+        id: 'salary',
+        name: 'Зарплата',
+        amount: 3000,
+        currency: 'EUR',
+        frequency: 'monthly',
+        categoryId: 'salary',
+        startDate: '2026-01-01',
+      },
+    ]
+    const expenses: RecurringItem[] = [
+      {
+        id: 'rent',
+        name: 'Аренда',
+        amount: 1000,
+        currency: 'EUR',
+        frequency: 'monthly',
+        startDate: '2026-01-01',
+      },
+      {
+        id: 'food',
+        name: 'Еда',
+        amount: 300,
+        currency: 'EUR',
+        frequency: 'monthly',
+        category: FOOD_EXPENSE_CATEGORY,
+        startDate: '2026-01-01',
+      },
+    ]
+    const settings = {
+      ...DEFAULT_SETTINGS,
+      taxRegimeId: 'ae-none',
+      horizonMonths: 1,
+      initialBalanceDate: '2026-01-01',
+    }
+    const days = calculateDailyBudgetProjection(incomes, expenses, [], settings)
+    const day = days.find((d) => d.date === '2026-01-01')!
+    const ledger = getDayLedger(incomes, expenses, [], '2026-01-01', settings)
+
+    expect(ledger.incomes).toHaveLength(1)
+    expect(ledger.incomes[0].amountInBase).toBe(3000)
+    expect(ledger.expenses.some((l) => l.kind === 'food')).toBe(true)
+    expect(ledger.expenseTotal).toBeCloseTo(day.recurringExpenses + day.oneTimeExpenses, 5)
+    expect(ledger.incomeTotal).toBeCloseTo(day.grossIncome, 5)
+  })
+
+  it('shiftIsoDate moves across month boundary', () => {
+    expect(shiftIsoDate('2026-01-31', 1)).toBe('2026-02-01')
+    expect(shiftIsoDate('2026-03-01', -1)).toBe('2026-02-28')
   })
 })

@@ -17,9 +17,10 @@ import { Card } from '../ui/FormControls'
 interface CashFlowChartProps {
   snapshots: DailySnapshot[]
   currency: string
+  onDayClick?: (date: string) => void
 }
 
-export function CashFlowChart({ snapshots, currency }: CashFlowChartProps) {
+export function CashFlowChart({ snapshots, currency, onDayClick }: CashFlowChartProps) {
   const tickInterval = Math.max(1, Math.floor(snapshots.length / 12))
 
   const data = snapshots.map((s) => ({
@@ -37,11 +38,19 @@ export function CashFlowChart({ snapshots, currency }: CashFlowChartProps) {
       <h2 className="mb-1 text-lg font-semibold">Cash flow по дням</h2>
       <p className="mb-4 text-sm text-slate-500">
         Накопленный баланс по дням — помогает увидеть кассовый разрыв между поступлениями и
-        расходами. «Еда» начисляется ежедневно (сумма ÷ 30).
+        расходами. «Еда» начисляется ежедневно (сумма ÷ 30). Клик по точке открывает статьи дня.
       </p>
       <div className="h-96">
         <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={data}>
+          <ComposedChart
+            data={data}
+            onClick={(state) => {
+              if (!onDayClick) return
+              const date = state?.activePayload?.[0]?.payload?.date as string | undefined
+              if (date) onDayClick(date)
+            }}
+            style={onDayClick ? { cursor: 'pointer' } : undefined}
+          >
             <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
             <XAxis
               dataKey="label"
@@ -71,7 +80,7 @@ export function CashFlowChart({ snapshots, currency }: CashFlowChartProps) {
               stroke="#3b82f6"
               strokeWidth={2}
               dot={false}
-              activeDot={{ r: 4 }}
+              activeDot={{ r: 5 }}
             />
           </ComposedChart>
         </ResponsiveContainer>

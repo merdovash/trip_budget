@@ -20,7 +20,15 @@ import {
   isResidenceLifeStarted,
 } from '../config/relocationPrograms'
 
-import { loanMonthlyPayment, isLoanExpense, isLoanPaymentInMonth, isLoanPaymentOnDay, loanDisbursementForDay, loanDisbursementForMonth } from '../lib/loanAmortization'
+import {
+  loanMonthlyPayment,
+  isLoanExpense,
+  isLoanPaymentInMonth,
+  isLoanPaymentOnDay,
+  isLoanDisbursementDay,
+  loanDisbursementForDay,
+  loanDisbursementForMonth,
+} from '../lib/loanAmortization'
 import { convertCurrency } from '../lib/currency'
 import { buildDoubleTaxationLines, type DoubleTaxationLine } from '../tax/doubleTaxation'
 import { getTaxCalculator } from '../tax/registry'
@@ -497,6 +505,215 @@ function onceExpensesForDay(
     if (dateStr !== getEffectiveStartDate(item, settings)) return sum
     return sum + toBaseCurrency(item.amount, item.currency, baseCurrency)
   }, 0)
+}
+
+export type DayLedgerKind =
+  | 'income'
+  | 'expense'
+  | 'once'
+  | 'food'
+  | 'loan_payment'
+  | 'loan_disbursement'
+
+export interface DayLedgerLine {
+  id: string
+  name: string
+  kind: DayLedgerKind
+  amountInBase: number
+  currency: string
+  amountOriginal: number
+  detail?: string
+}
+
+export interface DayLedger {
+  date: string
+  incomes: DayLedgerLine[]
+  expenses: DayLedgerLine[]
+  inflows: DayLedgerLine[]
+  incomeTotal: number
+  expenseTotal: number
+  inflowTotal: number
+}
+
+/** Разбивка доходов и расходов на конкретный день (статьи для клика по графику). */
+export function getDayLedger(
+  incomes: RecurringItem[],
+  expenses: RecurringItem[],
+  oneTimeExpenses: OneTimeExpense[],
+  dateStr: string,
+  settings: BudgetSettings,
+): DayLedger {
+  const baseCurrency = settings.baseCurrency
+  const { year, month, day } = parseIsoDate(dateStr)
+  const incomeLines: DayLedgerLine[] = []
+  const expenseLines: DayLedgerLine[] = []
+  const inflowLines: DayLedgerLine[] = []
+
+  for (const item of incomes) {
+    if (!isActiveOnDay(item, dateStr, settings)) continue
+
+    if (item.payments && item.payments.length > 0) {
+      for (const payment of item.payments) {
+        if (!payment.dayOfMonth || !paymentDayMatches(year, month, day, payment.dayOfMonth)) {
+          continue
+        }
+        incomeLines.push({
+          id: `${item.id}:${payment.label}`,
+          name: item.name,
+          kind: 'income',
+          amountOriginal: payment.amount,
+          currency: item.currency,
+          amountInBase: toBaseCurrency(payment.amount, item.currency, baseCurrency),
+          detail: payment.label,
+        })
+      }
+      continue
+    }
+
+    let amount = 0
+    switch (item.frequency) {
+      case 'monthly':
+        if (scheduledDayMatches(year, month, day, item, settings)) amount = item.amount
+        break
+      case 'weekly':
+        if (daysBetween(getEffectiveStartDate(item, settings), dateStr) % 7 === 0) amount = item.amount
+        break
+      case 'yearly':
+        if (yearlyDayMatches(dateStr, item, settings)) amount = item.amount
+        break
+      case 'once':
+        if (dateStr === getEffectiveStartDate(item, settings)) amount = item.amount
+        break
+    }
+    if (amount > 0) {
+      incomeLines.push({
+        id: item.id,
+        name: item.name,
+        kind: 'income',
+        amountOriginal: amount,
+        currency: item.currency,
+        amountInBase: toBaseCurrency(amount, item.currency, baseCurrency),
+      })
+    }
+  }
+
+  for (const item of expenses) {
+    if (isLoanExpense(item) && isLoanDisbursementDay(item, dateStr)) {
+      const principal = item.principal ?? item.amount
+      inflowLines.push({
+        id: `${item.id}:disbursement`,
+        name: item.name,
+        kind: 'loan_disbursement',
+        amountOriginal: principal,
+        currency: item.currency,
+        amountInBase: toBaseCurrency(principal, item.currency, baseCurrency),
+        detail: 'Выдача кредита',
+      })
+    }
+
+    if (!isActiveOnDay(item, dateStr, settings)) continue
+
+    if (isLoanExpense(item)) {
+      if (isLoanPaymentOnDay(item, dateStr)) {
+        const payment = loanMonthlyPayment(item)
+        expenseLines.push({
+          id: `${item.id}:payment`,
+          name: item.name,
+          kind: 'loan_payment',
+          amountOriginal: payment,
+          currency: item.currency,
+          amountInBase: toBaseCurrency(payment, item.currency, baseCurrency),
+          detail: 'Платёж по кредиту',
+        })
+      }
+      continue
+    }
+
+    if (item.frequency === 'once') {
+      if (dateStr === getEffectiveStartDate(item, settings)) {
+        expenseLines.push({
+          id: item.id,
+          name: item.name,
+          kind: 'once',
+          amountOriginal: item.amount,
+          currency: item.currency,
+          amountInBase: toBaseCurrency(item.amount, item.currency, baseCurrency),
+          detail: 'Разовый расход',
+        })
+      }
+      continue
+    }
+
+    if (isFoodExpense(item) && item.frequency === 'monthly') {
+      const daily = foodDailyAmount(item.amount)
+      expenseLines.push({
+        id: item.id,
+        name: item.name,
+        kind: 'food',
+        amountOriginal: daily,
+        currency: item.currency,
+        amountInBase: toBaseCurrency(daily, item.currency, baseCurrency),
+        detail: 'Ежедневное начисление (сумма ÷ 30)',
+      })
+      continue
+    }
+
+    let amount = 0
+    switch (item.frequency) {
+      case 'monthly':
+        if (scheduledDayMatches(year, month, day, item, settings)) amount = item.amount
+        break
+      case 'weekly':
+        if (daysBetween(getEffectiveStartDate(item, settings), dateStr) % 7 === 0) amount = item.amount
+        break
+      case 'yearly':
+        if (yearlyDayMatches(dateStr, item, settings)) amount = item.amount
+        break
+    }
+    if (amount > 0) {
+      expenseLines.push({
+        id: item.id,
+        name: item.name,
+        kind: 'expense',
+        amountOriginal: amount,
+        currency: item.currency,
+        amountInBase: toBaseCurrency(amount, item.currency, baseCurrency),
+      })
+    }
+  }
+
+  for (const item of oneTimeExpenses) {
+    if (item.date !== dateStr) continue
+    expenseLines.push({
+      id: item.id,
+      name: item.name,
+      kind: 'once',
+      amountOriginal: item.amount,
+      currency: item.currency,
+      amountInBase: toBaseCurrency(item.amount, item.currency, baseCurrency),
+      detail: 'Разовый расход',
+    })
+  }
+
+  return {
+    date: dateStr,
+    incomes: incomeLines,
+    expenses: expenseLines,
+    inflows: inflowLines,
+    incomeTotal: incomeLines.reduce((s, line) => s + line.amountInBase, 0),
+    expenseTotal: expenseLines.reduce((s, line) => s + line.amountInBase, 0),
+    inflowTotal: inflowLines.reduce((s, line) => s + line.amountInBase, 0),
+  }
+}
+
+export function shiftIsoDate(dateStr: string, deltaDays: number): string {
+  const { year, month, day } = parseIsoDate(dateStr)
+  const date = new Date(Date.UTC(year, month - 1, day))
+  date.setUTCDate(date.getUTCDate() + deltaDays)
+  const y = date.getUTCFullYear()
+  const m = String(date.getUTCMonth() + 1).padStart(2, '0')
+  const d = String(date.getUTCDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
 }
 
 

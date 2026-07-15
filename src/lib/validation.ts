@@ -37,13 +37,25 @@ const regularExpenseFormSchema = z.object({
   name: z.string().min(1, 'Укажите название'),
   amount: z.coerce.number().positive('Сумма должна быть больше 0'),
   currency: z.string().min(1),
-  frequency: z.enum(['monthly', 'yearly', 'weekly', 'once']),
+  frequency: z.enum(['monthly', 'yearly', 'weekly']),
   category: z.string().optional(),
   expenseCountryScope: z.enum(['employment', 'residence', 'other'], {
     errorMap: () => ({ message: 'Укажите страну расхода' }),
   }),
   startDate: isoDateRequired,
   endDate: isoDateOptional,
+})
+
+const onceExpenseFormSchema = z.object({
+  kind: z.literal('once'),
+  name: z.string().min(1, 'Укажите название'),
+  amount: z.coerce.number().positive('Сумма должна быть больше 0'),
+  currency: z.string().min(1),
+  category: z.string().optional(),
+  expenseCountryScope: z.enum(['employment', 'residence', 'other'], {
+    errorMap: () => ({ message: 'Укажите страну расхода' }),
+  }),
+  startDate: isoDateRequired,
 })
 
 const loanExpenseFormSchema = z.object({
@@ -61,6 +73,7 @@ const loanExpenseFormSchema = z.object({
 
 export const expenseFormSchema = z.discriminatedUnion('kind', [
   regularExpenseFormSchema,
+  onceExpenseFormSchema,
   loanExpenseFormSchema,
 ])
 

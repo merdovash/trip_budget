@@ -55,7 +55,7 @@ export function toPresetSummary(preset: BudgetPreset): BudgetPresetSummary {
     familySize: settings.familySize,
     incomeCount: incomes.length,
     expenseCount: expenses.length,
-    oneTimeCount: oneTimeExpenses.length,
+    oneTimeCount: expenses.filter((item) => item.frequency === 'once').length + oneTimeExpenses.length,
   }
 }
 

@@ -9,7 +9,6 @@ const NAV_ITEMS: { id: AppSection; label: string; Icon: NavIcon }[] = [
   { id: 'income', label: 'Доходы', Icon: IncomeIcon },
   { id: 'expenses', label: 'Расходы', Icon: ExpenseIcon },
   { id: 'presets', label: 'Наборы', Icon: PresetsIcon },
-  { id: 'onetime', label: 'Разовые траты', Icon: OneTimeIcon },
 ]
 
 interface SidebarProps {
@@ -160,14 +159,6 @@ function ExpenseIcon(props: SVGProps<SVGSVGElement>) {
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" {...props}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M12 21V9M8 13l4-4 4 4" />
       <path strokeLinecap="round" strokeLinejoin="round" d="M4 5h16" />
-    </svg>
-  )
-}
-
-function OneTimeIcon(props: SVGProps<SVGSVGElement>) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" {...props}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M13 2 3 14h9l-1 8 10-12h-9l1-8Z" />
     </svg>
   )
 }

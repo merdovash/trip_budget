@@ -267,9 +267,23 @@ function sumRecurringForMonth(
   settings: BudgetSettings,
 ): number {
   return items.reduce((sum, item) => {
+    if (item.frequency === 'once') return sum
     if (!isActiveInMonth(item, monthKey, settings)) return sum
     const amount = recurringAmountForMonth(item, monthKey)
     return sum + toBaseCurrency(amount, item.currency, baseCurrency)
+  }, 0)
+}
+
+function sumOnceExpensesForMonth(
+  items: RecurringItem[],
+  monthKey: string,
+  baseCurrency: string,
+  settings: BudgetSettings,
+): number {
+  return items.reduce((sum, item) => {
+    if (item.frequency !== 'once') return sum
+    if (!isActiveInMonth(item, monthKey, settings)) return sum
+    return sum + toBaseCurrency(item.amount, item.currency, baseCurrency)
   }, 0)
 }
 
@@ -459,8 +473,6 @@ function expenseForDay(
 
       case 'once':
 
-        if (dateStr === effectiveStart(item)) amount = item.amount
-
         break
 
     }
@@ -471,6 +483,20 @@ function expenseForDay(
 
   }, 0)
 
+}
+
+function onceExpensesForDay(
+  items: RecurringItem[],
+  dateStr: string,
+  baseCurrency: string,
+  settings: BudgetSettings,
+): number {
+  return items.reduce((sum, item) => {
+    if (item.frequency !== 'once') return sum
+    if (!isActiveOnDay(item, dateStr, settings)) return sum
+    if (dateStr !== getEffectiveStartDate(item, settings)) return sum
+    return sum + toBaseCurrency(item.amount, item.currency, baseCurrency)
+  }, 0)
 }
 
 
@@ -659,7 +685,9 @@ export function calculateDailyBudgetProjection(
 
     const grossIncome = incomeForDay(incomes, date, baseCurrency, settings)
     const recurringExpenses = expenseForDay(expenses, date, baseCurrency, settings)
-    const oneTimeTotal = sumOneTimeForDay(oneTimeExpenses, date, baseCurrency)
+    const oneTimeTotal =
+      onceExpensesForDay(expenses, date, baseCurrency, settings) +
+      sumOneTimeForDay(oneTimeExpenses, date, baseCurrency)
 
     const russiaTax = russiaSourceTaxForDay(
       incomes,
@@ -752,7 +780,9 @@ export function calculateBudgetProjection(
     const grossIncome = sumRecurringForMonth(incomes, month, baseCurrency, settings)
     const residenceGross = sumRecurringForMonth(residenceIncomes, month, baseCurrency, settings)
     const recurringExpenses = sumRecurringForMonth(expenses, month, baseCurrency, settings)
-    const oneTimeTotal = sumOneTimeForMonth(oneTimeExpenses, month, baseCurrency)
+    const oneTimeTotal =
+      sumOnceExpensesForMonth(expenses, month, baseCurrency, settings) +
+      sumOneTimeForMonth(oneTimeExpenses, month, baseCurrency)
 
     const monthStart = `${month}-01`
     const residenceTax = isResidenceLifeStarted(monthStart, settings)

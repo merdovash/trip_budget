@@ -13,6 +13,7 @@ export interface BudgetPresetData {
     annualRate: number
     startDate: string
   }>
+  /** @deprecated Разовые траты хранятся в expenses с frequency === 'once'. */
   oneTimeExpenses: OneTimeExpense[]
 }
 

@@ -44,7 +44,6 @@ export function Dashboard() {
   const hasData =
     incomes.length > 0 ||
     expenses.length > 0 ||
-    oneTimeExpenses.length > 0 ||
     (settings.initialBalance ?? 0) > 0
 
   if (!hasData) {

@@ -9,7 +9,12 @@ import {
 import { useExchangeRateStore } from '../../store/exchangeRateStore'
 import { expenseFormSchema, type ExpenseFormData } from '../../lib/validation'
 import { useBudgetStore } from '../../store/budgetStore'
-import { FREQUENCY_LABELS, LOAN_EXPENSE_CATEGORY, type BudgetSettings, type RecurringItem } from '../../types/budget'
+import {
+  FREQUENCY_LABELS,
+  LOAN_EXPENSE_CATEGORY,
+  type BudgetSettings,
+  type RecurringItem,
+} from '../../types/budget'
 import {
   FOOD_EXPENSE_CATEGORY,
   getCountryLocalCurrency,
@@ -34,6 +39,12 @@ const EXPENSE_CATEGORIES = [
   'Здоровье',
   'Развлечения',
   'Связь',
+  'Переезд',
+  'Депозит',
+  'Мебель',
+  'Авто',
+  'Ремонт',
+  'Обучение',
   'Другое',
 ]
 
@@ -52,6 +63,10 @@ function loanAnnualRateFromItem(item: RecurringItem): string {
   return formatRateInput(item.annualRate ?? 0)
 }
 
+function currentScope(form: ExpenseFormData): ExpenseFormData['expenseCountryScope'] {
+  return form.expenseCountryScope
+}
+
 function expenseToFormData(item: RecurringItem, settings: BudgetSettings): ExpenseFormData {
   const expenseCountryScope = getExpenseCountryScope(item, settings)
   if (isLoanExpense(item)) {
@@ -62,6 +77,17 @@ function expenseToFormData(item: RecurringItem, settings: BudgetSettings): Expen
       currency: item.currency,
       termMonths: item.termMonths ?? 1,
       annualRate: item.annualRate ?? 0,
+      expenseCountryScope,
+      startDate: item.startDate,
+    }
+  }
+  if (item.frequency === 'once') {
+    return {
+      kind: 'once',
+      name: item.name,
+      amount: item.amount,
+      currency: item.currency,
+      category: item.category ?? '',
       expenseCountryScope,
       startDate: item.startDate,
     }
@@ -83,6 +109,19 @@ function formDataToExpense(data: ExpenseFormData): Omit<RecurringItem, 'id'> {
   if (data.kind === 'loan') {
     return buildLoanExpense(data)
   }
+  if (data.kind === 'once') {
+    return {
+      expenseKind: 'regular',
+      name: data.name,
+      amount: data.amount,
+      currency: data.currency,
+      frequency: 'once',
+      category: data.category || undefined,
+      lifecycle: 'any',
+      expenseCountryScope: data.expenseCountryScope,
+      startDate: data.startDate,
+    }
+  }
   return {
     expenseKind: 'regular',
     name: data.name,
@@ -94,6 +133,20 @@ function formDataToExpense(data: ExpenseFormData): Omit<RecurringItem, 'id'> {
     expenseCountryScope: data.expenseCountryScope,
     startDate: data.startDate,
     endDate: data.endDate || undefined,
+  }
+}
+
+function blankRegularForm(baseCurrency: string): Extract<ExpenseFormData, { kind: 'regular' }> {
+  return {
+    kind: 'regular',
+    name: '',
+    amount: 0,
+    currency: baseCurrency,
+    frequency: 'monthly',
+    category: '',
+    expenseCountryScope: 'residence',
+    startDate: todayIsoDate(),
+    endDate: '',
   }
 }
 
@@ -111,7 +164,10 @@ function ExpenseCountryField({
 
   return (
     <Field label="Страна расхода" error={error}>
-      <Select value={value} onChange={(e) => onChange(e.target.value as ExpenseFormData['expenseCountryScope'])}>
+      <Select
+        value={value}
+        onChange={(e) => onChange(e.target.value as ExpenseFormData['expenseCountryScope'])}
+      >
         {options.map((option) => (
           <option key={option.value} value={option.value}>
             {option.label}
@@ -161,19 +217,7 @@ interface ExpenseFormProps {
 function ExpenseForm({ initialItem, onSubmit, onCancel }: ExpenseFormProps) {
   const settings = useBudgetStore((s) => s.settings)
   const [form, setForm] = useState<ExpenseFormData>(() =>
-    initialItem
-      ? expenseToFormData(initialItem, settings)
-      : {
-          kind: 'regular',
-          name: '',
-          amount: 0,
-          currency: settings.baseCurrency,
-          frequency: 'monthly',
-          category: '',
-          expenseCountryScope: 'residence',
-          startDate: todayIsoDate(),
-          endDate: '',
-        },
+    initialItem ? expenseToFormData(initialItem, settings) : blankRegularForm(settings.baseCurrency),
   )
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [annualRateInput, setAnnualRateInput] = useState(() =>
@@ -200,33 +244,62 @@ function ExpenseForm({ initialItem, onSubmit, onCancel }: ExpenseFormProps) {
   }, [form, annualRateInput])
 
   function handleCategoryChange(category: string) {
-    if (form.kind !== 'regular') return
-    if (category === FOOD_EXPENSE_CATEGORY) {
+    if (form.kind !== 'regular' && form.kind !== 'once') return
+    if (form.kind === 'regular' && category === FOOD_EXPENSE_CATEGORY) {
       const amount = getTypicalFoodBudget(settings.countryCode, settings.familySize)
       const currency = getCountryLocalCurrency(settings.countryCode)
-      setForm((prev) => {
-        if (prev.kind !== 'regular') return prev
-        return {
-          ...prev,
-          category,
-          amount,
-          currency,
-          frequency: 'monthly',
-          name: prev.name.trim() ? prev.name : FOOD_EXPENSE_CATEGORY,
-        }
+      setForm({
+        ...form,
+        category,
+        amount,
+        currency,
+        frequency: 'monthly',
+        name: form.name.trim() ? form.name : FOOD_EXPENSE_CATEGORY,
       })
       return
     }
-    setForm((prev) => {
-      if (prev.kind !== 'regular') return prev
-      return { ...prev, category }
-    })
+    setForm({ ...form, category })
   }
 
   const foodBudgetHint =
     form.kind === 'regular' && form.category === FOOD_EXPENSE_CATEGORY
       ? `Типовой бюджет на ${settings.familySize} чел. в ${COUNTRY_LABELS[settings.countryCode] ?? settings.countryCode}`
       : null
+
+  function switchKind(kind: ExpenseFormData['kind']) {
+    const scope = currentScope(form)
+    const name = form.name
+    setAnnualRateInput('0')
+    if (kind === 'loan') {
+      setForm({
+        kind: 'loan',
+        name,
+        principal: 0,
+        currency: settings.baseCurrency,
+        termMonths: 12,
+        annualRate: 0,
+        expenseCountryScope: scope,
+        startDate: todayIsoDate(),
+      })
+    } else if (kind === 'once') {
+      setForm({
+        kind: 'once',
+        name,
+        amount: 0,
+        currency: settings.baseCurrency,
+        category: '',
+        expenseCountryScope: scope,
+        startDate: todayIsoDate(),
+      })
+    } else {
+      setForm({
+        ...blankRegularForm(settings.baseCurrency),
+        name,
+        expenseCountryScope: scope,
+      })
+    }
+    setErrors({})
+  }
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault()
@@ -254,17 +327,7 @@ function ExpenseForm({ initialItem, onSubmit, onCancel }: ExpenseFormProps) {
     setErrors({})
     onSubmit(result.data)
     if (!isEditing) {
-      setForm({
-        kind: 'regular',
-        name: '',
-        amount: 0,
-        currency: settings.baseCurrency,
-        frequency: 'monthly',
-        category: '',
-        expenseCountryScope: 'residence',
-        startDate: todayIsoDate(),
-        endDate: '',
-      })
+      setForm(blankRegularForm(settings.baseCurrency))
       setAnnualRateInput('0')
     }
   }
@@ -272,42 +335,9 @@ function ExpenseForm({ initialItem, onSubmit, onCancel }: ExpenseFormProps) {
   return (
     <form onSubmit={handleSubmit} className="grid gap-3 md:grid-cols-2">
       <Field label="Вид расхода" className="md:col-span-2">
-        <Select
-          value={form.kind}
-          onChange={(e) => {
-            const kind = e.target.value as ExpenseFormData['kind']
-            if (kind === 'loan') {
-              setAnnualRateInput('0')
-              setForm({
-                kind: 'loan',
-                name: form.name,
-                principal: 0,
-                currency: settings.baseCurrency,
-                termMonths: 12,
-                annualRate: 0,
-                expenseCountryScope:
-                  form.kind === 'regular' ? form.expenseCountryScope : 'residence',
-                startDate: todayIsoDate(),
-              })
-            } else {
-              setAnnualRateInput('0')
-              setForm({
-                kind: 'regular',
-                name: form.name,
-                amount: 0,
-                currency: settings.baseCurrency,
-                frequency: 'monthly',
-                category: '',
-                expenseCountryScope:
-                  form.kind === 'loan' ? form.expenseCountryScope : 'residence',
-                startDate: todayIsoDate(),
-                endDate: '',
-              })
-            }
-            setErrors({})
-          }}
-        >
+        <Select value={form.kind} onChange={(e) => switchKind(e.target.value as ExpenseFormData['kind'])}>
           <option value="regular">Обычный</option>
+          <option value="once">Разовый</option>
           <option value="loan">Кредит</option>
         </Select>
       </Field>
@@ -316,7 +346,7 @@ function ExpenseForm({ initialItem, onSubmit, onCancel }: ExpenseFormProps) {
         <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
       </Field>
 
-      {form.kind === 'regular' ? (
+      {form.kind === 'regular' && (
         <>
           <Field label="Сумма" error={errors.amount}>
             <div className="flex gap-2">
@@ -340,9 +370,7 @@ function ExpenseForm({ initialItem, onSubmit, onCancel }: ExpenseFormProps) {
               currency={form.currency}
               baseCurrency={settings.baseCurrency}
             />
-            {foodBudgetHint && (
-              <p className="mt-1 text-xs text-slate-500">{foodBudgetHint}</p>
-            )}
+            {foodBudgetHint && <p className="mt-1 text-xs text-slate-500">{foodBudgetHint}</p>}
           </Field>
           <Field label="Периодичность">
             <Select
@@ -380,7 +408,10 @@ function ExpenseForm({ initialItem, onSubmit, onCancel }: ExpenseFormProps) {
             />
           </Field>
           <Field label="Дата окончания (опц.)" error={errors.endDate}>
-            <DateInput value={form.endDate ?? ''} onChange={(endDate) => setForm({ ...form, endDate })} />
+            <DateInput
+              value={form.endDate ?? ''}
+              onChange={(endDate) => setForm({ ...form, endDate })}
+            />
           </Field>
           <ExpenseCountryField
             value={form.expenseCountryScope}
@@ -388,7 +419,58 @@ function ExpenseForm({ initialItem, onSubmit, onCancel }: ExpenseFormProps) {
             error={errors.expenseCountryScope}
           />
         </>
-      ) : (
+      )}
+
+      {form.kind === 'once' && (
+        <>
+          <Field label="Сумма" error={errors.amount}>
+            <div className="flex gap-2">
+              <CurrencySelect
+                value={form.currency}
+                onChange={(currency) => setForm({ ...form, currency })}
+                className="w-24 shrink-0"
+              />
+              <Input
+                type="number"
+                min={0}
+                step={0.01}
+                placeholder="Сумма"
+                className="min-w-0 flex-1"
+                value={form.amount || ''}
+                onChange={(e) => setForm({ ...form, amount: Number(e.target.value) })}
+              />
+            </div>
+            <CurrencyConversionHint
+              amount={form.amount}
+              currency={form.currency}
+              baseCurrency={settings.baseCurrency}
+            />
+          </Field>
+          <Field label="Дата" error={errors.startDate}>
+            <DateInput
+              value={form.startDate}
+              onChange={(startDate) => setForm({ ...form, startDate })}
+            />
+          </Field>
+          <Field label="Категория">
+            <Select value={form.category} onChange={(e) => handleCategoryChange(e.target.value)}>
+              <option value="">—</option>
+              {EXPENSE_CATEGORIES.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <ExpenseCountryField
+            value={form.expenseCountryScope}
+            onChange={(expenseCountryScope) => setForm({ ...form, expenseCountryScope })}
+            error={errors.expenseCountryScope}
+          />
+        </>
+      )}
+
+      {form.kind === 'loan' && (
         <>
           <Field label="Сумма кредита" error={errors.principal}>
             <div className="flex gap-2">
@@ -501,7 +583,7 @@ function ExpenseList({
     return (
       <EmptyState
         title="Нет расходов"
-        description="Добавьте аренду, еду, кредиты и другие регулярные траты."
+        description="Добавьте аренду, еду, разовые траты, кредиты и другие расходы."
       />
     )
   }

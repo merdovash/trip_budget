@@ -43,8 +43,9 @@ describe('relocation date helpers', () => {
     const program = RELOCATION_PROGRAMS.find((p) => p.id === 'ge-remote-relocation')!
     const expenses = buildProgramOneTimeExpenses(program, settings.relocationDate)
     expect(expenses).toHaveLength(4)
-    expect(expenses[0].date).toBe(addDays(settings.relocationDate, -5))
-    expect(expenses[1].date).toBe(settings.relocationDate)
+    expect(expenses[0].startDate).toBe(addDays(settings.relocationDate!, -5))
+    expect(expenses[1].startDate).toBe(settings.relocationDate)
+    expect(expenses.every((item) => item.frequency === 'once')).toBe(true)
   })
 
   it('lists country-specific programs', () => {

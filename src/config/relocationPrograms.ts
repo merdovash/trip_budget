@@ -1,5 +1,4 @@
-import type { BudgetSettings, OneTimeExpense, RecurringItem } from '../types/budget'
-import type { RelocationMode } from '../types/budget'
+import type { BudgetSettings, RecurringItem, RelocationMode } from '../types/budget'
 
 export type ItemLifecycle = 'destination' | 'origin' | 'any'
 
@@ -192,13 +191,16 @@ export function getRelocationProgram(programId: string | undefined): RelocationP
 export function buildProgramOneTimeExpenses(
   program: RelocationProgram,
   relocationDate: string,
-): Omit<OneTimeExpense, 'id'>[] {
+): Omit<RecurringItem, 'id'>[] {
   return program.expenses.map((template) => ({
+    expenseKind: 'regular' as const,
     name: template.name,
     amount: template.amount,
     currency: template.currency,
+    frequency: 'once' as const,
     category: template.category,
-    date: addDays(relocationDate, template.offsetDays),
-    expenseCountryScope: 'residence',
+    lifecycle: 'any' as const,
+    expenseCountryScope: 'residence' as const,
+    startDate: addDays(relocationDate, template.offsetDays),
   }))
 }

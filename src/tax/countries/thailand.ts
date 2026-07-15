@@ -491,3 +491,23 @@ export const thailandEmployed: TaxCalculator = createThailandCalculator(
   'PIT + взносы Social Security (5%, макс. ฿10 500/год) на зарплату в Таиланде. Зарплата из РФ в SSO не входит.',
   true,
 )
+
+/**
+ * LTR Wealthy Global Citizen (инвестиции, в т.ч. покупка жилья ≥ USD 500k).
+ * Royal Decree No. 743: освобождение remitted foreign-source income от PIT.
+ * Тайский доход облагается обычным прогрессивным PIT.
+ */
+export const thailandLtrInvestment: TaxCalculator = {
+  id: 'th-ltr-investment',
+  countryCode: 'TH',
+  name: 'LTR — инвестиции / жильё',
+  description:
+    'Long-Term Resident (Wealthy Global Citizen): инвестиция ≥ USD 500 000 в тайские активы (жильё, гос. облигации, FDI). Иностранный доход, ввезённый в Таиланд, освобождён от PIT (Royal Decree No. 743). Доход из Таиланда — обычный прогрессивный PIT. Условие визы — не налоговый расчёт.',
+  taxDistribution: 'with_income',
+  calculate(input: TaxInput) {
+    return buildThailandTaxResult(input.grossAnnualIncome, 'THB', input, undefined, {
+      includeSocialSecurity: false,
+      localEmploymentGrossBase: 0,
+    })
+  },
+}

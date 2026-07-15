@@ -7,6 +7,7 @@ import {
   TH_SPOUSE_ALLOWANCE,
   TH_CHILD_ALLOWANCE,
   TH_EMPLOYMENT_EXPENSE_CAP,
+  thailandLtrInvestment,
   thailandStandard,
 } from './countries/thailand'
 import { adjustThailandResidenceTaxResult } from './thailandResidenceTax'
@@ -140,5 +141,58 @@ describe('adjustThailandResidenceTaxResult with RU salary', () => {
     expect(withExpenses.thailandForeignSalary?.remittanceEstimate).toBe(30_000 * 12)
     expect(withExpenses.thailandForeignSalary?.foreignSalaryTaxableGross).toBe(30_000 * 12)
     expect(withExpenses.thailandForeignSalary?.pitGross).toBeGreaterThan(0)
+  })
+})
+
+describe('Thailand LTR investment regime', () => {
+  it('exempts remitted foreign RU salary from PIT under LTR investment', () => {
+    const ruSalary: RecurringItem = {
+      id: 'ru',
+      name: 'Salary RU',
+      amount: 200_000,
+      currency: 'THB',
+      frequency: 'monthly',
+      categoryId: 'salary',
+      salaryCountryCode: 'RU',
+      includeInResidenceTax: true,
+      startDate: '2026-01-01',
+    }
+    const settings = {
+      baseCurrency: 'THB',
+      countryCode: 'TH',
+      taxRegimeId: 'th-ltr-investment',
+      familySize: 1,
+      dependents: 0,
+      horizonMonths: 12,
+      initialBalance: 0,
+      initialBalanceCurrency: 'THB',
+      initialBalanceDate: '2026-01-01',
+      relocationDate: '2026-01-01',
+    }
+
+    const ltr = adjustThailandResidenceTaxResult([ruSalary], settings, thailandLtrInvestment, [], [])
+    expect(ltr.thailandForeignSalary?.foreignSalaryTaxableGross).toBe(0)
+    expect(ltr.thailandForeignSalary?.foreignSalaryExcluded).toBe(200_000 * 12)
+    expect(ltr.result.incomeTax).toBe(0)
+    expect(ltr.result.breakdown.some((line) => line.label.includes('LTR'))).toBe(true)
+
+    const living: RecurringItem = {
+      id: 'rent',
+      name: 'Rent',
+      amount: 50_000,
+      currency: 'THB',
+      frequency: 'monthly',
+      expenseCountryScope: 'residence',
+      startDate: '2026-01-01',
+    }
+    const standardWithRemit = adjustThailandResidenceTaxResult(
+      [ruSalary],
+      { ...settings, taxRegimeId: 'th-standard' },
+      thailandStandard,
+      [living],
+      [],
+    )
+    expect(standardWithRemit.thailandForeignSalary?.foreignSalaryTaxableGross).toBeGreaterThan(0)
+    expect(standardWithRemit.thailandForeignSalary?.pitGross).toBeGreaterThan(0)
   })
 })

@@ -2,11 +2,16 @@ import type { TaxBracket, TaxCalculator, TaxInput } from '../types'
 import { buildTaxResult, calculateProgressiveTax } from '../types'
 import { spainBeckham, spainEmployed, spainStandard } from './spain'
 import { georgiaSmallBusiness, georgiaStandard, georgiaVirtualZone } from './georgia'
-import { thailandEmployed, thailandLtrInvestment, thailandStandard } from './thailand'
+import {
+  thailandEmployed,
+  thailandLtrInvestment,
+  thailandProperty3m,
+  thailandStandard,
+} from './thailand'
 
 export { spainBeckham, spainEmployed, spainStandard }
 export { georgiaSmallBusiness, georgiaStandard, georgiaVirtualZone }
-export { thailandEmployed, thailandLtrInvestment, thailandStandard }
+export { thailandEmployed, thailandLtrInvestment, thailandProperty3m, thailandStandard }
 
 function progressiveCalculator(
   id: string,

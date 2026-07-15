@@ -511,3 +511,15 @@ export const thailandLtrInvestment: TaxCalculator = {
     })
   },
 }
+
+/**
+ * Investment extension «฿3M route» (Orders 237/2568, 238/2568):
+ * freehold condo or registered long-term lease ≥ THB 3,000,000 → 90-day permission, then annual 12-month renewals.
+ * Tax: no LTR exemption — ordinary remittance-based PIT if tax resident (180+ days).
+ */
+export const thailandProperty3m: TaxCalculator = createThailandCalculator(
+  'th-property-3m',
+  '฿3M — condo / долгосрочная аренда',
+  'Иммиграционный маршрут (Non-Immigrant B investment extension): freehold-кондо или зарегистрированный long-term lease ≥ ฿3 000 000. Сначала 90 дней, затем продление на 12 месяцев ежегодно. Налоги как у обычного резидента: remittance Por. 161/2566, без льготы LTR / RD 743. Покупка жилья — условие визы, не налоговый вычет.',
+  false,
+)

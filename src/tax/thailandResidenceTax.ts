@@ -62,6 +62,14 @@ export const THAILAND_LTR_INVESTMENT = {
     'Royal Decree No. 743: qualifying foreign-source income, remitted to Thailand, освобождён от PIT для LTR Wealthy Global Citizen / Pensioner / Work-from-Thailand. Доход из Таиланда облагается обычным PIT. Highly-Skilled Professionals вместо этого могут иметь flat 17% на тайскую зарплату — в этом режиме не моделируется.',
 } as const
 
+export const THAILAND_PROPERTY_3M = {
+  title: '฿3M — condo / долгосрочная аренда',
+  summary:
+    'Investment extension (Immigration Orders 237/2568 и 238/2568): freehold-кондоминиум или зарегистрированный long-term lease ≥ ฿3 000 000. Сначала разрешение на 90 дней, затем продление на 12 месяцев ежегодно. Покупка/аренда — условие визы, не налоговый вычет.',
+  tax:
+    'Отдельной налоговой льготы нет (в отличие от LTR / RD 743). При налоговом резидентстве (обычно ≥180 дней в календарном году) remitted foreign income облагается PIT по Por. 161/2566; зачёт НДФЛ РФ — как в стандартном режиме.',
+} as const
+
 export function isThailandLtrInvestmentRegime(calculator: TaxCalculator): boolean {
   return calculator.id === 'th-ltr-investment'
 }
@@ -291,11 +299,34 @@ export function adjustThailandResidenceTaxResult(
     expenses,
     oneTimeExpenses,
   )
-  if (mixed) return mixed
+  const adjusted =
+    mixed ??
+    ({
+      result: calculateThailandResidenceTax(residenceIncomes, settings, calculator),
+    } satisfies SpainAdjustedResidenceTax)
 
-  return {
-    result: calculateThailandResidenceTax(residenceIncomes, settings, calculator),
+  if (calculator.id === 'th-property-3m') {
+    adjusted.result = {
+      ...adjusted.result,
+      breakdown: [
+        {
+          label: '฿3M — condo / lease (виза)',
+          amount: 0,
+          description: THAILAND_PROPERTY_3M.summary,
+          kind: 'info',
+        },
+        {
+          label: 'Налоги: без льготы LTR',
+          amount: 0,
+          description: THAILAND_PROPERTY_3M.tax,
+          kind: 'info',
+        },
+        ...adjusted.result.breakdown,
+      ],
+    }
   }
+
+  return adjusted
 }
 
 /** Для тестов: PIT на базе в THB без конвертации. */

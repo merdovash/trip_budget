@@ -8,6 +8,7 @@ import {
   TH_CHILD_ALLOWANCE,
   TH_EMPLOYMENT_EXPENSE_CAP,
   thailandLtrInvestment,
+  thailandProperty3m,
   thailandStandard,
 } from './countries/thailand'
 import { adjustThailandResidenceTaxResult } from './thailandResidenceTax'
@@ -194,5 +195,64 @@ describe('Thailand LTR investment regime', () => {
     )
     expect(standardWithRemit.thailandForeignSalary?.foreignSalaryTaxableGross).toBeGreaterThan(0)
     expect(standardWithRemit.thailandForeignSalary?.pitGross).toBeGreaterThan(0)
+  })
+})
+
+describe('Thailand ฿3M property route', () => {
+  it('taxes remitted foreign income like standard PIT, unlike LTR', () => {
+    const ruSalary: RecurringItem = {
+      id: 'ru',
+      name: 'Salary RU',
+      amount: 200_000,
+      currency: 'THB',
+      frequency: 'monthly',
+      categoryId: 'salary',
+      salaryCountryCode: 'RU',
+      includeInResidenceTax: true,
+      foreignTaxCredit: false,
+      startDate: '2026-01-01',
+    }
+    const living: RecurringItem = {
+      id: 'rent',
+      name: 'Rent',
+      amount: 50_000,
+      currency: 'THB',
+      frequency: 'monthly',
+      expenseCountryScope: 'residence',
+      startDate: '2026-01-01',
+    }
+    const settings = {
+      baseCurrency: 'THB',
+      countryCode: 'TH',
+      taxRegimeId: 'th-property-3m',
+      familySize: 1,
+      dependents: 0,
+      horizonMonths: 12,
+      initialBalance: 0,
+      initialBalanceCurrency: 'THB',
+      initialBalanceDate: '2026-01-01',
+      relocationDate: '2026-01-01',
+    }
+
+    const property3m = adjustThailandResidenceTaxResult(
+      [ruSalary],
+      settings,
+      thailandProperty3m,
+      [living],
+      [],
+    )
+    const ltr = adjustThailandResidenceTaxResult(
+      [ruSalary],
+      { ...settings, taxRegimeId: 'th-ltr-investment' },
+      thailandLtrInvestment,
+      [living],
+      [],
+    )
+
+    expect(property3m.thailandForeignSalary?.foreignSalaryTaxableGross).toBe(50_000 * 12)
+    expect(property3m.thailandForeignSalary?.pitGross).toBeGreaterThan(0)
+    expect(property3m.result.incomeTax).toBeGreaterThan(0)
+    expect(property3m.result.breakdown.some((line) => line.label.includes('฿3M'))).toBe(true)
+    expect(ltr.result.incomeTax).toBe(0)
   })
 })

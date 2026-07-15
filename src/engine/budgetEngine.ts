@@ -721,6 +721,7 @@ export function calculateDailyBudgetProjection(
       netIncome,
       recurringExpenses,
       oneTimeExpenses: oneTimeTotal,
+      loanDisbursement,
       taxes,
       balance,
       cumulativeBalance,
@@ -820,6 +821,8 @@ export function calculateBudgetProjection(
 
       oneTimeExpenses: oneTimeTotal,
 
+      loanDisbursement,
+
       taxes,
 
       balance,
@@ -830,6 +833,42 @@ export function calculateBudgetProjection(
 
   })
 
+}
+
+/** Средние за горизонт: приток (доход + выдача кредитов) и расходы сходятся с итоговым остатком. */
+export function computeSummaryAverages(snapshots: MonthlySnapshot[]): {
+  avgInflow: number
+  avgExpenses: number
+  avgNetIncome: number
+  avgLoanDisbursement: number
+  avgRecurringExpenses: number
+  avgOneTimeExpenses: number
+} {
+  const n = snapshots.length
+  if (n === 0) {
+    return {
+      avgInflow: 0,
+      avgExpenses: 0,
+      avgNetIncome: 0,
+      avgLoanDisbursement: 0,
+      avgRecurringExpenses: 0,
+      avgOneTimeExpenses: 0,
+    }
+  }
+
+  const avgNetIncome = snapshots.reduce((s, m) => s + m.netIncome, 0) / n
+  const avgLoanDisbursement = snapshots.reduce((s, m) => s + m.loanDisbursement, 0) / n
+  const avgRecurringExpenses = snapshots.reduce((s, m) => s + m.recurringExpenses, 0) / n
+  const avgOneTimeExpenses = snapshots.reduce((s, m) => s + m.oneTimeExpenses, 0) / n
+
+  return {
+    avgNetIncome,
+    avgLoanDisbursement,
+    avgRecurringExpenses,
+    avgOneTimeExpenses,
+    avgInflow: avgNetIncome + avgLoanDisbursement,
+    avgExpenses: avgRecurringExpenses + avgOneTimeExpenses,
+  }
 }
 
 

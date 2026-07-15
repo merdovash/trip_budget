@@ -115,6 +115,8 @@ export interface MonthlySnapshot {
   netIncome: number
   recurringExpenses: number
   oneTimeExpenses: number
+  /** Выдача кредита в этом месяце (приток, не расход). */
+  loanDisbursement: number
   taxes: number
   balance: number
   cumulativeBalance: number
@@ -126,6 +128,8 @@ export interface DailySnapshot {
   netIncome: number
   recurringExpenses: number
   oneTimeExpenses: number
+  /** Выдача кредита в этот день (приток, не расход). */
+  loanDisbursement: number
   taxes: number
   balance: number
   cumulativeBalance: number

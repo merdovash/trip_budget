@@ -1,4 +1,5 @@
 import { formatCurrency, formatPercent } from '../../lib/format'
+import { computeSummaryAverages } from '../../engine/budgetEngine'
 import type { DailySnapshot, MonthlySnapshot } from '../../types/budget'
 import { Card } from '../ui/FormControls'
 
@@ -17,15 +18,7 @@ export function SummaryCards({
   annualTaxes,
   initialBalance,
 }: SummaryCardsProps) {
-  const avgNet =
-    snapshots.length > 0
-      ? snapshots.reduce((s, m) => s + m.netIncome, 0) / snapshots.length
-      : 0
-  const avgExpenses =
-    snapshots.length > 0
-      ? snapshots.reduce((s, m) => s + m.recurringExpenses + m.oneTimeExpenses, 0) /
-        snapshots.length
-      : 0
+  const { avgInflow, avgExpenses } = computeSummaryAverages(snapshots)
   const lastBalance = snapshots.at(-1)?.cumulativeBalance ?? 0
   const minDailyBalance =
     dailySnapshots.length > 0
@@ -34,8 +27,16 @@ export function SummaryCards({
 
   const cards = [
     { label: 'Начальный остаток', value: formatCurrency(initialBalance, currency) },
-    { label: 'Средний чистый доход / мес.', value: formatCurrency(avgNet, currency) },
-    { label: 'Средние расходы / мес.', value: formatCurrency(avgExpenses, currency) },
+    {
+      label: 'Средний приток / мес.',
+      value: formatCurrency(avgInflow, currency),
+      hint: 'Чистый доход + выдача кредитов за горизонт / число месяцев',
+    },
+    {
+      label: 'Средние расходы / мес.',
+      value: formatCurrency(avgExpenses, currency),
+      hint: 'Регулярные (с учётом дат начала/конца), разовые и платежи по кредитам',
+    },
     { label: 'Налоги / год', value: formatCurrency(annualTaxes, currency) },
     {
       label: 'Мин. баланс (по дням)',
@@ -55,6 +56,9 @@ export function SummaryCards({
           >
             {card.value}
           </p>
+          {'hint' in card && card.hint && (
+            <p className="mt-1 text-xs leading-snug text-slate-400">{card.hint}</p>
+          )}
         </Card>
       ))}
     </div>

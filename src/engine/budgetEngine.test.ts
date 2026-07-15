@@ -5,6 +5,7 @@ import {
   calculateAnnualGrossIncome,
   calculateBudgetProjection,
   calculateDailyBudgetProjection,
+  computeSummaryAverages,
   foodDailyAmount,
   foodMonthlyAmount,
   generateDayKeys,
@@ -316,10 +317,12 @@ describe('loan expenses in projection', () => {
 
     const disbursementDay = days.find((d) => d.date === '2026-01-15')
     expect(disbursementDay?.recurringExpenses).toBeCloseTo(4000)
+    expect(disbursementDay?.loanDisbursement).toBeCloseTo(12000)
     expect(disbursementDay?.balance).toBeCloseTo(12000 - 4000)
 
     const paymentDay = days.find((d) => d.date === '2026-02-15')
     expect(paymentDay?.recurringExpenses).toBeCloseTo(4000)
+    expect(paymentDay?.loanDisbursement).toBe(0)
     expect(days.find((d) => d.date === '2026-02-14')?.recurringExpenses).toBe(0)
   })
 
@@ -330,8 +333,80 @@ describe('loan expenses in projection', () => {
       horizonMonths: 2,
       initialBalanceDate: '2026-01-01',
     })
+    expect(snapshots[0].loanDisbursement).toBeCloseTo(12000)
     expect(snapshots[0].balance).toBeCloseTo(12000 - 4000)
+    expect(snapshots[1].loanDisbursement).toBe(0)
     expect(snapshots[1].balance).toBeCloseTo(-4000)
+  })
+})
+
+describe('computeSummaryAverages', () => {
+  it('averages one-time and dated recurring expenses over the full horizon', () => {
+    const expenses: RecurringItem[] = [
+      {
+        id: 'rent',
+        name: 'Rent',
+        amount: 1000,
+        currency: 'EUR',
+        frequency: 'monthly',
+        startDate: '2026-01-01',
+        endDate: '2026-02-28',
+      },
+      {
+        id: 'once',
+        name: 'Deposit',
+        amount: 3000,
+        currency: 'EUR',
+        frequency: 'once',
+        startDate: '2026-01-10',
+      },
+    ]
+    const snapshots = calculateBudgetProjection([], expenses, [], {
+      ...DEFAULT_SETTINGS,
+      taxRegimeId: 'ae-none',
+      horizonMonths: 4,
+      initialBalanceDate: '2026-01-01',
+    })
+    const averages = computeSummaryAverages(snapshots)
+    // rent: 1000+1000, once: 3000 → total 5000 / 4 months
+    expect(averages.avgExpenses).toBeCloseTo(5000 / 4)
+    expect(averages.avgOneTimeExpenses).toBeCloseTo(3000 / 4)
+    expect(averages.avgRecurringExpenses).toBeCloseTo(2000 / 4)
+  })
+
+  it('includes loan disbursement in avg inflow so averages match ending balance growth', () => {
+    const testLoan: RecurringItem = {
+      ...buildLoanExpense({
+        name: 'Автокредит',
+        principal: 12000,
+        currency: 'EUR',
+        termMonths: 3,
+        annualRate: 0,
+        startDate: '2026-01-15',
+      }),
+      id: 'loan-avg',
+    }
+    const income: RecurringItem = {
+      id: 'sal',
+      name: 'Salary',
+      amount: 2000,
+      currency: 'EUR',
+      frequency: 'monthly',
+      startDate: '2026-01-01',
+    }
+    const snapshots = calculateBudgetProjection([income], [testLoan], [], {
+      ...DEFAULT_SETTINGS,
+      taxRegimeId: 'ae-none',
+      horizonMonths: 3,
+      initialBalance: 0,
+      initialBalanceCurrency: 'EUR',
+      initialBalanceDate: '2026-01-01',
+    })
+    const averages = computeSummaryAverages(snapshots)
+    const last = snapshots.at(-1)!.cumulativeBalance
+    expect(averages.avgInflow).toBeGreaterThan(averages.avgNetIncome)
+    expect(averages.avgExpenses).toBeGreaterThan(averages.avgNetIncome)
+    expect(last).toBeCloseTo((averages.avgInflow - averages.avgExpenses) * snapshots.length)
   })
 })
 

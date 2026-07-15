@@ -647,6 +647,11 @@ export interface DayLedger {
   inflowTotal: number
 }
 
+export interface DayLedgerOptions {
+  /** Уже посчитанные проценты накопительного счёта за день (из daily snapshot). */
+  savingsInterestInBase?: number
+}
+
 /** Разбивка доходов и расходов на конкретный день (статьи для клика по графику). */
 export function getDayLedger(
   incomes: RecurringItem[],
@@ -654,6 +659,7 @@ export function getDayLedger(
   oneTimeExpenses: OneTimeExpense[],
   dateStr: string,
   settings: BudgetSettings,
+  options: DayLedgerOptions = {},
 ): DayLedger {
   const baseCurrency = settings.baseCurrency
   const { year, month, day } = parseIsoDate(dateStr)
@@ -807,45 +813,18 @@ export function getDayLedger(
     })
   }
 
-  if (isRubSavingsEnabled(settings) && isLastDayOfMonth(dateStr)) {
-    let rubBalance = getInitialRubBalance(settings)
-    let russiaTracker = createRussiaYtdTracker()
-    let trackerYear = -1
-    const dayKeys = generateDayKeys(getProjectionStartDate(settings), settings.horizonMonths)
-    for (const dayKey of dayKeys) {
-      if (dayKey > dateStr) break
-      const { year: y } = parseIsoDate(dayKey)
-      if (y !== trackerYear) {
-        russiaTracker = createRussiaYtdTracker()
-        trackerYear = y
-      }
-      const ndflRub = russiaSourceNdflRubForDay(incomes, dayKey, settings.dependents, russiaTracker)
-      rubBalance += rubNetCashflowBeforeNdflForDay(
-        incomes,
-        expenses,
-        oneTimeExpenses,
-        dayKey,
-        settings,
-      )
-      rubBalance -= ndflRub
-      if (dayKey === dateStr) {
-        const interestRub = monthlyRubSavingsInterest(rubBalance, getRubSavingsAnnualRate(settings))
-        if (interestRub > 0) {
-          inflowLines.push({
-            id: 'savings-interest',
-            name: 'Проценты накопительного счёта',
-            kind: 'savings_interest',
-            amountOriginal: interestRub,
-            currency: 'RUB',
-            amountInBase: toBaseCurrency(interestRub, 'RUB', baseCurrency),
-            detail: `${getRubSavingsAnnualRate(settings)}% годовых`,
-          })
-        }
-        break
-      }
-      const accrued = accrueRubSavingsInterestForDay(rubBalance, dayKey, settings)
-      rubBalance = accrued.nextRubBalance
-    }
+  const savingsInterestInBase = options.savingsInterestInBase ?? 0
+  if (savingsInterestInBase > 0) {
+    const amountOriginal = convertCurrency(savingsInterestInBase, baseCurrency, 'RUB')
+    inflowLines.push({
+      id: 'savings-interest',
+      name: 'Проценты накопительного счёта',
+      kind: 'savings_interest',
+      amountOriginal,
+      currency: 'RUB',
+      amountInBase: savingsInterestInBase,
+      detail: `${getRubSavingsAnnualRate(settings)}% годовых`,
+    })
   }
 
   return {
@@ -1168,6 +1147,8 @@ export function calculateBudgetProjection(
 
   let cumulativeBalance = getInitialBalanceInBase(settings)
   let rubBalance = getInitialRubBalance(settings)
+  let savingsRussiaTracker = createRussiaYtdTracker()
+  let savingsTrackerYear = -1
 
   return monthKeys.map((month) => {
     const grossIncome = sumRecurringForMonth(incomes, month, baseCurrency, settings)
@@ -1198,22 +1179,18 @@ export function calculateBudgetProjection(
     let savingsInterest = 0
     if (isRubSavingsEnabled(settings)) {
       const [year, monthNum] = month.split('-').map(Number)
-      const daysInMonth = getDaysInMonth(year, monthNum)
-      let russiaTracker = createRussiaYtdTracker()
-      for (let m = 1; m < monthNum; m++) {
-        const dim = getDaysInMonth(year, m)
-        for (let day = 1; day <= dim; day++) {
-          const dateStr = `${year}-${String(m).padStart(2, '0')}-${String(day).padStart(2, '0')}`
-          russiaSourceNdflRubForDay(incomes, dateStr, settings.dependents, russiaTracker)
-        }
+      if (year !== savingsTrackerYear) {
+        savingsRussiaTracker = createRussiaYtdTracker()
+        savingsTrackerYear = year
       }
+      const daysInMonth = getDaysInMonth(year, monthNum)
       for (let day = 1; day <= daysInMonth; day++) {
         const dateStr = `${month}-${String(day).padStart(2, '0')}`
         const ndflRub = russiaSourceNdflRubForDay(
           incomes,
           dateStr,
           settings.dependents,
-          russiaTracker,
+          savingsRussiaTracker,
         )
         rubBalance += rubNetCashflowBeforeNdflForDay(
           incomes,

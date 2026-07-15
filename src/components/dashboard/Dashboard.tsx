@@ -54,8 +54,13 @@ export function Dashboard() {
 
   const dayLedger = useMemo(() => {
     if (!selectedDay) return null
-    return getDayLedger(incomes, expenses, oneTimeExpenses, selectedDay, settings)
-  }, [selectedDay, incomes, expenses, oneTimeExpenses, settings, rateDate])
+    const idx = dayIndexByDate.get(selectedDay)
+    const savingsInterestInBase =
+      idx != null ? (dailySnapshots[idx]?.savingsInterest ?? 0) : 0
+    return getDayLedger(incomes, expenses, oneTimeExpenses, selectedDay, settings, {
+      savingsInterestInBase,
+    })
+  }, [selectedDay, dailySnapshots, dayIndexByDate, incomes, expenses, oneTimeExpenses, settings, rateDate])
 
   const selectedIndex = selectedDay != null ? (dayIndexByDate.get(selectedDay) ?? -1) : -1
   const canPrev = selectedIndex > 0
@@ -97,7 +102,8 @@ export function Dashboard() {
         initialBalance={initialBalance}
       />
       <CashFlowChart
-        snapshots={dailySnapshots}
+        dailySnapshots={dailySnapshots}
+        monthlySnapshots={snapshots}
         currency={settings.baseCurrency}
         onDayClick={setSelectedDay}
       />

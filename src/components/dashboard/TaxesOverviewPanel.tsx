@@ -6,8 +6,8 @@ import {
   convertScheduledPaymentsFromBase,
   convertTaxResultFromBase,
 } from '../../lib/taxCurrencyDisplay'
-import type { FullTaxSummary } from '../../engine/budgetEngine'
-import { taxSummaryTotalInBase } from '../../engine/budgetEngine'
+import type { FullTaxSummary, YearTaxSummary } from '../../engine/budgetEngine'
+import { yearTaxTotalInBase } from '../../engine/budgetEngine'
 import { COUNTRY_LABELS } from '../../tax/registry'
 import {
   getEmploymentCountryCurrency,
@@ -32,7 +32,7 @@ interface YearTaxBlockProps {
 }
 
 interface TaxesOverviewPanelProps {
-  yearSummaries: { year: number; summary: FullTaxSummary }[]
+  yearSummaries: YearTaxSummary[]
   settings: BudgetSettings
   hasIncomes: boolean
 }
@@ -285,35 +285,59 @@ export function TaxesOverviewPanel({
   const showSourceTaxes = shouldShowSourceCountryTaxes(settings)
   const multiYear = yearSummaries.length > 1
   const horizonTotalInBase = yearSummaries.reduce(
-    (sum, { summary }) => sum + taxSummaryTotalInBase(summary, settings, showSourceTaxes),
+    (sum, yearSummary) => sum + yearTaxTotalInBase(yearSummary, settings, showSourceTaxes),
     0,
   )
 
   if (yearSummaries.length === 0) return null
 
-  if (!multiYear) {
+  function renderYear(yearSummary: YearTaxSummary, yearLabel?: string) {
+    const multiPart = yearSummary.parts.length > 1
     return (
-      <YearTaxBlock
-        taxSummary={yearSummaries[0].summary}
-        settings={settings}
-        hasIncomes={hasIncomes}
-        showGrandTotalFooter
-      />
+      <div className="space-y-0">
+        {yearLabel && !multiPart && (
+          <h3 className="mb-4 text-base font-semibold text-slate-900">{yearLabel}</h3>
+        )}
+        {yearLabel && multiPart && (
+          <h3 className="mb-4 text-base font-semibold text-slate-900">{yearLabel}</h3>
+        )}
+        {yearSummary.parts.map((part, partIndex) => {
+          const partSettings: BudgetSettings = {
+            ...settings,
+            countryCode: part.countryCode,
+            taxRegimeId: part.taxRegimeId,
+          }
+          return (
+            <div key={`${part.countryCode}-${part.startDate}-${partIndex}`}>
+              {partIndex > 0 && <SectionDivider />}
+              <YearTaxBlock
+                taxSummary={part.summary}
+                settings={partSettings}
+                hasIncomes={hasIncomes}
+                showGrandTotalFooter={!multiYear && !multiPart}
+                yearLabel={
+                  multiPart
+                    ? `${COUNTRY_LABELS[part.countryCode] ?? part.countryCode} (${part.startDate} – ${part.endDate})`
+                    : undefined
+                }
+              />
+            </div>
+          )
+        })}
+      </div>
     )
+  }
+
+  if (!multiYear) {
+    return renderYear(yearSummaries[0])
   }
 
   return (
     <div className="space-y-0">
-      {yearSummaries.map(({ year, summary }, index) => (
-        <div key={year}>
+      {yearSummaries.map((yearSummary, index) => (
+        <div key={yearSummary.year}>
           {index > 0 && <SectionDivider />}
-          <YearTaxBlock
-            taxSummary={summary}
-            settings={settings}
-            hasIncomes={hasIncomes}
-            showGrandTotalFooter={false}
-            yearLabel={`${year} год`}
-          />
+          {renderYear(yearSummary, `${yearSummary.year} год`)}
         </div>
       ))}
 
@@ -334,7 +358,7 @@ export function TaxesOverviewPanel({
           </dd>
         </div>
         <p className="mt-2 text-xs text-slate-500">
-          Сумма годовых налогов по календарным годам горизонта планирования (в{' '}
+          Сумма годовых налогов по календарным годам и странам маршрута (в{' '}
           {settings.baseCurrency}, оценка по курсу). Взносы работодателя в РФ не включены.
         </p>
       </section>

@@ -571,3 +571,47 @@ describe('RUB savings account interest', () => {
     )
   })
 })
+
+describe('residence route tax strategy', () => {
+  it('applies residence tax only while living in a taxed country', () => {
+    const incomes: RecurringItem[] = [
+      {
+        id: 'salary',
+        name: 'Income',
+        amount: 3000,
+        currency: 'EUR',
+        frequency: 'monthly',
+        startDate: '2026-01-01',
+        includeInResidenceTax: true,
+      },
+    ]
+    const settings = {
+      ...DEFAULT_SETTINGS,
+      taxRegimeId: 'ae-none',
+      countryCode: 'AE',
+      horizonMonths: 2,
+      initialBalanceDate: '2026-01-01',
+      residenceRoute: [
+        {
+          id: 'ae',
+          countryCode: 'AE',
+          taxRegimeId: 'ae-none',
+          startDate: '2026-01-01',
+          endDate: '2026-01-31',
+        },
+        {
+          id: 'ge',
+          countryCode: 'GE',
+          taxRegimeId: 'ge-standard',
+          startDate: '2026-02-01',
+          endDate: '2026-02-28',
+        },
+      ],
+    }
+    const days = calculateDailyBudgetProjection(incomes, [], [], settings)
+    const janTax = days.filter((d) => d.date.startsWith('2026-01')).reduce((s, d) => s + d.taxes, 0)
+    const febTax = days.filter((d) => d.date.startsWith('2026-02')).reduce((s, d) => s + d.taxes, 0)
+    expect(janTax).toBe(0)
+    expect(febTax).toBeGreaterThan(0)
+  })
+})

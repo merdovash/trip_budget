@@ -4,6 +4,7 @@ import {
   getCalculatorsByCountry,
   getTaxCalculator,
 } from '../../tax/registry'
+import { describeResidenceRoute } from '../../config/residenceRoute'
 import { formatDateDisplay } from '../../lib/format'
 import {
   deleteSettingsSnapshot,
@@ -36,6 +37,10 @@ function SettingsSnapshotDetails({ id }: { id: string }) {
     {
       label: 'Дата переезда',
       value: formatDateDisplay(snapshot.settings.relocationDate ?? snapshot.settings.initialBalanceDate),
+    },
+    {
+      label: 'Маршрут проживания',
+      value: describeResidenceRoute(snapshot.settings),
     },
     ...(snapshot.settings.relocationMode !== 'sole_proprietorship'
       ? [

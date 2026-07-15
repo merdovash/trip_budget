@@ -87,6 +87,16 @@ export interface ThailandDeductionSettings {
   socialSecurityPaid?: number
 }
 
+export interface ResidenceRoutePoint {
+  id: string
+  countryCode: string
+  taxRegimeId: string
+  /** Дата начала проживания (включительно). */
+  startDate: string
+  /** Дата окончания проживания (включительно). */
+  endDate: string
+}
+
 export interface BudgetSettings {
   baseCurrency: string
   countryCode: string
@@ -103,6 +113,11 @@ export interface BudgetSettings {
   relocationMode?: RelocationMode
   /** Страна работодателя / источника зарплаты (при remote_employment). */
   employmentCountryCode?: string
+  /**
+   * Маршрут проживания: произвольное число стран с датами.
+   * Пустой/undefined — legacy-режим (countryCode + taxRegimeId + relocationDate).
+   */
+  residenceRoute?: ResidenceRoutePoint[]
   horizonMonths: number
   initialBalance: number
   initialBalanceCurrency: string

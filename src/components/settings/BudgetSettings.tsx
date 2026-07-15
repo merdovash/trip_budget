@@ -11,6 +11,7 @@ import { Button, Card, Field, Input, Select, DateInput } from '../ui/FormControl
 import { CurrencySelect } from '../ui/CurrencySelect'
 import { CurrencyConversionHint } from '../ui/CurrencyConversionHint'
 import { SavedSettingsPanel } from './SavedSettingsPanel'
+import { ResidenceRouteEditor } from './ResidenceRouteEditor'
 import {
   getRelocationProgramsForCountry,
   RELOCATION_PROGRAM_NONE,
@@ -213,10 +214,12 @@ export function BudgetSettingsPanel() {
             onChange={(relocationDate) => setSettings({ relocationDate })}
           />
           <p className="mt-1 text-xs text-slate-500">
-            С этой даты начинается жизнь в стране проживания: налоги страны, расходы с меткой
-            «в стране» и локальная зарплата.
+            С этой даты начинается жизнь в первой стране проживания (если маршрут не задан —
+            единственная дата переезда).
           </p>
         </Field>
+
+        <ResidenceRouteEditor settings={settings} onChange={setSettings} />
 
         <Field label="Программа переезда">
           <Select

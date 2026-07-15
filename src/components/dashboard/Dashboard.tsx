@@ -7,7 +7,7 @@ import {
   getInitialBalanceInBase,
   getTaxSummariesByHorizon,
   shiftIsoDate,
-  taxSummaryTotalInBase,
+  yearTaxTotalInBase,
 } from '../../engine/budgetEngine'
 import { formatCurrency, formatDateDisplay } from '../../lib/format'
 import { useBudgetStore } from '../../store/budgetStore'
@@ -84,13 +84,13 @@ export function Dashboard() {
   const annualTaxes =
     yearTaxSummaries.length > 0
       ? yearTaxSummaries.reduce(
-          (sum, { summary }) => sum + taxSummaryTotalInBase(summary, settings, showSourceTaxes),
+          (sum, yearSummary) => sum + yearTaxTotalInBase(yearSummary, settings, showSourceTaxes),
           0,
         ) / yearTaxSummaries.length
       : 0
   const initialBalance = getInitialBalanceInBase(settings)
   const hasTaxContent =
-    incomes.length > 0 || yearTaxSummaries.some(({ summary }) => summary.residence)
+    incomes.length > 0 || yearTaxSummaries.some((y) => y.parts.some((p) => p.summary.residence))
 
   return (
     <div className="space-y-4">

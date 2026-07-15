@@ -1,9 +1,10 @@
 import type { BudgetSettings, RecurringItem, RelocationMode } from '../types/budget'
+import { getResidenceOnDate, getRouteStartDate } from './residenceRoute'
 
 export type ItemLifecycle = 'destination' | 'origin' | 'any'
 
 export function getRelocationDate(settings: BudgetSettings): string {
-  return settings.relocationDate ?? settings.initialBalanceDate
+  return getRouteStartDate(settings)
 }
 
 export function addDays(iso: string, days: number): string {
@@ -36,7 +37,7 @@ export function getEffectiveEndDate(
 }
 
 export function isResidenceLifeStarted(dateStr: string, settings: BudgetSettings): boolean {
-  return dateStr >= getRelocationDate(settings)
+  return getResidenceOnDate(settings, dateStr) != null
 }
 
 export function isItemActiveOnDay(

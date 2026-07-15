@@ -17,8 +17,13 @@ import {
   getEffectiveStartDate,
   isItemActiveInMonth,
   isItemActiveOnDay,
-  isResidenceLifeStarted,
 } from '../config/relocationPrograms'
+import {
+  getResidenceOnDate,
+  getResidenceRoute,
+  getRouteSegmentsInYear,
+  settingsForResidencePoint,
+} from '../config/residenceRoute'
 
 import {
   loanMonthlyPayment,
@@ -959,20 +964,6 @@ function buildScheduledTaxByDate(
   return map
 }
 
-function scheduledTaxTotalForMonth(
-  monthKey: string,
-  scheduledTaxMap: Map<string, { social: number; incomeTax: number }>,
-): number {
-  const prefix = `${monthKey}-`
-  let total = 0
-  for (const [date, amounts] of scheduledTaxMap) {
-    if (date.startsWith(prefix)) {
-      total += amounts.social + amounts.incomeTax
-    }
-  }
-  return total
-}
-
 function getEffectiveTaxRate(
   incomes: RecurringItem[],
   expenses: RecurringItem[],
@@ -986,6 +977,90 @@ function getEffectiveTaxRate(
   const calculator = getTaxCalculator(settings.taxRegimeId)
   const burden = computeAnnualTaxBurden(incomes, settings, calculator, expenses, oneTimeExpenses)
   return (burden.residenceIncomeTax + burden.residenceSocial) / grossAnnualIncome
+}
+
+interface ResidenceTaxPlan {
+  taxRegimeId: string
+  rate: number
+  useScheduled: boolean
+  scheduledMap: Map<string, { social: number; incomeTax: number }>
+}
+
+function buildResidenceTaxPlans(
+  incomes: RecurringItem[],
+  expenses: RecurringItem[],
+  oneTimeExpenses: OneTimeExpense[],
+  settings: BudgetSettings,
+  years: number[],
+): Map<string, ResidenceTaxPlan> {
+  const plans = new Map<string, ResidenceTaxPlan>()
+  const seen = new Set<string>()
+
+  for (const point of getResidenceRoute(settings)) {
+    if (seen.has(point.taxRegimeId)) continue
+    seen.add(point.taxRegimeId)
+    const pointSettings = settingsForResidencePoint(settings, point)
+    const calculator = getTaxCalculator(point.taxRegimeId)
+    const residenceIncomes = filterResidenceTaxableIncomes(incomes)
+    const grossAnnualIncome = calculateAnnualGrossIncome(
+      residenceIncomes,
+      pointSettings.baseCurrency,
+    )
+    const taxResult = calculator?.calculate({
+      grossAnnualIncome,
+      familySize: pointSettings.familySize,
+      dependents: pointSettings.dependents,
+    })
+    const rate = getEffectiveTaxRate(incomes, expenses, oneTimeExpenses, pointSettings)
+    const useScheduled = calculator?.taxDistribution === 'scheduled'
+    const scheduledMap =
+      taxResult && useScheduled
+        ? buildScheduledTaxByDate(incomes, pointSettings, taxResult, years)
+        : new Map()
+    plans.set(point.taxRegimeId, {
+      taxRegimeId: point.taxRegimeId,
+      rate,
+      useScheduled: Boolean(useScheduled),
+      scheduledMap,
+    })
+  }
+  return plans
+}
+
+function residenceTaxForDate(
+  date: string,
+  settings: BudgetSettings,
+  plans: Map<string, ResidenceTaxPlan>,
+  residenceIncomes: RecurringItem[],
+  baseCurrency: string,
+): number {
+  const point = getResidenceOnDate(settings, date)
+  if (!point) return 0
+  const plan = plans.get(point.taxRegimeId)
+  if (!plan) return 0
+  if (plan.useScheduled) {
+    const scheduled = plan.scheduledMap.get(date)
+    return scheduled ? scheduled.social + scheduled.incomeTax : 0
+  }
+  const residenceGross = incomeForDay(residenceIncomes, date, baseCurrency, settings)
+  return residenceGross * plan.rate
+}
+
+function residenceTaxForMonthKey(
+  month: string,
+  settings: BudgetSettings,
+  plans: Map<string, ResidenceTaxPlan>,
+  residenceIncomes: RecurringItem[],
+  baseCurrency: string,
+): number {
+  const [year, monthNum] = month.split('-').map(Number)
+  const daysInMonth = getDaysInMonth(year, monthNum)
+  let total = 0
+  for (let day = 1; day <= daysInMonth; day++) {
+    const date = `${month}-${String(day).padStart(2, '0')}`
+    total += residenceTaxForDate(date, settings, plans, residenceIncomes, baseCurrency)
+  }
+  return total
 }
 
 
@@ -1007,18 +1082,8 @@ export function calculateDailyBudgetProjection(
   const dayKeys = generateDayKeys(getProjectionStartDate(settings), settings.horizonMonths)
 
   const residenceIncomes = filterResidenceTaxableIncomes(incomes)
-  const grossAnnualIncome = calculateAnnualGrossIncome(residenceIncomes, baseCurrency)
-  const calculator = getTaxCalculator(settings.taxRegimeId)
-  const taxResult = calculator?.calculate({
-    grossAnnualIncome,
-    familySize: settings.familySize,
-    dependents: settings.dependents,
-  })
-  const taxRate = getEffectiveTaxRate(incomes, expenses, oneTimeExpenses, settings)
-  const scheduledTaxMap = taxResult
-    ? buildScheduledTaxByDate(incomes, settings, taxResult, collectYearsFromDayKeys(dayKeys))
-    : new Map()
-  const useScheduled = calculator?.taxDistribution === 'scheduled'
+  const years = collectYearsFromDayKeys(dayKeys)
+  const taxPlans = buildResidenceTaxPlans(incomes, expenses, oneTimeExpenses, settings, years)
 
   let russiaTracker = createRussiaYtdTracker()
   let trackerYear = -1
@@ -1047,16 +1112,13 @@ export function calculateDailyBudgetProjection(
     )
     const russiaTax = toBaseCurrency(russiaTaxRub, 'RUB', baseCurrency)
 
-    const scheduled = scheduledTaxMap.get(date)
-    let residenceTax = 0
-    if (isResidenceLifeStarted(date, settings)) {
-      if (scheduled) {
-        residenceTax = scheduled.social + scheduled.incomeTax
-      } else if (!useScheduled) {
-        const residenceGross = incomeForDay(residenceIncomes, date, baseCurrency, settings)
-        residenceTax = residenceGross * taxRate
-      }
-    }
+    const residenceTax = residenceTaxForDate(
+      date,
+      settings,
+      taxPlans,
+      residenceIncomes,
+      baseCurrency,
+    )
 
     const taxes = russiaTax + residenceTax
     const netIncome = grossIncome - taxes
@@ -1118,32 +1180,14 @@ export function calculateBudgetProjection(
   const monthKeys = generateMonthKeys(getProjectionStartDate(settings), settings.horizonMonths)
 
   const residenceIncomes = filterResidenceTaxableIncomes(incomes)
-  const grossAnnualIncome = calculateAnnualGrossIncome(residenceIncomes, baseCurrency)
-
-  const calculator = getTaxCalculator(settings.taxRegimeId)
-
-  const adjusted =
-    calculator
-      ? adjustResidenceTaxResult(residenceIncomes, settings, calculator, expenses, oneTimeExpenses)
-      : null
-  const taxResult =
-    adjusted?.result ??
-    calculator?.calculate({
-      grossAnnualIncome,
-      familySize: settings.familySize,
-      dependents: settings.dependents,
-    })
-
-  const monthlyTax =
-    taxResult && calculator?.taxDistribution !== 'scheduled'
-      ? taxResult.incomeTax / 12 + taxResult.socialContributions / 12
-      : 0
-
-  const projectionYears = monthKeys.map((m) => Number(m.split('-')[0]))
-  const scheduledTaxMap = taxResult
-    ? buildScheduledTaxByDate(incomes, settings, taxResult, [...new Set(projectionYears)])
-    : new Map()
-  const useScheduled = calculator?.taxDistribution === 'scheduled'
+  const projectionYears = [...new Set(monthKeys.map((m) => Number(m.split('-')[0])))]
+  const taxPlans = buildResidenceTaxPlans(
+    incomes,
+    expenses,
+    oneTimeExpenses,
+    settings,
+    projectionYears,
+  )
 
   let cumulativeBalance = getInitialBalanceInBase(settings)
   let rubBalance = getInitialRubBalance(settings)
@@ -1152,20 +1196,18 @@ export function calculateBudgetProjection(
 
   return monthKeys.map((month) => {
     const grossIncome = sumRecurringForMonth(incomes, month, baseCurrency, settings)
-    const residenceGross = sumRecurringForMonth(residenceIncomes, month, baseCurrency, settings)
     const recurringExpenses = sumRecurringForMonth(expenses, month, baseCurrency, settings)
     const oneTimeTotal =
       sumOnceExpensesForMonth(expenses, month, baseCurrency, settings) +
       sumOneTimeForMonth(oneTimeExpenses, month, baseCurrency)
 
-    const monthStart = `${month}-01`
-    const residenceTax = isResidenceLifeStarted(monthStart, settings)
-      ? useScheduled
-        ? scheduledTaxTotalForMonth(month, scheduledTaxMap)
-        : grossAnnualIncome > 0
-          ? monthlyTax * (residenceGross / (grossAnnualIncome / 12))
-          : 0
-      : 0
+    const residenceTax = residenceTaxForMonthKey(
+      month,
+      settings,
+      taxPlans,
+      residenceIncomes,
+      baseCurrency,
+    )
     const russiaTax = russiaSourceTaxForMonth(
       incomes,
       month,
@@ -1425,8 +1467,20 @@ export function getTaxSummaryForYear(
   )
 }
 
+export interface YearTaxPart {
+  countryCode: string
+  taxRegimeId: string
+  label: string
+  startDate: string
+  endDate: string
+  summary: FullTaxSummary
+}
+
 export interface YearTaxSummary {
   year: number
+  /** Блоки по странам маршрута в этом году (обычно 1). */
+  parts: YearTaxPart[]
+  /** Сводка первой части (совместимость / источник НДФЛ показывается один раз). */
   summary: FullTaxSummary
 }
 
@@ -1441,6 +1495,61 @@ export function taxSummaryTotalInBase(
   return residence + (includeSourceTaxes ? summary.russiaNdflInBase : 0)
 }
 
+export function yearTaxTotalInBase(
+  yearSummary: YearTaxSummary,
+  settings: BudgetSettings,
+  includeSourceTaxes: boolean,
+): number {
+  let total = 0
+  yearSummary.parts.forEach((part, index) => {
+    const residence =
+      (part.summary.residence?.result.incomeTax ?? 0) +
+      (part.summary.residence?.result.socialContributions ?? 0)
+    total += residence
+    if (includeSourceTaxes && index === 0) {
+      total += part.summary.russiaNdflInBase
+    }
+  })
+  return total
+}
+
+function scopeIncomeItemToYearSegment(
+  item: RecurringItem,
+  year: number,
+  settings: BudgetSettings,
+  segmentId: string,
+): RecurringItem | null {
+  if (item.frequency === 'once') {
+    const startYear = Number(item.startDate.slice(0, 4))
+    if (startYear !== year) return null
+    if (!isActiveInMonth(item, item.startDate.slice(0, 7), settings)) return null
+    const onDate = getResidenceOnDate(settings, item.startDate)
+    if (onDate?.id !== segmentId) return null
+    return { ...item }
+  }
+
+  let months = 0
+  for (let month = 1; month <= 12; month++) {
+    const monthKey = `${year}-${String(month).padStart(2, '0')}`
+    if (!isActiveInMonth(item, monthKey, settings)) continue
+    const mid = `${monthKey}-15`
+    const onDate = getResidenceOnDate(settings, mid)
+    if (onDate?.id !== segmentId) continue
+    months += 1
+  }
+  if (months === 0) return null
+
+  const fullYearAmount = toMonthlyAmount(item.amount, item.frequency) * 12
+  return {
+    ...item,
+    frequency: 'yearly',
+    amount: fullYearAmount * (months / 12),
+    payments: undefined,
+    startDate: `${year}-01-01`,
+    endDate: undefined,
+  }
+}
+
 /** Налоговые сводки по каждому календарному году горизонта планирования. */
 export function getTaxSummariesByHorizon(
   incomes: RecurringItem[],
@@ -1448,10 +1557,66 @@ export function getTaxSummariesByHorizon(
   expenses: RecurringItem[] = [],
   oneTimeExpenses: OneTimeExpense[] = [],
 ): YearTaxSummary[] {
-  return getHorizonTaxYears(settings).map((year) => ({
-    year,
-    summary: getTaxSummaryForYear(incomes, settings, expenses, oneTimeExpenses, year),
-  }))
+  return getHorizonTaxYears(settings).map((year) => {
+    const segments = getRouteSegmentsInYear(settings, year)
+    const yearStart = `${year}-01-01`
+    const yearEnd = `${year}-12-31`
+    const parts: YearTaxPart[] = segments.map((point, index) => {
+      const pointSettings = settingsForTaxYear(
+        settingsForResidencePoint(settings, point),
+        year,
+      )
+      const scopedIncomes = incomes
+        .map((item) => scopeIncomeItemToYearSegment(item, year, settings, point.id))
+        .filter((item): item is RecurringItem => item != null)
+      const scopedOnce = oneTimeExpenses.filter((item) => {
+        if (!item.date.startsWith(`${year}-`)) return false
+        const onDate = getResidenceOnDate(settings, item.date)
+        return onDate?.id === point.id
+      })
+      let summary = getTaxSummary(scopedIncomes, pointSettings, expenses, scopedOnce, year)
+      if (index > 0) {
+        summary = {
+          ...summary,
+          russiaSalary: null,
+          russiaNdflInBase: 0,
+          russiaEmployerSocialInBase: 0,
+        }
+      }
+      const segStart = point.startDate > yearStart ? point.startDate : yearStart
+      const segEnd = point.endDate < yearEnd ? point.endDate : yearEnd
+      return {
+        countryCode: point.countryCode,
+        taxRegimeId: point.taxRegimeId,
+        label: `${point.countryCode} · ${segStart}–${segEnd}`,
+        startDate: segStart,
+        endDate: segEnd,
+        summary,
+      }
+    })
+
+    const fallback =
+      parts[0]?.summary ??
+      getTaxSummaryForYear(incomes, settings, expenses, oneTimeExpenses, year)
+
+    return {
+      year,
+      parts:
+        parts.length > 0
+          ? parts
+          : [
+              {
+                countryCode: settings.countryCode,
+                taxRegimeId: settings.taxRegimeId,
+                label: String(year),
+                startDate: yearStart,
+                endDate: yearEnd,
+                summary: fallback,
+              },
+            ],
+      summary: fallback,
+    }
+  })
 }
 
 

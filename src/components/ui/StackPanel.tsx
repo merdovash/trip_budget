@@ -1,0 +1,57 @@
+import { useEffect, type ReactNode } from 'react'
+
+interface StackPanelProps {
+  open: boolean
+  title: string
+  onClose: () => void
+  children: ReactNode
+}
+
+/** Нижняя стековая панель (sheet) поверх контента. */
+export function StackPanel({ open, title, onClose, children }: StackPanelProps) {
+  useEffect(() => {
+    if (!open) return
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', onKey)
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      document.body.style.overflow = prevOverflow
+    }
+  }, [open, onClose])
+
+  if (!open) return null
+
+  return (
+    <div className="fixed inset-0 z-[60] flex flex-col justify-end">
+      <button
+        type="button"
+        className="absolute inset-0 bg-slate-900/40"
+        aria-label="Закрыть"
+        onClick={onClose}
+      />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        className="relative z-10 flex max-h-[92vh] w-full flex-col rounded-t-2xl border border-slate-200 bg-white shadow-2xl"
+        style={{ animation: 'stack-panel-up 200ms ease-out' }}
+      >
+        <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-4 py-3">
+          <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
+          <button
+            type="button"
+            className="rounded-lg px-2 py-1 text-sm text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+            onClick={onClose}
+          >
+            Закрыть
+          </button>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto p-4">{children}</div>
+      </div>
+    </div>
+  )
+}

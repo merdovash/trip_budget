@@ -29,6 +29,7 @@ import {
 import { Button, Card, EmptyState, Field, Input, Select, DateInput } from '../ui/FormControls'
 import { CurrencySelect } from '../ui/CurrencySelect'
 import { CurrencyConversionHint } from '../ui/CurrencyConversionHint'
+import { StackPanel } from '../ui/StackPanel'
 
 const EXPENSE_CATEGORIES = [
   'Жильё',
@@ -758,7 +759,8 @@ function ExpenseRows({
       {items.map((item) => (
         <tr
           key={item.id}
-          className={`border-b border-slate-100 ${editingId === item.id ? 'bg-blue-50' : ''}`}
+          className={`cursor-pointer border-b border-slate-100 hover:bg-slate-50 ${editingId === item.id ? 'bg-blue-50' : ''}`}
+          onClick={() => onEdit(item.id)}
         >
           <td className="py-2 pr-4 font-medium">{item.name}</td>
           <AmountCell item={item} baseCurrency={baseCurrency} />
@@ -774,7 +776,7 @@ function ExpenseRows({
             {getExpenseCountryScopeLabel(getExpenseCountryScope(item, settings), settings)}
           </td>
           <td className="py-2 text-right">
-            <div className="flex justify-end gap-2">
+            <div className="flex justify-end gap-2" onClick={(e) => e.stopPropagation()}>
               <Button variant="secondary" type="button" onClick={() => onEdit(item.id)}>
                 Изменить
               </Button>
@@ -919,42 +921,68 @@ export function ExpensePanel() {
   const addExpense = useBudgetStore((s) => s.addExpense)
   const updateExpense = useBudgetStore((s) => s.updateExpense)
   const removeExpense = useBudgetStore((s) => s.removeExpense)
+  const [panelMode, setPanelMode] = useState<'closed' | 'create' | 'edit'>('closed')
   const [editingId, setEditingId] = useState<string | null>(null)
 
-  const editingItem = editingId ? expenses.find((e) => e.id === editingId) : undefined
+  const editingItem =
+    panelMode === 'edit' && editingId
+      ? expenses.find((e) => e.id === editingId)
+      : undefined
+
+  function openCreate() {
+    setEditingId(null)
+    setPanelMode('create')
+  }
+
+  function openEdit(id: string) {
+    setEditingId(id)
+    setPanelMode('edit')
+  }
+
+  function closePanel() {
+    setPanelMode('closed')
+    setEditingId(null)
+  }
 
   return (
     <div className="space-y-4">
       <Card>
-        <h2 className="mb-4 text-lg font-semibold">
-          {editingId ? 'Редактировать расход' : 'Добавить расход'}
-        </h2>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-lg font-semibold">Расходы</h2>
+          <Button type="button" onClick={openCreate}>
+            Добавить расход
+          </Button>
+        </div>
+        <ExpenseList
+          editingId={editingId}
+          onEdit={openEdit}
+          onRemove={(id) => {
+            removeExpense(id)
+            if (editingId === id) closePanel()
+          }}
+        />
+      </Card>
+
+      <StackPanel
+        open={panelMode !== 'closed'}
+        title={panelMode === 'edit' ? 'Карточка расхода' : 'Новый расход'}
+        onClose={closePanel}
+      >
         <ExpenseForm
           key={editingId ?? 'new'}
           initialItem={editingItem}
           onSubmit={(data) => {
             const expense = formDataToExpense(data)
-            if (editingId) {
+            if (panelMode === 'edit' && editingId) {
               updateExpense(editingId, expense)
-              setEditingId(null)
             } else {
               addExpense(expense)
             }
+            closePanel()
           }}
-          onCancel={editingId ? () => setEditingId(null) : undefined}
+          onCancel={closePanel}
         />
-      </Card>
-      <Card>
-        <h2 className="mb-4 text-lg font-semibold">Список расходов</h2>
-        <ExpenseList
-          editingId={editingId}
-          onEdit={setEditingId}
-          onRemove={(id) => {
-            removeExpense(id)
-            if (editingId === id) setEditingId(null)
-          }}
-        />
-      </Card>
+      </StackPanel>
     </div>
   )
 }

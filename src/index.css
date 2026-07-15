@@ -7,3 +7,14 @@ body {
   background: #f8fafc;
   color: #0f172a;
 }
+
+@keyframes stack-panel-up {
+  from {
+    transform: translateY(100%);
+    opacity: 0.6;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}

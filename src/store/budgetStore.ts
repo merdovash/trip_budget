@@ -66,6 +66,20 @@ type PersistedBudgetState = Partial<BudgetState> & {
   }>
 }
 
+export function migrateCountryDeductions(settings: BudgetSettings): BudgetSettings {
+  const legacy = settings as BudgetSettings & {
+    thailandDeductions?: NonNullable<BudgetSettings['countryDeductions']>['TH']
+  }
+  if (legacy.thailandDeductions && !settings.countryDeductions?.TH) {
+    settings.countryDeductions = {
+      ...settings.countryDeductions,
+      TH: legacy.thailandDeductions,
+    }
+  }
+  delete legacy.thailandDeductions
+  return settings
+}
+
 function createId(): string {
   return crypto.randomUUID()
 }
@@ -84,7 +98,10 @@ function migrateOneTimeIntoExpenses(
 }
 
 function migratePersistedState(persisted: PersistedBudgetState, current: BudgetState): BudgetState {
-  const mergedSettings = { ...current.settings, ...persisted.settings }
+  const mergedSettings = migrateCountryDeductions({
+    ...current.settings,
+    ...persisted.settings,
+  })
   if (!mergedSettings.relocationDate) {
     mergedSettings.relocationDate = mergedSettings.initialBalanceDate ?? current.settings.relocationDate
   }
@@ -97,12 +114,29 @@ function migratePersistedState(persisted: PersistedBudgetState, current: BudgetS
   if (!mergedSettings.employmentCountryCode) {
     mergedSettings.employmentCountryCode = 'RU'
   }
-  if (mergedSettings.parkRubOnSavingsAccount == null) {
-    mergedSettings.parkRubOnSavingsAccount = false
+  if (
+    (mergedSettings as { parkRubOnSavingsAccount?: boolean }).parkRubOnSavingsAccount != null &&
+    mergedSettings.parkBalanceOnSavingsAccount == null
+  ) {
+    mergedSettings.parkBalanceOnSavingsAccount = Boolean(
+      (mergedSettings as { parkRubOnSavingsAccount?: boolean }).parkRubOnSavingsAccount,
+    )
   }
-  if (mergedSettings.rubSavingsAnnualRate == null) {
-    mergedSettings.rubSavingsAnnualRate = 16
+  if (mergedSettings.parkBalanceOnSavingsAccount == null) {
+    mergedSettings.parkBalanceOnSavingsAccount = false
   }
+  const legacyRate = (mergedSettings as { rubSavingsAnnualRate?: number }).rubSavingsAnnualRate
+  if (legacyRate != null && mergedSettings.savingsAnnualRate == null) {
+    mergedSettings.savingsAnnualRate = legacyRate
+  }
+  if (mergedSettings.savingsAnnualRate == null) {
+    mergedSettings.savingsAnnualRate = 16
+  }
+  if (!mergedSettings.savingsAccountCurrency) {
+    mergedSettings.savingsAccountCurrency = 'RUB'
+  }
+  delete (mergedSettings as { parkRubOnSavingsAccount?: boolean }).parkRubOnSavingsAccount
+  delete (mergedSettings as { rubSavingsAnnualRate?: number }).rubSavingsAnnualRate
   if (!mergedSettings.residenceRoute?.length) {
     const start =
       mergedSettings.relocationDate ??
@@ -256,7 +290,7 @@ export const useBudgetStore = create<BudgetState>()(
       },
 
       loadFromPreset: (data: BudgetPresetData, activePreset = null) => {
-        const settings = { ...data.settings }
+        const settings = migrateCountryDeductions({ ...data.settings })
         const migratedLoans = (data.loans ?? []).map((loan) => ({
           ...migrateLegacyLoan(loan),
           id: createId(),

@@ -24,7 +24,7 @@ import {
   routeIncludesCountry,
   syncLegacyFromRoute,
 } from '../../config/residenceRoute'
-import type { RelocationMode } from '../../types/budget'
+import type { RelocationMode, ThailandDeductionSettings } from '../../types/budget'
 import { formatCurrency } from '../../lib/format'
 
 export function BudgetSettingsPanel() {
@@ -42,6 +42,22 @@ export function BudgetSettingsPanel() {
   const route = getResidenceRoute(settings)
   const showThailandDeductions = routeIncludesCountry(settings, 'TH')
   const primaryRegime = getTaxCalculator(settings.taxRegimeId)
+  const thailandDeductions = settings.countryDeductions?.TH
+
+  function updateThailandDeduction(
+    key: keyof ThailandDeductionSettings,
+    value: number,
+  ) {
+    setSettings({
+      countryDeductions: {
+        ...settings.countryDeductions,
+        TH: {
+          ...thailandDeductions,
+          [key]: value,
+        },
+      },
+    })
+  }
 
   function handleRelocationModeChange(mode: RelocationMode) {
     const routePoints = ensureExplicitResidenceRoute(settings)
@@ -251,9 +267,9 @@ export function BudgetSettingsPanel() {
 
         <Field label="Накопительный счёт в России (RUB)">
           <Select
-            value={settings.parkRubOnSavingsAccount ? 'yes' : 'no'}
+            value={settings.parkBalanceOnSavingsAccount ? 'yes' : 'no'}
             onChange={(e) =>
-              setSettings({ parkRubOnSavingsAccount: e.target.value === 'yes' })
+              setSettings({ parkBalanceOnSavingsAccount: e.target.value === 'yes' })
             }
           >
             <option value="no">Нет</option>
@@ -265,16 +281,16 @@ export function BudgetSettingsPanel() {
           </p>
         </Field>
 
-        {settings.parkRubOnSavingsAccount && (
+        {settings.parkBalanceOnSavingsAccount && (
           <Field label="Ставка накопительного счёта (% годовых)">
             <Input
               type="number"
               min={0}
               max={100}
               step={0.1}
-              value={settings.rubSavingsAnnualRate ?? 16}
+              value={settings.savingsAnnualRate ?? 16}
               onChange={(e) =>
-                setSettings({ rubSavingsAnnualRate: Number(e.target.value) || 0 })
+                setSettings({ savingsAnnualRate: Number(e.target.value) || 0 })
               }
             />
           </Field>
@@ -314,14 +330,9 @@ export function BudgetSettingsPanel() {
                   type="number"
                   min={0}
                   max={4}
-                  value={settings.thailandDeductions?.parentAllowances ?? 0}
+                  value={thailandDeductions?.parentAllowances ?? 0}
                   onChange={(e) =>
-                    setSettings({
-                      thailandDeductions: {
-                        ...settings.thailandDeductions,
-                        parentAllowances: Number(e.target.value),
-                      },
-                    })
+                    updateThailandDeduction('parentAllowances', Number(e.target.value))
                   }
                 />
               </Field>
@@ -329,14 +340,9 @@ export function BudgetSettingsPanel() {
                 <Input
                   type="number"
                   min={0}
-                  value={settings.thailandDeductions?.lifeInsurance ?? 0}
+                  value={thailandDeductions?.lifeInsurance ?? 0}
                   onChange={(e) =>
-                    setSettings({
-                      thailandDeductions: {
-                        ...settings.thailandDeductions,
-                        lifeInsurance: Number(e.target.value),
-                      },
-                    })
+                    updateThailandDeduction('lifeInsurance', Number(e.target.value))
                   }
                 />
               </Field>
@@ -344,14 +350,9 @@ export function BudgetSettingsPanel() {
                 <Input
                   type="number"
                   min={0}
-                  value={settings.thailandDeductions?.healthInsurance ?? 0}
+                  value={thailandDeductions?.healthInsurance ?? 0}
                   onChange={(e) =>
-                    setSettings({
-                      thailandDeductions: {
-                        ...settings.thailandDeductions,
-                        healthInsurance: Number(e.target.value),
-                      },
-                    })
+                    updateThailandDeduction('healthInsurance', Number(e.target.value))
                   }
                 />
               </Field>
@@ -359,14 +360,9 @@ export function BudgetSettingsPanel() {
                 <Input
                   type="number"
                   min={0}
-                  value={settings.thailandDeductions?.mortgageInterest ?? 0}
+                  value={thailandDeductions?.mortgageInterest ?? 0}
                   onChange={(e) =>
-                    setSettings({
-                      thailandDeductions: {
-                        ...settings.thailandDeductions,
-                        mortgageInterest: Number(e.target.value),
-                      },
-                    })
+                    updateThailandDeduction('mortgageInterest', Number(e.target.value))
                   }
                 />
               </Field>
@@ -374,14 +370,9 @@ export function BudgetSettingsPanel() {
                 <Input
                   type="number"
                   min={0}
-                  value={settings.thailandDeductions?.providentFund ?? 0}
+                  value={thailandDeductions?.providentFund ?? 0}
                   onChange={(e) =>
-                    setSettings({
-                      thailandDeductions: {
-                        ...settings.thailandDeductions,
-                        providentFund: Number(e.target.value),
-                      },
-                    })
+                    updateThailandDeduction('providentFund', Number(e.target.value))
                   }
                 />
               </Field>
@@ -389,14 +380,9 @@ export function BudgetSettingsPanel() {
                 <Input
                   type="number"
                   min={0}
-                  value={settings.thailandDeductions?.rmfContribution ?? 0}
+                  value={thailandDeductions?.rmfContribution ?? 0}
                   onChange={(e) =>
-                    setSettings({
-                      thailandDeductions: {
-                        ...settings.thailandDeductions,
-                        rmfContribution: Number(e.target.value),
-                      },
-                    })
+                    updateThailandDeduction('rmfContribution', Number(e.target.value))
                   }
                 />
               </Field>
@@ -404,14 +390,9 @@ export function BudgetSettingsPanel() {
                 <Input
                   type="number"
                   min={0}
-                  value={settings.thailandDeductions?.socialSecurityPaid ?? 0}
+                  value={thailandDeductions?.socialSecurityPaid ?? 0}
                   onChange={(e) =>
-                    setSettings({
-                      thailandDeductions: {
-                        ...settings.thailandDeductions,
-                        socialSecurityPaid: Number(e.target.value),
-                      },
-                    })
+                    updateThailandDeduction('socialSecurityPaid', Number(e.target.value))
                   }
                 />
               </Field>

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_SETTINGS } from '../types/budget'
 import type { RecurringItem } from '../types/budget'
-import { calculateSpainEmployedWithForeignSalary } from './spainForeignSalary'
+import { calculateSpainEmployedWithForeignSalary } from './residenceTaxAdjust'
 import { filterResidenceTaxableIncomes } from './incomeSourceTax'
 
 function income(overrides: Partial<RecurringItem> = {}): RecurringItem {
@@ -40,9 +40,9 @@ describe('calculateSpainEmployedWithForeignSalary', () => {
       taxRegimeId: 'es-employed',
     })
 
-    expect(result?.spainForeignSalary?.personalAllowance).toBe(5550)
-    expect(result?.spainForeignSalary?.foreignSalaryGross).toBeGreaterThan(0)
-    expect(result?.spainForeignSalary?.socialOnLocalIncome).toBeGreaterThan(0)
+    expect(result?.foreignSalary?.personalAllowance).toBe(5550)
+    expect(result?.foreignSalary?.foreignSalaryGross).toBeGreaterThan(0)
+    expect(result?.foreignSalary?.socialOnLocalIncome).toBeGreaterThan(0)
   })
 
   it('credits russian NDFL against IRPF on foreign salary share', () => {
@@ -53,8 +53,9 @@ describe('calculateSpainEmployedWithForeignSalary', () => {
       taxRegimeId: 'es-employed',
     })
 
-    expect(result?.spainForeignSalary?.foreignTaxCredit).toBeGreaterThan(0)
-    expect(result?.result.incomeTax).toBeLessThan(result!.spainForeignSalary!.irpfGross)
+    expect(result?.foreignSalary?.foreignTaxCredit).toBeGreaterThan(0)
+    expect(result?.foreignSalary?.sourceTaxInBase).toBeGreaterThan(0)
+    expect(result?.result.incomeTax).toBeLessThan(result!.foreignSalary!.irpfGross!)
   })
 
   it('does not charge SS on foreign salary gross', () => {
@@ -62,7 +63,7 @@ describe('calculateSpainEmployedWithForeignSalary', () => {
     const residence = filterResidenceTaxableIncomes(items)
     const onlyForeign = calculateSpainEmployedWithForeignSalary(residence, DEFAULT_SETTINGS)
 
-    expect(onlyForeign?.spainForeignSalary?.localIncomeGross).toBe(0)
-    expect(onlyForeign?.spainForeignSalary?.socialOnLocalIncome).toBe(0)
+    expect(onlyForeign?.foreignSalary?.localIncomeGross).toBe(0)
+    expect(onlyForeign?.foreignSalary?.socialOnLocalIncome).toBe(0)
   })
 })

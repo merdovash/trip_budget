@@ -5,7 +5,7 @@ import {
   calculateRussiaNdflForPayment,
   calculateRussiaSalaryTax,
 } from './countries/russia'
-import { isRussiaSourceTaxable } from './doubleTaxation'
+import { isSourceCountryTaxable } from './doubleTaxation'
 
 export const SALARY_SOURCE_COUNTRIES = [{ code: 'RU', label: 'Россия' }] as const
 export type SalarySourceCountryCode = (typeof SALARY_SOURCE_COUNTRIES)[number]['code']
@@ -23,8 +23,8 @@ function toMonthlyAmount(amount: number, frequency: Frequency): number {
   }
 }
 
-export function isRussiaSalary(item: RecurringItem): boolean {
-  return item.categoryId === 'salary' && item.salaryCountryCode === 'RU'
+export function isSalaryFrom(item: RecurringItem, countryCode: string): boolean {
+  return item.categoryId === 'salary' && item.salaryCountryCode === countryCode
 }
 
 /** Доход участвует в расчёте налогов страны проживания. */
@@ -32,7 +32,7 @@ export function isIncludedInResidenceTax(item: RecurringItem): boolean {
   if (item.includeInResidenceTax !== undefined) {
     return item.includeInResidenceTax
   }
-  return !isRussiaSalary(item)
+  return !isSalaryFrom(item, 'RU')
 }
 
 export function filterResidenceTaxableIncomes(incomes: RecurringItem[]): RecurringItem[] {
@@ -55,15 +55,11 @@ export function sumAnnualGrossIncomes(
   return incomes.reduce((sum, item) => sum + annualGrossInCurrency(item, baseCurrency), 0)
 }
 
-export function annualGrossInRub(item: RecurringItem): number {
-  return annualGrossInCurrency(item, 'RUB')
-}
-
-export interface RussiaYtdTracker {
+export interface SourceTaxYtdTracker {
   byItem: Record<string, number>
 }
 
-export function createRussiaYtdTracker(): RussiaYtdTracker {
+export function createSourceTaxYtdTracker(): SourceTaxYtdTracker {
   return { byItem: {} }
 }
 
@@ -136,48 +132,54 @@ export function paymentAmountNativeOnDay(
   }
 }
 
-export function paymentGrossRubOnDay(
+export function paymentGrossInTaxCurrencyOnDay(
   item: RecurringItem,
   year: number,
   month: number,
   day: number,
+  taxCurrency: string,
 ): number {
   const native = paymentAmountNativeOnDay(item, year, month, day)
   if (native <= 0) return 0
-  return convertCurrency(native, item.currency, 'RUB')
+  return convertCurrency(native, item.currency, taxCurrency)
 }
 
-export function calculateRussiaSourceTaxForPayment(
+export function calculateSourceTaxForPayment(
   item: RecurringItem,
-  paymentGrossRub: number,
+  paymentGross: number,
   dependents: number,
-  tracker: RussiaYtdTracker,
+  tracker: SourceTaxYtdTracker,
 ): number {
-  if (paymentGrossRub <= 0) return 0
+  if (paymentGross <= 0) return 0
   const ytd = tracker.byItem[item.id] ?? 0
-  const ndfl = calculateRussiaNdflForPayment(paymentGrossRub, ytd, dependents)
-  tracker.byItem[item.id] = ytd + paymentGrossRub
+  const ndfl = calculateRussiaNdflForPayment(paymentGross, ytd, dependents)
+  tracker.byItem[item.id] = ytd + paymentGross
   return ndfl
 }
 
-export function summarizeRussiaSalaries(
+export function summarizeSourceSalaries(
   incomes: RecurringItem[],
   dependents: number,
+  sourceCurrency: string,
 ): ReturnType<typeof calculateRussiaSalaryTax> | null {
-  const ruSalaries = incomes.filter(isRussiaSourceTaxable)
-  if (ruSalaries.length === 0) return null
+  const sourceSalaries = incomes.filter(isSourceCountryTaxable)
+  if (sourceSalaries.length === 0) return null
 
-  const grossAnnualRub = ruSalaries.reduce((sum, item) => sum + annualGrossInRub(item), 0)
-  return calculateRussiaSalaryTax(grossAnnualRub, dependents)
+  const grossAnnual = sourceSalaries.reduce(
+    (sum, item) => sum + annualGrossInCurrency(item, sourceCurrency),
+    0,
+  )
+  return calculateRussiaSalaryTax(grossAnnual, dependents)
 }
 
 /** YTD-трекер НДФЛ до указанной даты (не включая сам день). */
-export function buildRussiaYtdTrackerBeforeDate(
+export function buildSourceTaxYtdTrackerBeforeDate(
   incomes: RecurringItem[],
   dateStr: string,
   dependents: number,
-): RussiaYtdTracker {
-  const tracker = createRussiaYtdTracker()
+  taxCurrency: string,
+): SourceTaxYtdTracker {
+  const tracker = createSourceTaxYtdTracker()
   const { year, month, day } = parseDate(dateStr)
 
   for (let m = 1; m <= month; m++) {
@@ -185,40 +187,48 @@ export function buildRussiaYtdTrackerBeforeDate(
     const lastDay = m === month ? day - 1 : daysInMonth
     for (let d = 1; d <= lastDay; d++) {
       const prior = `${year}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
-      russiaSourceNdflRubForDay(incomes, prior, dependents, tracker)
+      sourceTaxNativeForDay(incomes, prior, dependents, tracker, taxCurrency)
     }
   }
 
   return tracker
 }
 
-export function russiaSourceNdflRubForDay(
+export function sourceTaxNativeForDay(
   incomes: RecurringItem[],
   dateStr: string,
   dependents: number,
-  tracker: RussiaYtdTracker,
+  tracker: SourceTaxYtdTracker,
+  taxCurrency: string,
 ): number {
   const { year, month, day } = parseDate(dateStr)
   let total = 0
 
   for (const item of incomes) {
-    if (!isRussiaSourceTaxable(item)) continue
-    const grossRub = paymentGrossRubOnDay(item, year, month, day)
-    total += calculateRussiaSourceTaxForPayment(item, grossRub, dependents, tracker)
+    if (!isSourceCountryTaxable(item)) continue
+    const grossNative = paymentGrossInTaxCurrencyOnDay(item, year, month, day, taxCurrency)
+    total += calculateSourceTaxForPayment(item, grossNative, dependents, tracker)
   }
 
   return total
 }
 
-export function russiaSourceTaxForDay(
+export function sourceTaxInBaseForDay(
   incomes: RecurringItem[],
   dateStr: string,
   dependents: number,
-  tracker: RussiaYtdTracker,
+  tracker: SourceTaxYtdTracker,
+  taxCurrency: string,
   baseCurrency: string,
 ): number {
-  const ndflRub = russiaSourceNdflRubForDay(incomes, dateStr, dependents, tracker)
-  return convertCurrency(ndflRub, 'RUB', baseCurrency)
+  const sourceTaxNative = sourceTaxNativeForDay(
+    incomes,
+    dateStr,
+    dependents,
+    tracker,
+    taxCurrency,
+  )
+  return convertCurrency(sourceTaxNative, taxCurrency, baseCurrency)
 }
 
 function parseDate(iso: string): { year: number; month: number; day: number } {
@@ -226,20 +236,21 @@ function parseDate(iso: string): { year: number; month: number; day: number } {
   return { year, month, day }
 }
 
-export function russiaSourceTaxForMonth(
+export function sourceTaxForMonth(
   incomes: RecurringItem[],
   monthKey: string,
   dependents: number,
+  taxCurrency: string,
   baseCurrency: string,
 ): number {
   const [year, month] = monthKey.split('-').map(Number)
-  const tracker = createRussiaYtdTracker()
+  const tracker = createSourceTaxYtdTracker()
 
   for (let m = 1; m < month; m++) {
     const daysInMonth = new Date(year, m, 0).getDate()
     for (let day = 1; day <= daysInMonth; day++) {
       const dateStr = `${year}-${String(m).padStart(2, '0')}-${String(day).padStart(2, '0')}`
-      russiaSourceTaxForDay(incomes, dateStr, dependents, tracker, baseCurrency)
+      sourceTaxInBaseForDay(incomes, dateStr, dependents, tracker, taxCurrency, baseCurrency)
     }
   }
 
@@ -247,19 +258,31 @@ export function russiaSourceTaxForMonth(
   const daysInMonth = new Date(year, month, 0).getDate()
   for (let day = 1; day <= daysInMonth; day++) {
     const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
-    monthTotal += russiaSourceTaxForDay(incomes, dateStr, dependents, tracker, baseCurrency)
+    monthTotal += sourceTaxInBaseForDay(
+      incomes,
+      dateStr,
+      dependents,
+      tracker,
+      taxCurrency,
+      baseCurrency,
+    )
   }
 
   return monthTotal
 }
 
-export function russiaEmployerSocialAnnualInBase(
+export function sourceEmployerSocialAnnualInBase(
   incomes: RecurringItem[],
+  sourceCurrency: string,
   baseCurrency: string,
 ): number {
-  const grossRub = incomes
-    .filter(isRussiaSourceTaxable)
-    .reduce((sum, item) => sum + annualGrossInRub(item), 0)
-  if (grossRub === 0) return 0
-  return convertCurrency(calculateRussiaEmployerSocial(grossRub), 'RUB', baseCurrency)
+  const grossNative = incomes
+    .filter(isSourceCountryTaxable)
+    .reduce((sum, item) => sum + annualGrossInCurrency(item, sourceCurrency), 0)
+  if (grossNative === 0) return 0
+  return convertCurrency(
+    calculateRussiaEmployerSocial(grossNative),
+    sourceCurrency,
+    baseCurrency,
+  )
 }

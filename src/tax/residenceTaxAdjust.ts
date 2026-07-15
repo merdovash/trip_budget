@@ -9,25 +9,22 @@ import {
 import {
   filterResidenceTaxableIncomes,
   isIncludedInResidenceTax,
-  isRussiaSalary,
+  isSalaryFrom,
   sumAnnualGrossIncomes,
-  summarizeRussiaSalaries,
+  summarizeSourceSalaries,
 } from './incomeSourceTax'
 import type { TaxCalculator, TaxResult } from './types'
 import { breakdownProgressiveTax, calculateProgressiveTax } from './types'
 import { adjustThailandResidenceTaxResult } from './thailandResidenceTax'
 import { adjustGeorgiaResidenceTaxResult } from './georgiaResidenceTax'
+import { isForeignSalaryInResidenceBase, usesResidenceForeignTaxCredit } from './doubleTaxation'
 
-export function isRussiaSalaryInSpanishBase(item: RecurringItem): boolean {
-  return isRussiaSalary(item) && isIncludedInResidenceTax(item)
-}
-
-/** Зачёт НДФЛ РФ против IRPF Испании (deducción por doble imposición internacional, упрощ.). */
+/** Зачёт налога у источника против IRPF (упрощ.). */
 export function usesForeignTaxCredit(item: RecurringItem): boolean {
-  return isRussiaSalaryInSpanishBase(item) && item.foreignTaxCredit !== false
+  return usesResidenceForeignTaxCredit(item)
 }
 
-export const SPAIN_DEDUCTIONS_WITH_RU_SALARY = {
+export const SPAIN_DEDUCTIONS_WITH_FOREIGN_SALARY = {
   title: 'Вычеты Испании при зарплате из России',
   summary:
     'Да — если зарплата РФ включена в декларацию IRPF («Учитывать в налогах проживания»). Mínimo personal y familiar уменьшает общую базу IRPF. Cuota SS работника начисляется только на доход в Испании, не на зарплату российского работодателя.',
@@ -35,26 +32,35 @@ export const SPAIN_DEDUCTIONS_WITH_RU_SALARY = {
     'Опция «Зачёт НДФЛ в РФ»: уплаченный НДФЛ зачитывается против IRPF на эту зарплату (Art. 80 Ley 35/2006, упрощ.).',
 } as const
 
-export interface SpainForeignSalaryBreakdown {
+export interface ForeignSalaryBreakdown {
   foreignSalaryGross: number
   localIncomeGross: number
-  personalAllowance: number
-  socialOnLocalIncome: number
-  taxableBaseIrpf: number
-  irpfGross: number
-  irpfOnForeignSalary: number
-  russianNdflInBase: number
+  sourceTaxInBase?: number
   foreignTaxCredit: number
-  irpfNetAfterCredit: number
   totalTaxBurdenInBase: number
+  personalAllowance?: number
+  socialOnLocalIncome?: number
+  taxableBaseIrpf?: number
+  irpfGross?: number
+  irpfOnForeignSalary?: number
+  irpfNetAfterCredit?: number
+  foreignSalaryTaxableGross?: number
+  foreignSalaryExcluded?: number
+  remittanceEstimate?: number
+  taxableBase?: number
+  pitGross?: number
+  pitOnForeignSalary?: number
+  pitNetAfterCredit?: number
+  pensionOnLocalIncome?: number
 }
 
 export interface AdjustedResidenceTax {
   result: TaxResult
-  spainForeignSalary?: SpainForeignSalaryBreakdown
-  thailandForeignSalary?: import('./thailandResidenceTax').ThailandForeignSalaryBreakdown
-  georgiaForeignSalary?: import('./georgiaResidenceTax').GeorgiaForeignSalaryBreakdown
+  foreignSalary?: ForeignSalaryBreakdown
 }
+
+export type SpainForeignSalaryBreakdown = ForeignSalaryBreakdown
+export type SpainAdjustedResidenceTax = AdjustedResidenceTax
 
 function personalAllowanceAmount(dependents: number): number {
   return SPAIN_PERSONAL_ALLOWANCE + dependents * SPAIN_DEPENDENT_ALLOWANCE
@@ -65,7 +71,7 @@ export function calculateSpainEmployedWithForeignSalary(
   residenceIncomes: RecurringItem[],
   settings: BudgetSettings,
 ): AdjustedResidenceTax | null {
-  const foreignItems = residenceIncomes.filter(isRussiaSalaryInSpanishBase)
+  const foreignItems = residenceIncomes.filter(isForeignSalaryInResidenceBase)
   if (foreignItems.length === 0) return null
 
   const baseCurrency = settings.baseCurrency
@@ -87,22 +93,24 @@ export function calculateSpainEmployedWithForeignSalary(
   const irpfOnForeign = totalGross > 0 ? irpfGross * (foreignGross / totalGross) : 0
 
   const creditItems = foreignItems.filter(usesForeignTaxCredit)
-  const russianSummary =
-    creditItems.length > 0 ? summarizeRussiaSalaries(creditItems, settings.dependents) : null
-  const russianNdflInBase = russianSummary
-    ? convertCurrency(russianSummary.ndfl, 'RUB', baseCurrency)
+  const sourceSalary =
+    creditItems.length > 0
+      ? summarizeSourceSalaries(creditItems, settings.dependents, 'RUB')
+      : null
+  const sourceTaxInBase = sourceSalary
+    ? convertCurrency(sourceSalary.ndfl, 'RUB', baseCurrency)
     : 0
   const foreignTaxCredit =
-    creditItems.length > 0 ? Math.min(russianNdflInBase, irpfOnForeign) : 0
+    creditItems.length > 0 ? Math.min(sourceTaxInBase, irpfOnForeign) : 0
   const irpfNetAfterCredit = Math.max(0, irpfGross - foreignTaxCredit)
   const totalTaxBurdenInBase =
-    irpfNetAfterCredit + socialOnLocal + russianNdflInBase - foreignTaxCredit
+    irpfNetAfterCredit + socialOnLocal + sourceTaxInBase - foreignTaxCredit
 
   const breakdown: TaxResult['breakdown'] = [
     {
       label: 'Зарплата РФ в базе IRPF',
       amount: foreignGross,
-      description: SPAIN_DEDUCTIONS_WITH_RU_SALARY.summary,
+      description: SPAIN_DEDUCTIONS_WITH_FOREIGN_SALARY.summary,
       kind: 'gross',
     },
     {
@@ -143,7 +151,7 @@ export function calculateSpainEmployedWithForeignSalary(
     breakdown.push({
       label: 'Зачёт НДФЛ РФ (deducción doble imposición)',
       amount: foreignTaxCredit,
-      description: SPAIN_DEDUCTIONS_WITH_RU_SALARY.foreignCredit,
+      description: SPAIN_DEDUCTIONS_WITH_FOREIGN_SALARY.foreignCredit,
       kind: 'deduction',
     })
   }
@@ -173,7 +181,7 @@ export function calculateSpainEmployedWithForeignSalary(
 
   return {
     result,
-    spainForeignSalary: {
+    foreignSalary: {
       foreignSalaryGross: foreignGross,
       localIncomeGross: localGross,
       personalAllowance: allowances,
@@ -181,7 +189,7 @@ export function calculateSpainEmployedWithForeignSalary(
       taxableBaseIrpf,
       irpfGross,
       irpfOnForeignSalary: irpfOnForeign,
-      russianNdflInBase,
+      sourceTaxInBase,
       foreignTaxCredit,
       irpfNetAfterCredit,
       totalTaxBurdenInBase,
@@ -234,11 +242,16 @@ export function computeAnnualTaxBurden(
 ): {
   residenceIncomeTax: number
   residenceSocial: number
-  russiaNdflInBase: number
+  sourceIncomeTaxInBase: number
   foreignTaxCredit: number
 } {
   if (!calculator) {
-    return { residenceIncomeTax: 0, residenceSocial: 0, russiaNdflInBase: 0, foreignTaxCredit: 0 }
+    return {
+      residenceIncomeTax: 0,
+      residenceSocial: 0,
+      sourceIncomeTaxInBase: 0,
+      foreignTaxCredit: 0,
+    }
   }
 
   const residenceIncomes = filterResidenceTaxableIncomes(incomes)
@@ -250,27 +263,19 @@ export function computeAnnualTaxBurden(
     oneTimeExpenses,
   )
 
-  const sourceRuItems = incomes.filter(
-    (item) => isRussiaSalary(item) && !isIncludedInResidenceTax(item),
+  const sourceOnlyItems = incomes.filter(
+    (item) => isSalaryFrom(item, 'RU') && !isIncludedInResidenceTax(item),
   )
-  const russiaSourceOnly = summarizeRussiaSalaries(sourceRuItems, settings.dependents)
-  const russiaFromSource = russiaSourceOnly
-    ? convertCurrency(russiaSourceOnly.ndfl, 'RUB', settings.baseCurrency)
+  const sourceOnlySummary = summarizeSourceSalaries(sourceOnlyItems, settings.dependents, 'RUB')
+  const sourceTaxFromSourceOnly = sourceOnlySummary
+    ? convertCurrency(sourceOnlySummary.ndfl, 'RUB', settings.baseCurrency)
     : 0
-  const russiaFromCredit =
-    adjusted.spainForeignSalary?.russianNdflInBase ??
-    adjusted.thailandForeignSalary?.russianNdflInBase ??
-    adjusted.georgiaForeignSalary?.russianNdflInBase ??
-    0
+  const sourceTaxFromCredit = adjusted.foreignSalary?.sourceTaxInBase ?? 0
 
   return {
     residenceIncomeTax: adjusted.result.incomeTax,
     residenceSocial: adjusted.result.socialContributions,
-    russiaNdflInBase: russiaFromSource + russiaFromCredit,
-    foreignTaxCredit:
-      adjusted.spainForeignSalary?.foreignTaxCredit ??
-      adjusted.thailandForeignSalary?.foreignTaxCredit ??
-      adjusted.georgiaForeignSalary?.foreignTaxCredit ??
-      0,
+    sourceIncomeTaxInBase: sourceTaxFromSourceOnly + sourceTaxFromCredit,
+    foreignTaxCredit: adjusted.foreignSalary?.foreignTaxCredit ?? 0,
   }
 }

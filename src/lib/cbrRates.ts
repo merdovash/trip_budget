@@ -12,18 +12,19 @@ export interface CbrDailyResponse {
 }
 
 export interface ParsedCbrRates {
-  rubPerUnit: Record<string, number>
+  pivotPerUnit: Record<string, number>
   rateDate: string
 }
 
 export function parseCbrResponse(data: CbrDailyResponse): ParsedCbrRates {
-  const rubPerUnit: Record<string, number> = { RUB: 1 }
+  // CBR quotes each currency in RUB; expose RUB as an implementation-neutral pivot.
+  const rates: Record<string, number> = { RUB: 1 }
 
   for (const valute of Object.values(data.Valute)) {
-    rubPerUnit[valute.CharCode] = valute.Value / valute.Nominal
+    rates[valute.CharCode] = valute.Value / valute.Nominal
   }
 
-  return { rubPerUnit, rateDate: data.Date }
+  return { pivotPerUnit: rates, rateDate: data.Date }
 }
 
 export async function fetchCbrRates(): Promise<ParsedCbrRates> {
@@ -40,15 +41,15 @@ export function convertViaCbr(
   amount: number,
   from: string,
   to: string,
-  rubPerUnit: Record<string, number>,
+  pivotPerUnit: Record<string, number>,
 ): number | null {
   if (from === to) return amount
 
-  const rubPerFrom = from === 'RUB' ? 1 : rubPerUnit[from]
-  const rubPerTo = to === 'RUB' ? 1 : rubPerUnit[to]
+  const pivotFrom = from === 'RUB' ? 1 : pivotPerUnit[from]
+  const pivotTo = to === 'RUB' ? 1 : pivotPerUnit[to]
 
-  if (!rubPerFrom || !rubPerTo) return null
+  if (!pivotFrom || !pivotTo) return null
 
-  const amountInRub = from === 'RUB' ? amount : amount * rubPerFrom
-  return to === 'RUB' ? amountInRub : amountInRub / rubPerTo
+  const amountInPivot = from === 'RUB' ? amount : amount * pivotFrom
+  return to === 'RUB' ? amountInPivot : amountInPivot / pivotTo
 }

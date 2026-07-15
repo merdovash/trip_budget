@@ -9,6 +9,7 @@ import type {
   TaxBracket,
 } from '../types'
 import { breakdownProgressiveTax, buildTaxResult } from '../types'
+import { formatCurrency } from '../../lib/format'
 
 /** Прогрессивная шкала IRPF (государственная + типичная автономная, упрощённо). */
 export const SPAIN_IRPF_BRACKETS: TaxBracket[] = [
@@ -51,21 +52,21 @@ function personalAllowance(input: TaxInput): number {
   return SPAIN_PERSONAL_ALLOWANCE + input.dependents * SPAIN_DEPENDENT_ALLOWANCE
 }
 
-function formatEuro(amount: number): string {
-  return `€${Math.round(amount).toLocaleString('ru-RU')}`
+function formatLocal(amount: number): string {
+  return formatCurrency(amount, 'EUR')
 }
 
 export function formatIrpfBracketRange(from: number, to: number | null): string {
-  if (to === null) return `свыше ${formatEuro(from)}`
-  return `${formatEuro(from)} – ${formatEuro(to)}`
+  if (to === null) return `свыше ${formatLocal(from)}`
+  return `${formatLocal(from)} – ${formatLocal(to)}`
 }
 
 function bracketBreakdownItems(lines: BracketTaxLine[]): TaxBreakdownItem[] {
   return lines.map((line) => ({
     label: `Ступень ${formatIrpfBracketRange(line.from, line.to)}`,
     amount: line.tax,
-    description: `Налогооблагаемый доход в ступени: ${formatEuro(line.taxableInBracket)}`,
-    formula: `${formatEuro(line.taxableInBracket)} × ${(line.rate * 100).toFixed(0)}% = ${formatEuro(line.tax)}`,
+    description: `Налогооблагаемый доход в ступени: ${formatLocal(line.taxableInBracket)}`,
+    formula: `${formatLocal(line.taxableInBracket)} × ${(line.rate * 100).toFixed(0)}% = ${formatLocal(line.tax)}`,
     kind: 'bracket' as const,
   }))
 }
@@ -119,7 +120,7 @@ export function calculateSpainEmployeeTax(input: TaxInput): TaxResult {
       amount: socialContributions,
       description:
         'Cuota obrera (~6,35%): уменьшает базу IRPF (Art. 19 Ley 35/2006). Удерживается работодателем из bruto.',
-      formula: `min(${formatEuro(gross)}, ${formatEuro(SPAIN_SS_ANNUAL_CAP)}) × ${(SPAIN_EMPLOYEE_SS_RATE * 100).toFixed(2)}% = ${formatEuro(socialContributions)}`,
+      formula: `min(${formatLocal(gross)}, ${formatLocal(SPAIN_SS_ANNUAL_CAP)}) × ${(SPAIN_EMPLOYEE_SS_RATE * 100).toFixed(2)}% = ${formatLocal(socialContributions)}`,
       kind: 'deduction',
     },
     {
@@ -129,15 +130,15 @@ export function calculateSpainEmployeeTax(input: TaxInput): TaxResult {
         'Минимум личный и семейный вычет (Art. 57 Ley IRPF). Снижает базу, не возвращается наличными.',
       formula:
         input.dependents > 0
-          ? `${formatEuro(SPAIN_PERSONAL_ALLOWANCE)} + ${input.dependents} × ${formatEuro(SPAIN_DEPENDENT_ALLOWANCE)} = ${formatEuro(allowances)}`
-          : `${formatEuro(SPAIN_PERSONAL_ALLOWANCE)}`,
+          ? `${formatLocal(SPAIN_PERSONAL_ALLOWANCE)} + ${input.dependents} × ${formatLocal(SPAIN_DEPENDENT_ALLOWANCE)} = ${formatLocal(allowances)}`
+          : `${formatLocal(SPAIN_PERSONAL_ALLOWANCE)}`,
       kind: 'deduction',
     },
     {
       label: 'Налоговая база IRPF',
       amount: taxableBase,
       description: 'База после cuota obrera и mínimo personal — к ней применяется прогрессивная шкала.',
-      formula: `${formatEuro(gross)} − ${formatEuro(socialContributions)} − ${formatEuro(allowances)} = ${formatEuro(taxableBase)}`,
+      formula: `${formatLocal(gross)} − ${formatLocal(socialContributions)} − ${formatLocal(allowances)} = ${formatLocal(taxableBase)}`,
       kind: 'base',
     },
     ...bracketBreakdownItems(bracketLines),
@@ -158,21 +159,21 @@ export function calculateSpainEmployeeTax(input: TaxInput): TaxResult {
       label: 'Retención IRPF (среднемесячно)',
       amount: monthlyIRPF,
       description: 'Оценка удержания IRPF с одной nómina при равном bruto по месяцам.',
-      formula: `${formatEuro(incomeTax)} / 12 = ${formatEuro(monthlyIRPF)}`,
+      formula: `${formatLocal(incomeTax)} / 12 = ${formatLocal(monthlyIRPF)}`,
       kind: 'info',
     },
     {
       label: 'Cuota obrera SS (среднемесячно)',
       amount: monthlySS,
       description: 'Удержание взноса работника с каждой выплаты.',
-      formula: `${formatEuro(socialContributions)} / 12 = ${formatEuro(monthlySS)}`,
+      formula: `${formatLocal(socialContributions)} / 12 = ${formatLocal(monthlySS)}`,
       kind: 'info',
     },
     {
       label: 'Neto mensual (оценка)',
       amount: monthlyNet,
       description: 'Bruto − IRPF − cuota obrera, среднее «на руки» в месяц.',
-      formula: `(${formatEuro(gross)} − ${formatEuro(incomeTax)} − ${formatEuro(socialContributions)}) / 12 = ${formatEuro(monthlyNet)}`,
+      formula: `(${formatLocal(gross)} − ${formatLocal(incomeTax)} − ${formatLocal(socialContributions)}) / 12 = ${formatLocal(monthlyNet)}`,
       kind: 'info',
     },
     {
@@ -180,14 +181,14 @@ export function calculateSpainEmployeeTax(input: TaxInput): TaxResult {
       amount: employerSocial,
       description:
         'Взносы работодателя (~29,9%, упрощ.). Не удерживаются из зарплаты, но влияют на полную стоимость найма.',
-      formula: `min(${formatEuro(gross)}, ${formatEuro(SPAIN_SS_ANNUAL_CAP)}) × ${(SPAIN_EMPLOYER_SS_RATE * 100).toFixed(1)}% = ${formatEuro(employerSocial)}`,
+      formula: `min(${formatLocal(gross)}, ${formatLocal(SPAIN_SS_ANNUAL_CAP)}) × ${(SPAIN_EMPLOYER_SS_RATE * 100).toFixed(1)}% = ${formatLocal(employerSocial)}`,
       kind: 'info',
     },
     {
       label: 'Neto anual (на руки)',
       amount: gross - incomeTax - socialContributions,
       description: 'Bruto − retención IRPF − cuota obrera SS.',
-      formula: `${formatEuro(gross)} − ${formatEuro(incomeTax)} − ${formatEuro(socialContributions)}`,
+      formula: `${formatLocal(gross)} − ${formatLocal(incomeTax)} − ${formatLocal(socialContributions)}`,
       kind: 'total',
     },
   ]
@@ -280,7 +281,7 @@ export function buildSpainEmployeeSchedule(
       label: 'Retenciones nómina',
       description:
         'Удержание cuota obrera SS и retención IRPF с bruto при выплате nómina (оценка).',
-      formula: `SS ${formatEuro(monthlySS)} + IRPF ${formatEuro(monthlyIRPF)} = ${formatEuro(monthlySS + monthlyIRPF)}`,
+      formula: `SS ${formatLocal(monthlySS)} + IRPF ${formatLocal(monthlyIRPF)} = ${formatLocal(monthlySS + monthlyIRPF)}`,
     }
   })
 }
@@ -309,7 +310,7 @@ export function calculateSpainDigitalNomadTax(input: TaxInput): TaxResult {
       amount: professionalExpenses,
       description:
         'Упрощённая оценка вычитаемых расходов (30% от оборота). В реальности — фактические gastos по modelo 100.',
-      formula: `${formatEuro(gross)} × ${(SPAIN_NOMAD_EXPENSE_DEDUCTION * 100).toFixed(0)}% = ${formatEuro(professionalExpenses)}`,
+      formula: `${formatLocal(gross)} × ${(SPAIN_NOMAD_EXPENSE_DEDUCTION * 100).toFixed(0)}% = ${formatLocal(professionalExpenses)}`,
       kind: 'deduction',
     },
     {
@@ -317,7 +318,7 @@ export function calculateSpainDigitalNomadTax(input: TaxInput): TaxResult {
       amount: socialContributions,
       description:
         'Ежемесячный взнос autónomo уменьшает базу IRPF. Тариф по трамо дохода (RETA, упрощённо).',
-      formula: `${formatEuro(monthlyCuota)}/мес. × 12 = ${formatEuro(socialContributions)} (${getAutonomoCuotaTramoLabel(gross)})`,
+      formula: `${formatLocal(monthlyCuota)}/мес. × 12 = ${formatLocal(socialContributions)} (${getAutonomoCuotaTramoLabel(gross)})`,
       kind: 'deduction',
     },
     {
@@ -326,15 +327,15 @@ export function calculateSpainDigitalNomadTax(input: TaxInput): TaxResult {
       description: 'Минимум личный и семейный вычет (Art. 57 Ley IRPF).',
       formula:
         input.dependents > 0
-          ? `${formatEuro(SPAIN_PERSONAL_ALLOWANCE)} + ${input.dependents} × ${formatEuro(SPAIN_DEPENDENT_ALLOWANCE)} = ${formatEuro(allowances)}`
-          : `${formatEuro(SPAIN_PERSONAL_ALLOWANCE)}`,
+          ? `${formatLocal(SPAIN_PERSONAL_ALLOWANCE)} + ${input.dependents} × ${formatLocal(SPAIN_DEPENDENT_ALLOWANCE)} = ${formatLocal(allowances)}`
+          : `${formatLocal(SPAIN_PERSONAL_ALLOWANCE)}`,
       kind: 'deduction',
     },
     {
       label: 'Налоговая база IRPF',
       amount: taxableBase,
       description: 'База после профессиональных расходов, соцвзносов и mínimo personal.',
-      formula: `${formatEuro(gross)} − ${formatEuro(professionalExpenses)} − ${formatEuro(socialContributions)} − ${formatEuro(allowances)} = ${formatEuro(taxableBase)}`,
+      formula: `${formatLocal(gross)} − ${formatLocal(professionalExpenses)} − ${formatLocal(socialContributions)} − ${formatLocal(allowances)} = ${formatLocal(taxableBase)}`,
       kind: 'base',
     },
     ...bracketBreakdownItems(bracketLines),
@@ -350,7 +351,7 @@ export function calculateSpainDigitalNomadTax(input: TaxInput): TaxResult {
       amount: quarterlyPrepayments,
       description:
         'Квартальные платежи 20% от прибыли квартала (Art. 110.3 RIRPF). Срок: 1–20 апр, июл, окт, янв.',
-      formula: `${formatEuro(taxableBase)} × ${(SPAIN_NOMAD_PREPAYMENT_RATE * 100).toFixed(0)}% = ${formatEuro(quarterlyPrepayments)} (сумма за год, упрощ.)`,
+      formula: `${formatLocal(taxableBase)} × ${(SPAIN_NOMAD_PREPAYMENT_RATE * 100).toFixed(0)}% = ${formatLocal(quarterlyPrepayments)} (сумма за год, упрощ.)`,
       kind: 'info',
     },
     {
@@ -363,7 +364,7 @@ export function calculateSpainDigitalNomadTax(input: TaxInput): TaxResult {
       label: 'Чистый доход после налогов',
       amount: gross - incomeTax - socialContributions,
       description: 'Оценка после IRPF и соцвзносов autónomo (без учёта авансов modelo 130 как отдельного резерва).',
-      formula: `${formatEuro(gross)} − ${formatEuro(incomeTax)} − ${formatEuro(socialContributions)}`,
+      formula: `${formatLocal(gross)} − ${formatLocal(incomeTax)} − ${formatLocal(socialContributions)}`,
       kind: 'total',
     },
   ]
@@ -418,8 +419,8 @@ export function buildSpainDigitalNomadSchedule(
       social: 0,
       incomeTax: prepayment,
       label: `Modelo 130, Q${slot.quarter + 1} ${paymentYear}`,
-      formula: `(${formatEuro(quarterGross)} − ${formatEuro(quarterExpenses)} − ${formatEuro(quarterSS)} − ${formatEuro(allowancePerQuarter)}) × 20% = ${formatEuro(prepayment)}`,
-      description: `Доход Q${slot.quarter + 1}: ${formatEuro(quarterGross)}. Срок: до 20 ${MONTH_NAMES[slot.month - 1]} ${paymentYear}.`,
+      formula: `(${formatLocal(quarterGross)} − ${formatLocal(quarterExpenses)} − ${formatLocal(quarterSS)} − ${formatLocal(allowancePerQuarter)}) × 20% = ${formatLocal(prepayment)}`,
+      description: `Доход Q${slot.quarter + 1}: ${formatLocal(quarterGross)}. Срок: до 20 ${MONTH_NAMES[slot.month - 1]} ${paymentYear}.`,
     })
   }
 
@@ -474,8 +475,8 @@ export const spainBeckham: TaxCalculator = {
         description: 'Фиксированная ставка для квалифицированных новых резидентов (до €600 000).',
         formula:
           taxedAt47 > 0
-            ? `${formatEuro(taxedAt24)} × 24% = ${formatEuro(taxedAt24 * 0.24)}`
-            : `${formatEuro(gross)} × 24% = ${formatEuro(incomeTax)}`,
+            ? `${formatLocal(taxedAt24)} × 24% = ${formatLocal(taxedAt24 * 0.24)}`
+            : `${formatLocal(gross)} × 24% = ${formatLocal(incomeTax)}`,
         kind: 'tax',
       },
     ]
@@ -485,7 +486,7 @@ export const spainBeckham: TaxCalculator = {
         label: 'Налог по ставке 47% (свыше €600 000)',
         amount: taxedAt47 * 0.47,
         description: 'Часть дохода свыше порога облагается по максимальной ставке.',
-        formula: `${formatEuro(taxedAt47)} × 47% = ${formatEuro(taxedAt47 * 0.47)}`,
+        formula: `${formatLocal(taxedAt47)} × 47% = ${formatLocal(taxedAt47 * 0.47)}`,
         kind: 'tax',
       })
     }

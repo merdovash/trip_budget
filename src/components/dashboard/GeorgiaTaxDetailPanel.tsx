@@ -1,6 +1,6 @@
 import { formatCurrency, formatPercent } from '../../lib/format'
 import type { TaxBreakdownItem, TaxResult } from '../../tax/types'
-import { GEORGIA_RU_SALARY_RULES } from '../../tax/georgiaResidenceTax'
+import { GEORGIA_FOREIGN_SALARY_RULES } from '../../tax/georgiaResidenceTax'
 import { Card } from '../ui/FormControls'
 
 const SECTION_TITLES: Record<string, string> = {
@@ -85,9 +85,9 @@ export function GeorgiaTaxDetailPanel({
       )}
 
       <div className="mt-4 rounded-lg border border-amber-100 bg-amber-50/80 px-3 py-2.5 text-xs leading-relaxed text-amber-900">
-        <p className="font-medium">{GEORGIA_RU_SALARY_RULES.title}</p>
-        <p className="mt-1">{GEORGIA_RU_SALARY_RULES.summary}</p>
-        <p className="mt-1">{GEORGIA_RU_SALARY_RULES.residency}</p>
+        <p className="font-medium">{GEORGIA_FOREIGN_SALARY_RULES.title}</p>
+        <p className="mt-1">{GEORGIA_FOREIGN_SALARY_RULES.summary}</p>
+        <p className="mt-1">{GEORGIA_FOREIGN_SALARY_RULES.residency}</p>
       </div>
 
       <div className="mt-5 space-y-5">

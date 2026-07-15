@@ -3,7 +3,7 @@ import type { RecurringItem } from '../types/budget'
 import {
   buildDoubleTaxationLines,
   getIncomeTaxTreatment,
-  isRussiaSourceTaxable,
+  isSourceCountryTaxable,
 } from './doubleTaxation'
 
 function income(overrides: Partial<RecurringItem> = {}): RecurringItem {
@@ -21,8 +21,8 @@ function income(overrides: Partial<RecurringItem> = {}): RecurringItem {
 describe('double taxation rules', () => {
   it('taxes RU salary at source by default', () => {
     const item = income({ categoryId: 'salary', salaryCountryCode: 'RU' })
-    expect(getIncomeTaxTreatment(item)).toBe('source_russia')
-    expect(isRussiaSourceTaxable(item)).toBe(true)
+    expect(getIncomeTaxTreatment(item)).toBe('source_withholding')
+    expect(isSourceCountryTaxable(item)).toBe(true)
   })
 
   it('taxes RU salary at residence without NDFL when credit disabled', () => {
@@ -33,7 +33,7 @@ describe('double taxation rules', () => {
       foreignTaxCredit: false,
     })
     expect(getIncomeTaxTreatment(item)).toBe('residence')
-    expect(isRussiaSourceTaxable(item)).toBe(false)
+    expect(isSourceCountryTaxable(item)).toBe(false)
   })
 
   it('uses foreign tax credit when included with default credit flag', () => {
@@ -43,13 +43,13 @@ describe('double taxation rules', () => {
       includeInResidenceTax: true,
     })
     expect(getIncomeTaxTreatment(item)).toBe('residence_with_credit')
-    expect(isRussiaSourceTaxable(item)).toBe(true)
+    expect(isSourceCountryTaxable(item)).toBe(true)
   })
 
   it('taxes ES freelance only at residence', () => {
     const item = income({ categoryId: 'freelance' })
     expect(getIncomeTaxTreatment(item)).toBe('residence')
-    expect(isRussiaSourceTaxable(item)).toBe(false)
+    expect(isSourceCountryTaxable(item)).toBe(false)
   })
 
   it('builds per-income treatment lines', () => {
@@ -57,7 +57,7 @@ describe('double taxation rules', () => {
       income({ id: 'a', name: 'RU', categoryId: 'salary', salaryCountryCode: 'RU' }),
       income({ id: 'b', name: 'ES', categoryId: 'freelance' }),
     ])
-    expect(lines.map((line) => line.treatment)).toEqual(['source_russia', 'residence'])
+    expect(lines.map((line) => line.treatment)).toEqual(['source_withholding', 'residence'])
   })
 
   it('uses Georgia-specific credit label', () => {

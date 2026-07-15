@@ -36,8 +36,8 @@ describe('calculateThailandPitBreakdown', () => {
       800_000,
       { grossAnnualIncome: 800_000, familySize: 2, dependents: 1 },
     )
-    expect(breakdown.taxableBaseThb).toBe(550_000)
-    expect(breakdown.pitGrossThb).toBeCloseTo(35_000)
+    expect(breakdown.taxableBase).toBe(550_000)
+    expect(breakdown.pitGross).toBeCloseTo(35_000)
   })
 })
 
@@ -92,7 +92,8 @@ describe('adjustThailandResidenceTaxResult with RU salary', () => {
       [thLiving],
       [],
     )
-    expect(adjusted.thailandForeignSalary).toBeDefined()
+    expect(adjusted.foreignSalary).toBeDefined()
+    expect(adjusted.foreignSalary?.sourceTaxInBase).toBeGreaterThan(0)
     expect(adjusted.result.breakdown.some((b) => b.kind === 'deduction')).toBe(true)
     expect(adjusted.result.breakdown.some((b) => b.kind === 'bracket')).toBe(true)
   })
@@ -137,11 +138,11 @@ describe('adjustThailandResidenceTaxResult with RU salary', () => {
       [],
     )
 
-    expect(withoutExpenses.thailandForeignSalary?.foreignSalaryTaxableGross).toBe(0)
-    expect(withoutExpenses.thailandForeignSalary?.pitGross).toBe(0)
-    expect(withExpenses.thailandForeignSalary?.remittanceEstimate).toBe(30_000 * 12)
-    expect(withExpenses.thailandForeignSalary?.foreignSalaryTaxableGross).toBe(30_000 * 12)
-    expect(withExpenses.thailandForeignSalary?.pitGross).toBeGreaterThan(0)
+    expect(withoutExpenses.foreignSalary?.foreignSalaryTaxableGross).toBe(0)
+    expect(withoutExpenses.foreignSalary?.pitGross).toBe(0)
+    expect(withExpenses.foreignSalary?.remittanceEstimate).toBe(30_000 * 12)
+    expect(withExpenses.foreignSalary?.foreignSalaryTaxableGross).toBe(30_000 * 12)
+    expect(withExpenses.foreignSalary?.pitGross).toBeGreaterThan(0)
   })
 })
 
@@ -172,8 +173,8 @@ describe('Thailand LTR investment regime', () => {
     }
 
     const ltr = adjustThailandResidenceTaxResult([ruSalary], settings, thailandLtrInvestment, [], [])
-    expect(ltr.thailandForeignSalary?.foreignSalaryTaxableGross).toBe(0)
-    expect(ltr.thailandForeignSalary?.foreignSalaryExcluded).toBe(200_000 * 12)
+    expect(ltr.foreignSalary?.foreignSalaryTaxableGross).toBe(0)
+    expect(ltr.foreignSalary?.foreignSalaryExcluded).toBe(200_000 * 12)
     expect(ltr.result.incomeTax).toBe(0)
     expect(ltr.result.breakdown.some((line) => line.label.includes('LTR'))).toBe(true)
 
@@ -193,8 +194,8 @@ describe('Thailand LTR investment regime', () => {
       [living],
       [],
     )
-    expect(standardWithRemit.thailandForeignSalary?.foreignSalaryTaxableGross).toBeGreaterThan(0)
-    expect(standardWithRemit.thailandForeignSalary?.pitGross).toBeGreaterThan(0)
+    expect(standardWithRemit.foreignSalary?.foreignSalaryTaxableGross).toBeGreaterThan(0)
+    expect(standardWithRemit.foreignSalary?.pitGross).toBeGreaterThan(0)
   })
 })
 
@@ -249,8 +250,8 @@ describe('Thailand ฿3M property route', () => {
       [],
     )
 
-    expect(property3m.thailandForeignSalary?.foreignSalaryTaxableGross).toBe(50_000 * 12)
-    expect(property3m.thailandForeignSalary?.pitGross).toBeGreaterThan(0)
+    expect(property3m.foreignSalary?.foreignSalaryTaxableGross).toBe(50_000 * 12)
+    expect(property3m.foreignSalary?.pitGross).toBeGreaterThan(0)
     expect(property3m.result.incomeTax).toBeGreaterThan(0)
     expect(property3m.result.breakdown.some((line) => line.label.includes('฿3M'))).toBe(true)
     expect(ltr.result.incomeTax).toBe(0)

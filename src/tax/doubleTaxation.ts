@@ -1,35 +1,35 @@
 import type { RecurringItem } from '../types/budget'
-import { isIncludedInResidenceTax, isRussiaSalary } from './incomeSourceTax'
+import { isIncludedInResidenceTax, isSalaryFrom } from './incomeSourceTax'
 
 /** Как облагается доход в модели избежания двойного налогообложения. */
 export type IncomeTaxTreatment =
   | 'residence'
   | 'residence_with_credit'
-  | 'source_russia'
+  | 'source_withholding'
   | 'excluded'
   | 'none'
 
-export function isRussiaSalaryInResidenceBase(item: RecurringItem): boolean {
-  return isRussiaSalary(item) && isIncludedInResidenceTax(item)
+export function isForeignSalaryInResidenceBase(item: RecurringItem): boolean {
+  return isSalaryFrom(item, 'RU') && isIncludedInResidenceTax(item)
 }
 
 export function usesResidenceForeignTaxCredit(item: RecurringItem): boolean {
-  return isRussiaSalaryInResidenceBase(item) && item.foreignTaxCredit !== false
+  return isForeignSalaryInResidenceBase(item) && item.foreignTaxCredit !== false
 }
 
 export function getIncomeTaxTreatment(item: RecurringItem): IncomeTaxTreatment {
   if (!isIncludedInResidenceTax(item)) {
-    return isRussiaSalary(item) ? 'source_russia' : 'excluded'
+    return isSalaryFrom(item, 'RU') ? 'source_withholding' : 'excluded'
   }
-  if (isRussiaSalaryInResidenceBase(item)) {
+  if (isForeignSalaryInResidenceBase(item)) {
     return usesResidenceForeignTaxCredit(item) ? 'residence_with_credit' : 'residence'
   }
   return 'residence'
 }
 
 /** НДФЛ у источника в РФ — если доход не в декларации или включён с зачётом. */
-export function isRussiaSourceTaxable(item: RecurringItem): boolean {
-  if (!isRussiaSalary(item)) return false
+export function isSourceCountryTaxable(item: RecurringItem): boolean {
+  if (!isSalaryFrom(item, 'RU')) return false
   if (!isIncludedInResidenceTax(item)) return true
   return usesResidenceForeignTaxCredit(item)
 }
@@ -129,7 +129,7 @@ export function getTreatmentLabel(
       if (countryCode === 'TH') return 'PIT TH + зачёт НДФЛ РФ'
       if (countryCode === 'GE') return 'PIT GE + зачёт НДФЛ РФ'
       return 'IRPF ES + зачёт НДФЛ РФ'
-    case 'source_russia':
+    case 'source_withholding':
       return 'НДФЛ в России (источник)'
     case 'excluded':
       return 'Вне налогов проживания'

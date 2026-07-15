@@ -35,32 +35,36 @@ import {
   loanDisbursementForMonth,
 } from '../lib/loanAmortization'
 import { convertCurrency } from '../lib/currency'
-import { buildDoubleTaxationLines, type DoubleTaxationLine } from '../tax/doubleTaxation'
+import {
+  buildDoubleTaxationLines,
+  isSourceCountryTaxable,
+  type DoubleTaxationLine,
+} from '../tax/doubleTaxation'
 import { getTaxCalculator } from '../tax/registry'
 import {
   adjustResidenceTaxResult,
   computeAnnualTaxBurden,
-  type SpainForeignSalaryBreakdown,
-} from '../tax/spainForeignSalary'
+  type ForeignSalaryBreakdown,
+} from '../tax/residenceTaxAdjust'
 import type { ScheduledTaxPayment, TaxResult } from '../tax/types'
-import { isRussiaSourceTaxable } from '../tax/doubleTaxation'
 import {
-  buildRussiaYtdTrackerBeforeDate,
-  calculateRussiaSourceTaxForPayment,
-  createRussiaYtdTracker,
+  buildSourceTaxYtdTrackerBeforeDate,
+  calculateSourceTaxForPayment,
+  createSourceTaxYtdTracker,
   filterResidenceTaxableIncomes,
-  russiaEmployerSocialAnnualInBase,
-  russiaSourceNdflRubForDay,
-  russiaSourceTaxForMonth,
-  summarizeRussiaSalaries,
+  sourceEmployerSocialAnnualInBase,
+  sourceTaxForMonth,
+  sourceTaxNativeForDay,
+  summarizeSourceSalaries,
 } from '../tax/incomeSourceTax'
 import {
-  getInitialRubBalance,
-  getRubSavingsAnnualRate,
+  getInitialSavingsBalance,
+  getSavingsAccountCurrency,
+  getSavingsAnnualRate,
   isLastDayOfMonth,
-  isRubSavingsEnabled,
-  monthlyRubSavingsInterest,
-} from '../lib/rubSavings'
+  isSavingsAccountEnabled,
+  monthlySavingsInterest,
+} from '../lib/savingsAccount'
 
 
 
@@ -583,45 +587,47 @@ function expenseAmountNativeForDay(
 }
 
 /** Чистый рублёвый поток дня: доходы − расходы + выдача кредита (до НДФЛ). */
-function rubNetCashflowBeforeNdflForDay(
+function nativeNetCashflowBeforeSourceTaxForDay(
   incomes: RecurringItem[],
   expenses: RecurringItem[],
   oneTimeExpenses: OneTimeExpense[],
   dateStr: string,
   settings: BudgetSettings,
 ): number {
+  const savingsCurrency = getSavingsAccountCurrency(settings)
   let net = 0
   for (const item of incomes) {
-    if (item.currency !== 'RUB') continue
+    if (item.currency !== savingsCurrency) continue
     net += incomeAmountNativeForDay(item, dateStr, settings)
   }
   for (const item of expenses) {
-    if (item.currency !== 'RUB') continue
+    if (item.currency !== savingsCurrency) continue
     if (isLoanExpense(item) && isLoanDisbursementDay(item, dateStr)) {
       net += item.principal ?? item.amount
     }
     net -= expenseAmountNativeForDay(item, dateStr, settings)
   }
   for (const item of oneTimeExpenses) {
-    if (item.currency !== 'RUB' || item.date !== dateStr) continue
+    if (item.currency !== savingsCurrency || item.date !== dateStr) continue
     net -= item.amount
   }
   return net
 }
 
-function accrueRubSavingsInterestForDay(
-  rubBalance: number,
+function accrueSavingsInterestForDay(
+  savingsBalance: number,
   dateStr: string,
   settings: BudgetSettings,
-): { interestRub: number; interestBase: number; nextRubBalance: number } {
-  if (!isRubSavingsEnabled(settings) || !isLastDayOfMonth(dateStr)) {
-    return { interestRub: 0, interestBase: 0, nextRubBalance: rubBalance }
+): { interestNative: number; interestBase: number; nextSavingsBalance: number } {
+  if (!isSavingsAccountEnabled(settings) || !isLastDayOfMonth(dateStr)) {
+    return { interestNative: 0, interestBase: 0, nextSavingsBalance: savingsBalance }
   }
-  const interestRub = monthlyRubSavingsInterest(rubBalance, getRubSavingsAnnualRate(settings))
+  const interestNative = monthlySavingsInterest(savingsBalance, getSavingsAnnualRate(settings))
+  const savingsCurrency = getSavingsAccountCurrency(settings)
   return {
-    interestRub,
-    interestBase: toBaseCurrency(interestRub, 'RUB', settings.baseCurrency),
-    nextRubBalance: rubBalance + interestRub,
+    interestNative,
+    interestBase: toBaseCurrency(interestNative, savingsCurrency, settings.baseCurrency),
+    nextSavingsBalance: savingsBalance + interestNative,
   }
 }
 
@@ -674,13 +680,14 @@ export function getDayLedger(
   const expenseLines: DayLedgerLine[] = []
   const inflowLines: DayLedgerLine[] = []
   /** YTD НДФЛ до этого дня — зарплата РФ в расшифровке идёт нетто (удержание у источника). */
-  const russiaTracker = buildRussiaYtdTrackerBeforeDate(
+  const sourceTaxTracker = buildSourceTaxYtdTrackerBeforeDate(
     incomes,
     dateStr,
     settings.dependents,
+    'RUB',
   )
 
-  function pushRussiaNetIncomeLine(params: {
+  function pushNetIncomeAfterSourceTax(params: {
     id: string
     name: string
     grossNative: number
@@ -689,19 +696,19 @@ export function getDayLedger(
     item: RecurringItem
   }) {
     const { id, name, grossNative, currency, detailPrefix, item } = params
-    const grossRub = convertCurrency(grossNative, currency, 'RUB')
-    const ndflRub = calculateRussiaSourceTaxForPayment(
+    const grossInTaxCurrency = convertCurrency(grossNative, currency, 'RUB')
+    const ndflNative = calculateSourceTaxForPayment(
       item,
-      grossRub,
+      grossInTaxCurrency,
       settings.dependents,
-      russiaTracker,
+      sourceTaxTracker,
     )
-    const netRub = Math.max(0, grossRub - ndflRub)
-    const netNative = convertCurrency(netRub, 'RUB', currency)
-    const ndflNative = convertCurrency(ndflRub, 'RUB', currency)
+    const netInTaxCurrency = Math.max(0, grossInTaxCurrency - ndflNative)
+    const netNative = convertCurrency(netInTaxCurrency, 'RUB', currency)
+    const sourceTax = convertCurrency(ndflNative, 'RUB', currency)
     const withhold =
-      ndflNative > 0
-        ? `на руки (удержан НДФЛ ${Math.round(ndflNative).toLocaleString('ru-RU')} ${currency})`
+      sourceTax > 0
+        ? `на руки (удержан НДФЛ ${Math.round(sourceTax).toLocaleString('ru-RU')} ${currency})`
         : 'на руки'
     incomeLines.push({
       id,
@@ -722,8 +729,8 @@ export function getDayLedger(
         if (!payment.dayOfMonth || !paymentDayMatches(year, month, day, payment.dayOfMonth)) {
           continue
         }
-        if (isRussiaSourceTaxable(item)) {
-          pushRussiaNetIncomeLine({
+        if (isSourceCountryTaxable(item)) {
+          pushNetIncomeAfterSourceTax({
             id: `${item.id}:${payment.label}`,
             name: item.name,
             grossNative: payment.amount,
@@ -762,8 +769,8 @@ export function getDayLedger(
         break
     }
     if (amount > 0) {
-      if (isRussiaSourceTaxable(item)) {
-        pushRussiaNetIncomeLine({
+      if (isSourceCountryTaxable(item)) {
+        pushNetIncomeAfterSourceTax({
           id: item.id,
           name: item.name,
           grossNative: amount,
@@ -891,7 +898,7 @@ export function getDayLedger(
       amountOriginal,
       currency: 'RUB',
       amountInBase: savingsInterestInBase,
-      detail: `${getRubSavingsAnnualRate(settings)}% годовых`,
+      detail: `${getSavingsAnnualRate(settings)}% годовых`,
     })
   }
 
@@ -1148,16 +1155,16 @@ export function calculateDailyBudgetProjection(
   const years = collectYearsFromDayKeys(dayKeys)
   const taxPlans = buildResidenceTaxPlans(incomes, expenses, oneTimeExpenses, settings, years)
 
-  let russiaTracker = createRussiaYtdTracker()
+  let sourceTaxTracker = createSourceTaxYtdTracker()
   let trackerYear = -1
 
   let cumulativeBalance = getInitialBalanceInBase(settings)
-  let rubBalance = getInitialRubBalance(settings)
+  let savingsBalance = getInitialSavingsBalance(settings)
 
   return dayKeys.map((date) => {
     const { year } = parseIsoDate(date)
     if (year !== trackerYear) {
-      russiaTracker = createRussiaYtdTracker()
+      sourceTaxTracker = createSourceTaxYtdTracker()
       trackerYear = year
     }
 
@@ -1167,13 +1174,14 @@ export function calculateDailyBudgetProjection(
       onceExpensesForDay(expenses, date, baseCurrency, settings) +
       sumOneTimeForDay(oneTimeExpenses, date, baseCurrency)
 
-    const russiaTaxRub = russiaSourceNdflRubForDay(
+    const sourceTaxNative = sourceTaxNativeForDay(
       incomes,
       date,
       settings.dependents,
-      russiaTracker,
+      sourceTaxTracker,
+      'RUB',
     )
-    const russiaTax = toBaseCurrency(russiaTaxRub, 'RUB', baseCurrency)
+    const sourceTax = toBaseCurrency(sourceTaxNative, 'RUB', baseCurrency)
 
     const residenceTax = residenceTaxForDate(
       date,
@@ -1183,27 +1191,27 @@ export function calculateDailyBudgetProjection(
       baseCurrency,
     )
 
-    const taxes = russiaTax + residenceTax
+    const taxes = sourceTax + residenceTax
     const netIncome = grossIncome - taxes
     const loanDisbursement = loanDisbursementForDay(expenses, date, baseCurrency)
 
-    if (isRubSavingsEnabled(settings)) {
-      rubBalance += rubNetCashflowBeforeNdflForDay(
+    if (isSavingsAccountEnabled(settings)) {
+      savingsBalance += nativeNetCashflowBeforeSourceTaxForDay(
         incomes,
         expenses,
         oneTimeExpenses,
         date,
         settings,
       )
-      rubBalance -= russiaTaxRub
+      savingsBalance -= sourceTaxNative
     }
 
-    const { interestBase, nextRubBalance } = accrueRubSavingsInterestForDay(
-      rubBalance,
+    const { interestBase, nextSavingsBalance } = accrueSavingsInterestForDay(
+      savingsBalance,
       date,
       settings,
     )
-    rubBalance = nextRubBalance
+    savingsBalance = nextSavingsBalance
 
     const balance =
       netIncome - recurringExpenses - oneTimeTotal + loanDisbursement + interestBase
@@ -1253,8 +1261,8 @@ export function calculateBudgetProjection(
   )
 
   let cumulativeBalance = getInitialBalanceInBase(settings)
-  let rubBalance = getInitialRubBalance(settings)
-  let savingsRussiaTracker = createRussiaYtdTracker()
+  let savingsBalance = getInitialSavingsBalance(settings)
+  let savingsSourceTaxTracker = createSourceTaxYtdTracker()
   let savingsTrackerYear = -1
 
   return monthKeys.map((month) => {
@@ -1271,42 +1279,44 @@ export function calculateBudgetProjection(
       residenceIncomes,
       baseCurrency,
     )
-    const russiaTax = russiaSourceTaxForMonth(
+    const sourceTax = sourceTaxForMonth(
       incomes,
       month,
       settings.dependents,
+      'RUB',
       baseCurrency,
     )
-    const taxes = residenceTax + russiaTax
+    const taxes = residenceTax + sourceTax
     const netIncome = grossIncome - taxes
     const loanDisbursement = loanDisbursementForMonth(expenses, month, baseCurrency)
 
     let savingsInterest = 0
-    if (isRubSavingsEnabled(settings)) {
+    if (isSavingsAccountEnabled(settings)) {
       const [year, monthNum] = month.split('-').map(Number)
       if (year !== savingsTrackerYear) {
-        savingsRussiaTracker = createRussiaYtdTracker()
+        savingsSourceTaxTracker = createSourceTaxYtdTracker()
         savingsTrackerYear = year
       }
       const daysInMonth = getDaysInMonth(year, monthNum)
       for (let day = 1; day <= daysInMonth; day++) {
         const dateStr = `${month}-${String(day).padStart(2, '0')}`
-        const ndflRub = russiaSourceNdflRubForDay(
+        const sourceTaxNative = sourceTaxNativeForDay(
           incomes,
           dateStr,
           settings.dependents,
-          savingsRussiaTracker,
+          savingsSourceTaxTracker,
+          'RUB',
         )
-        rubBalance += rubNetCashflowBeforeNdflForDay(
+        savingsBalance += nativeNetCashflowBeforeSourceTaxForDay(
           incomes,
           expenses,
           oneTimeExpenses,
           dateStr,
           settings,
         )
-        rubBalance -= ndflRub
-        const accrued = accrueRubSavingsInterestForDay(rubBalance, dateStr, settings)
-        rubBalance = accrued.nextRubBalance
+        savingsBalance -= sourceTaxNative
+        const accrued = accrueSavingsInterestForDay(savingsBalance, dateStr, settings)
+        savingsBalance = accrued.nextSavingsBalance
         savingsInterest += accrued.interestBase
       }
     }
@@ -1375,18 +1385,16 @@ export interface FullTaxSummary {
     calculator: NonNullable<ReturnType<typeof getTaxCalculator>>
     result: TaxResult
   } | null
-  russiaSalary: ReturnType<typeof summarizeRussiaSalaries>
-  russiaNdflInBase: number
-  russiaEmployerSocialInBase: number
-  spainSchedule?: {
+  sourceSalary: ReturnType<typeof summarizeSourceSalaries>
+  sourceIncomeTaxInBase: number
+  sourceEmployerSocialInBase: number
+  residenceTaxSchedule?: {
     year: number
     quarterlyGross?: [number, number, number, number]
     payments: ScheduledTaxPayment[]
   }
   doubleTaxation: DoubleTaxationLine[]
-  spainForeignSalary?: SpainForeignSalaryBreakdown
-  thailandForeignSalary?: import('../tax/thailandResidenceTax').ThailandForeignSalaryBreakdown
-  georgiaForeignSalary?: import('../tax/georgiaResidenceTax').GeorgiaForeignSalaryBreakdown
+  foreignSalary?: ForeignSalaryBreakdown
   foreignTaxCredit: number
 }
 
@@ -1400,9 +1408,10 @@ export function getTaxSummary(
   const residenceIncomes = filterResidenceTaxableIncomes(incomes)
   const grossAnnualIncome = calculateAnnualGrossIncome(residenceIncomes, settings.baseCurrency)
   const calculator = getTaxCalculator(settings.taxRegimeId)
-  const russiaSalary = summarizeRussiaSalaries(
-    incomes.filter((item) => isRussiaSourceTaxable(item)),
+  const sourceSalary = summarizeSourceSalaries(
+    incomes.filter((item) => isSourceCountryTaxable(item)),
     settings.dependents,
+    'RUB',
   )
 
   const input = {
@@ -1426,14 +1435,14 @@ export function getTaxSummary(
 
   const taxBurden = computeAnnualTaxBurden(incomes, settings, calculator, expenses, oneTimeExpenses)
 
-  let spainSchedule: FullTaxSummary['spainSchedule']
+  let residenceTaxSchedule: FullTaxSummary['residenceTaxSchedule']
   if (calculator?.countryCode === 'ES' && calculator.buildTaxSchedule) {
     const year = taxYear
     const quarterlyGross =
       calculator.id === 'es-standard'
         ? getQuarterlyGrossFromIncomes(residenceIncomes, settings.baseCurrency, year, settings)
         : undefined
-    spainSchedule = {
+    residenceTaxSchedule = {
       year,
       ...(quarterlyGross ? { quarterlyGross } : {}),
       payments: calculator.buildTaxSchedule(input, residence!.result, {
@@ -1445,14 +1454,16 @@ export function getTaxSummary(
 
   return {
     residence,
-    russiaSalary,
-    russiaNdflInBase: taxBurden.russiaNdflInBase,
-    russiaEmployerSocialInBase: russiaEmployerSocialAnnualInBase(incomes, settings.baseCurrency),
-    spainSchedule,
+    sourceSalary,
+    sourceIncomeTaxInBase: taxBurden.sourceIncomeTaxInBase,
+    sourceEmployerSocialInBase: sourceEmployerSocialAnnualInBase(
+      incomes,
+      'RUB',
+      settings.baseCurrency,
+    ),
+    residenceTaxSchedule,
     doubleTaxation: buildDoubleTaxationLines(incomes, settings.countryCode),
-    spainForeignSalary: adjusted?.spainForeignSalary,
-    thailandForeignSalary: adjusted?.thailandForeignSalary,
-    georgiaForeignSalary: adjusted?.georgiaForeignSalary,
+    foreignSalary: adjusted?.foreignSalary,
     foreignTaxCredit: taxBurden.foreignTaxCredit,
   }
 }
@@ -1555,7 +1566,7 @@ export function taxSummaryTotalInBase(
   const residence =
     (summary.residence?.result.incomeTax ?? 0) +
     (summary.residence?.result.socialContributions ?? 0)
-  return residence + (includeSourceTaxes ? summary.russiaNdflInBase : 0)
+  return residence + (includeSourceTaxes ? summary.sourceIncomeTaxInBase : 0)
 }
 
 export function yearTaxTotalInBase(
@@ -1570,7 +1581,7 @@ export function yearTaxTotalInBase(
       (part.summary.residence?.result.socialContributions ?? 0)
     total += residence
     if (includeSourceTaxes && index === 0) {
-      total += part.summary.russiaNdflInBase
+      total += part.summary.sourceIncomeTaxInBase
     }
   })
   return total
@@ -1641,9 +1652,9 @@ export function getTaxSummariesByHorizon(
       if (index > 0) {
         summary = {
           ...summary,
-          russiaSalary: null,
-          russiaNdflInBase: 0,
-          russiaEmployerSocialInBase: 0,
+          sourceSalary: null,
+          sourceIncomeTaxInBase: 0,
+          sourceEmployerSocialInBase: 0,
         }
       }
       const segStart = point.startDate > yearStart ? point.startDate : yearStart

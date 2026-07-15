@@ -25,9 +25,9 @@ function convertViaFallback(amount: number, from: string, to: string): number {
 export function convertCurrency(amount: number, from: string, to: string): number {
   if (from === to) return amount
 
-  const { rubPerUnit, status } = useExchangeRateStore.getState()
-  if (status === 'loaded' && Object.keys(rubPerUnit).length > 0) {
-    const viaCbr = convertViaCbr(amount, from, to, rubPerUnit)
+  const { pivotPerUnit, status } = useExchangeRateStore.getState()
+  if (status === 'loaded' && Object.keys(pivotPerUnit).length > 0) {
+    const viaCbr = convertViaCbr(amount, from, to, pivotPerUnit)
     if (viaCbr !== null) return viaCbr
   }
 
@@ -36,12 +36,12 @@ export function convertCurrency(amount: number, from: string, to: string): numbe
 
 export function isCbrRateUsed(from: string, to: string): boolean {
   if (from === to) return false
-  const { rubPerUnit, status } = useExchangeRateStore.getState()
+  const { pivotPerUnit, status } = useExchangeRateStore.getState()
   if (status !== 'loaded') return false
 
-  const rubPerFrom = from === 'RUB' ? 1 : rubPerUnit[from]
-  const rubPerTo = to === 'RUB' ? 1 : rubPerUnit[to]
-  return Boolean(rubPerFrom && rubPerTo)
+  const pivotFrom = from === 'RUB' ? 1 : pivotPerUnit[from]
+  const pivotTo = to === 'RUB' ? 1 : pivotPerUnit[to]
+  return Boolean(pivotFrom && pivotTo)
 }
 
 export function getRateLabel(from: string, to: string): string {

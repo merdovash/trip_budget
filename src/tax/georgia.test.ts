@@ -71,10 +71,11 @@ describe('adjustGeorgiaResidenceTaxResult with RU salary', () => {
     }
 
     const adjusted = adjustGeorgiaResidenceTaxResult([ruSalary], settings, georgiaStandard)
-    expect(adjusted.georgiaForeignSalary).toBeDefined()
-    expect(adjusted.georgiaForeignSalary!.foreignSalaryGross).toBeGreaterThan(0)
-    expect(adjusted.georgiaForeignSalary!.foreignTaxCredit).toBeGreaterThan(0)
-    expect(adjusted.result.incomeTax).toBeLessThan(adjusted.georgiaForeignSalary!.pitGross)
+    expect(adjusted.foreignSalary).toBeDefined()
+    expect(adjusted.foreignSalary!.foreignSalaryGross).toBeGreaterThan(0)
+    expect(adjusted.foreignSalary!.foreignTaxCredit).toBeGreaterThan(0)
+    expect(adjusted.foreignSalary!.sourceTaxInBase).toBeGreaterThan(0)
+    expect(adjusted.result.incomeTax).toBeLessThan(adjusted.foreignSalary!.pitGross!)
     expect(adjusted.result.breakdown.some((b) => b.label.includes('Зачёт НДФЛ'))).toBe(true)
   })
 
@@ -92,6 +93,6 @@ describe('adjustGeorgiaResidenceTaxResult with RU salary', () => {
       initialBalanceDate: '2026-01-01',
     }
     const adjusted = adjustGeorgiaResidenceTaxResult([excluded], settings, georgiaStandard)
-    expect(adjusted.georgiaForeignSalary).toBeUndefined()
+    expect(adjusted.foreignSalary).toBeUndefined()
   })
 })

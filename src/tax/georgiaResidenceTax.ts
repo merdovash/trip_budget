@@ -4,24 +4,21 @@ import {
   buildGeorgiaTaxResult,
   getGeorgiaPitRate,
 } from './countries/georgia'
-import type { AdjustedResidenceTax } from './spainForeignSalary'
+import type { AdjustedResidenceTax } from './residenceTaxAdjust'
 import {
   isIncludedInResidenceTax,
-  isRussiaSalary,
+  isSalaryFrom,
   sumAnnualGrossIncomes,
-  summarizeRussiaSalaries,
+  summarizeSourceSalaries,
 } from './incomeSourceTax'
 import type { TaxCalculator, TaxResult } from './types'
-
-export function isRussiaSalaryInGeorgianBase(item: RecurringItem): boolean {
-  return isRussiaSalary(item) && isIncludedInResidenceTax(item)
-}
+import { isForeignSalaryInResidenceBase } from './doubleTaxation'
 
 export function usesGeorgiaForeignTaxCredit(item: RecurringItem): boolean {
-  return isRussiaSalaryInGeorgianBase(item) && item.foreignTaxCredit !== false
+  return isForeignSalaryInResidenceBase(item) && item.foreignTaxCredit !== false
 }
 
-export const GEORGIA_RU_SALARY_RULES = {
+export const GEORGIA_FOREIGN_SALARY_RULES = {
   title: 'Россиянин в Грузии — зарплата из РФ',
   summary:
     'По умолчанию зарплата РФ не входит в PIT Грузии: НДФЛ у источника в России. Если включить в декларацию — доход облагается как часть мирового дохода резидента (20% или 1% по режиму).',
@@ -30,19 +27,6 @@ export const GEORGIA_RU_SALARY_RULES = {
   foreignCredit:
     'Опция «Зачёт НДФЛ в РФ»: уплаченный НДФЛ зачитывается против PIT на эту зарплату (договор РФ–Грузия, упрощ.).',
 } as const
-
-export interface GeorgiaForeignSalaryBreakdown {
-  foreignSalaryGross: number
-  localIncomeGross: number
-  taxableBase: number
-  pitGross: number
-  pitOnForeignSalary: number
-  russianNdflInBase: number
-  foreignTaxCredit: number
-  pitNetAfterCredit: number
-  pensionOnLocalIncome: number
-  totalTaxBurdenInBase: number
-}
 
 function isLocalGeorgianEmployment(item: RecurringItem): boolean {
   return item.categoryId === 'salary' && item.salaryCountryCode === 'GE'
@@ -53,7 +37,7 @@ export function calculateGeorgiaWithRussianIncome(
   settings: BudgetSettings,
   calculator: TaxCalculator,
 ): AdjustedResidenceTax | null {
-  const foreignItems = residenceIncomes.filter(isRussiaSalaryInGeorgianBase)
+  const foreignItems = residenceIncomes.filter(isForeignSalaryInResidenceBase)
   if (foreignItems.length === 0) return null
 
   const baseCurrency = settings.baseCurrency
@@ -70,17 +54,19 @@ export function calculateGeorgiaWithRussianIncome(
   const pitOnForeign = totalGross > 0 ? pitGross * (foreignGross / totalGross) : 0
 
   const creditItems = foreignItems.filter(usesGeorgiaForeignTaxCredit)
-  const russianSummary =
-    creditItems.length > 0 ? summarizeRussiaSalaries(creditItems, settings.dependents) : null
-  const russianNdflInBase = russianSummary
-    ? convertCurrency(russianSummary.ndfl, 'RUB', baseCurrency)
+  const sourceSalary =
+    creditItems.length > 0
+      ? summarizeSourceSalaries(creditItems, settings.dependents, 'RUB')
+      : null
+  const sourceTaxInBase = sourceSalary
+    ? convertCurrency(sourceSalary.ndfl, 'RUB', baseCurrency)
     : 0
   const foreignTaxCredit =
-    creditItems.length > 0 ? Math.min(russianNdflInBase, pitOnForeign) : 0
+    creditItems.length > 0 ? Math.min(sourceTaxInBase, pitOnForeign) : 0
   const pitNetAfterCredit = Math.max(0, pitGross - foreignTaxCredit)
   const pensionOnLocal = localEmploymentGross * 0.02
   const totalTaxBurdenInBase =
-    pitNetAfterCredit + pensionOnLocal + russianNdflInBase - foreignTaxCredit
+    pitNetAfterCredit + pensionOnLocal + sourceTaxInBase - foreignTaxCredit
 
   const result = buildGeorgiaTaxResult(totalGross, baseCurrency, {
     grossAnnualIncome: totalGross,
@@ -98,13 +84,13 @@ export function calculateGeorgiaWithRussianIncome(
 
   return {
     result,
-    georgiaForeignSalary: {
+    foreignSalary: {
       foreignSalaryGross: foreignGross,
       localIncomeGross: localGross,
       taxableBase,
       pitGross,
       pitOnForeignSalary: pitOnForeign,
-      russianNdflInBase,
+      sourceTaxInBase,
       foreignTaxCredit,
       pitNetAfterCredit,
       pensionOnLocalIncome: pensionOnLocal,

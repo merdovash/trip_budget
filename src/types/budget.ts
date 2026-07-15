@@ -87,6 +87,10 @@ export interface ThailandDeductionSettings {
   socialSecurityPaid?: number
 }
 
+export interface CountryDeductionSettings {
+  TH?: ThailandDeductionSettings
+}
+
 export interface ResidenceRoutePoint {
   id: string
   countryCode: string
@@ -103,8 +107,8 @@ export interface BudgetSettings {
   taxRegimeId: string
   familySize: number
   dependents: number
-  /** Доп. вычеты PIT Таиланда (суммы в THB). */
-  thailandDeductions?: ThailandDeductionSettings
+  /** Дополнительные налоговые вычеты по стране проживания. */
+  countryDeductions?: CountryDeductionSettings
   /** Дата начала жизни в стране проживания (налоги и расходы «в стране» с этой даты). */
   relocationDate?: string
   /** Программа переезда — шаблон разовых расходов. */
@@ -122,10 +126,12 @@ export interface BudgetSettings {
   initialBalance: number
   initialBalanceCurrency: string
   initialBalanceDate: string
-  /** Класть положительный остаток рублей на накопительный счёт в РФ. */
-  parkRubOnSavingsAccount?: boolean
+  /** Класть положительный остаток в валюте накопительного счёта. */
+  parkBalanceOnSavingsAccount?: boolean
   /** Годовая ставка накопительного счёта (%). По умолчанию 16. */
-  rubSavingsAnnualRate?: number
+  savingsAnnualRate?: number
+  /** Валюта накопительного счёта (по умолчанию RUB). */
+  savingsAccountCurrency?: string
 }
 
 export interface MonthlySnapshot {
@@ -136,7 +142,7 @@ export interface MonthlySnapshot {
   oneTimeExpenses: number
   /** Выдача кредита в этом месяце (приток, не расход). */
   loanDisbursement: number
-  /** Проценты накопительного счёта (RUB → base). */
+  /** Проценты накопительного счёта (native → base). */
   savingsInterest: number
   taxes: number
   balance: number
@@ -151,7 +157,7 @@ export interface DailySnapshot {
   oneTimeExpenses: number
   /** Выдача кредита в этот день (приток, не расход). */
   loanDisbursement: number
-  /** Проценты накопительного счёта (RUB → base). */
+  /** Проценты накопительного счёта (native → base). */
   savingsInterest: number
   taxes: number
   balance: number
@@ -174,8 +180,9 @@ export const DEFAULT_SETTINGS: BudgetSettings = {
   relocationProgramId: 'none',
   relocationMode: 'remote_employment',
   employmentCountryCode: 'RU',
-  parkRubOnSavingsAccount: false,
-  rubSavingsAnnualRate: 16,
+  parkBalanceOnSavingsAccount: false,
+  savingsAnnualRate: 16,
+  savingsAccountCurrency: 'RUB',
   residenceRoute: [
     {
       id: 'default',

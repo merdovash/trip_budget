@@ -471,6 +471,11 @@ describe('getTaxSummariesByHorizon', () => {
     expect(years.map((y) => y.year)).toEqual([2026, 2027])
     expect(years[0].summary).toBeTruthy()
     expect(years[1].summary).toBeTruthy()
+    expect(years[0].summary).toHaveProperty('sourceSalary')
+    expect(years[0].summary).toHaveProperty('sourceIncomeTaxInBase')
+    expect(years[0].summary).toHaveProperty('sourceEmployerSocialInBase')
+    expect(years[0].summary).not.toHaveProperty('russiaSalary')
+    expect(years[0].summary).not.toHaveProperty('russiaNdflInBase')
   })
 
   it('scales yearly income by active months in the year', () => {
@@ -612,8 +617,8 @@ describe('RUB savings account interest', () => {
       initialBalance: 120_000,
       initialBalanceCurrency: 'RUB',
       initialBalanceDate: '2026-01-01',
-      parkRubOnSavingsAccount: true,
-      rubSavingsAnnualRate: 12,
+      parkBalanceOnSavingsAccount: true,
+      savingsAnnualRate: 12,
     }
     const days = calculateDailyBudgetProjection([], [], [], settings)
     const last = days[days.length - 1]
@@ -623,7 +628,7 @@ describe('RUB savings account interest', () => {
 
     const off = calculateDailyBudgetProjection([], [], [], {
       ...settings,
-      parkRubOnSavingsAccount: false,
+      parkBalanceOnSavingsAccount: false,
     })
     expect(off[off.length - 1].savingsInterest).toBe(0)
     expect(last.cumulativeBalance).toBeCloseTo(

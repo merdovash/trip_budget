@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { fetchCbrRates } from '../lib/cbrRates'
 
 interface ExchangeRateState {
-  rubPerUnit: Record<string, number>
+  pivotPerUnit: Record<string, number>
   rateDate: string | null
   status: 'idle' | 'loading' | 'loaded' | 'error'
   error: string | null
@@ -10,7 +10,7 @@ interface ExchangeRateState {
 }
 
 export const useExchangeRateStore = create<ExchangeRateState>((set, get) => ({
-  rubPerUnit: {},
+  pivotPerUnit: {},
   rateDate: null,
   status: 'idle',
   error: null,
@@ -20,8 +20,8 @@ export const useExchangeRateStore = create<ExchangeRateState>((set, get) => ({
 
     set({ status: 'loading', error: null })
     try {
-      const { rubPerUnit, rateDate } = await fetchCbrRates()
-      set({ rubPerUnit, rateDate, status: 'loaded', error: null })
+      const { pivotPerUnit, rateDate } = await fetchCbrRates()
+      set({ pivotPerUnit, rateDate, status: 'loaded', error: null })
     } catch (err) {
       set({
         status: 'error',

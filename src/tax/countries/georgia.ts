@@ -1,11 +1,12 @@
 import type { TaxBreakdownItem, TaxCalculator, TaxInput, TaxResult } from '../types'
+import { formatCurrency } from '../../lib/format'
 
 /** Плоская ставка PIT для резидентов Грузии. */
 export const GE_STANDARD_PIT_RATE = 0.2
 
 /** Статус малого бизнеса: 1% с оборота (лимит оборота 500 000 GEL в год). */
 export const GE_SMALL_BUSINESS_RATE = 0.01
-export const GE_SMALL_BUSINESS_TURNOVER_CAP_GEL = 500_000
+export const GE_SMALL_BUSINESS_TURNOVER_CAP = 500_000
 
 /** Virtual Zone: упрощённо 1% при распределении прибыли IT-компании. */
 export const GE_VIRTUAL_ZONE_RATE = 0.01
@@ -24,8 +25,8 @@ export function getGeorgiaPitRate(regimeId: string): number {
   }
 }
 
-export function formatGel(amount: number): string {
-  return `₾${Math.round(amount).toLocaleString('ru-RU')}`
+function formatLocal(amount: number): string {
+  return formatCurrency(amount, 'GEL')
 }
 
 export interface BuildGeorgiaTaxResultOptions {
@@ -81,7 +82,7 @@ export function buildGeorgiaTaxResult(
           ? 'Налог Virtual Zone (1%)'
           : 'Подоходный налог (20%)',
     amount: pitGross,
-    formula: `${formatGel(taxableBase)} × ${(pitRate * 100).toFixed(0)}%`,
+    formula: `${formatLocal(taxableBase)} × ${(pitRate * 100).toFixed(0)}%`,
     kind: 'tax',
   })
 

@@ -46,7 +46,7 @@ export function DoubleTaxationPanel({ lines, countryCode = 'ES', embedded }: Dou
               <span className="font-medium text-slate-800">{line.incomeName}</span>
               <span
                 className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                  line.treatment === 'source_russia'
+                  line.treatment === 'source_withholding'
                     ? 'bg-slate-100 text-slate-700'
                     : line.treatment === 'residence' || line.treatment === 'residence_with_credit'
                       ? 'bg-blue-50 text-blue-700'

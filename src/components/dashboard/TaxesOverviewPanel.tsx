@@ -109,16 +109,16 @@ function YearTaxBlock({
   const residenceSocial = taxSummary.residence?.result.socialContributions ?? 0
   const residenceTaxTotal = residenceIncomeTax + residenceSocial
   const sourceTaxTotalNative =
-    showSourceTaxes && taxSummary.russiaSalary ? taxSummary.russiaSalary.ndfl : 0
+    showSourceTaxes && taxSummary.sourceSalary ? taxSummary.sourceSalary.ndfl : 0
   const grandTotalInBase =
-    (showSourceTaxes ? taxSummary.russiaNdflInBase : 0) + residenceTaxTotal
+    (showSourceTaxes ? taxSummary.sourceIncomeTaxInBase : 0) + residenceTaxTotal
 
   const residenceResultForDisplay =
     taxSummary.residence &&
     convertTaxResultFromBase(taxSummary.residence.result, baseCurrency, residenceLocalCurrency)
-  const spainPaymentsForDisplay = taxSummary.spainSchedule?.payments
+  const residencePaymentsForDisplay = taxSummary.residenceTaxSchedule?.payments
     ? convertScheduledPaymentsFromBase(
-        taxSummary.spainSchedule.payments,
+        taxSummary.residenceTaxSchedule.payments,
         baseCurrency,
         residenceLocalCurrency,
       )
@@ -130,13 +130,10 @@ function YearTaxBlock({
     residenceLocalCurrency,
   )
 
-  const foreignDetail =
-    taxSummary.spainForeignSalary ??
-    taxSummary.thailandForeignSalary ??
-    taxSummary.georgiaForeignSalary
+  const foreignDetail = taxSummary.foreignSalary
 
   const hasResidenceBlock = Boolean(taxSummary.residence)
-  const hasAnyTaxBlock = hasResidenceBlock || (showSourceTaxes && taxSummary.russiaSalary) || hasIncomes
+  const hasAnyTaxBlock = hasResidenceBlock || (showSourceTaxes && taxSummary.sourceSalary) || hasIncomes
 
   if (!hasAnyTaxBlock) return null
 
@@ -158,22 +155,22 @@ function YearTaxBlock({
                 )}
               </dd>
             </div>
-            {foreignDetail && 'russianNdflInBase' in foreignDetail && (
+            {foreignDetail?.sourceTaxInBase != null && (
               <div className="flex justify-between gap-4 border-t border-emerald-100 pt-2">
                 <dt className="text-slate-600">НДФЛ РФ (база зачёта)</dt>
                 <dd className="font-medium text-slate-800">
-                  {formatCurrency(foreignDetail.russianNdflInBase, baseCurrency)}
+                  {formatCurrency(foreignDetail.sourceTaxInBase, baseCurrency)}
                 </dd>
               </div>
             )}
-            {taxSummary.spainForeignSalary && (
+            {foreignDetail?.irpfGross != null && (
               <>
                 <div className="flex justify-between gap-4">
                   <dt className="text-slate-600">IRPF на долю зарплаты РФ</dt>
                   <dd>
                     {formatCurrency(
                       convertAmountFromBase(
-                        taxSummary.spainForeignSalary.irpfOnForeignSalary,
+                        foreignDetail.irpfOnForeignSalary ?? 0,
                         baseCurrency,
                         residenceLocalCurrency,
                       ),
@@ -186,7 +183,7 @@ function YearTaxBlock({
                   <dd>
                     {formatCurrency(
                       convertAmountFromBase(
-                        taxSummary.spainForeignSalary.irpfGross,
+                        foreignDetail.irpfGross,
                         baseCurrency,
                         residenceLocalCurrency,
                       ),
@@ -199,7 +196,7 @@ function YearTaxBlock({
                   <dd className="font-semibold">
                     {formatCurrency(
                       convertAmountFromBase(
-                        taxSummary.spainForeignSalary.irpfNetAfterCredit,
+                        foreignDetail.irpfNetAfterCredit ?? 0,
                         baseCurrency,
                         residenceLocalCurrency,
                       ),
@@ -209,14 +206,14 @@ function YearTaxBlock({
                 </div>
               </>
             )}
-            {taxSummary.thailandForeignSalary && (
+            {foreignDetail?.pitGross != null && (
               <>
                 <div className="flex justify-between gap-4">
                   <dt className="text-slate-600">PIT на иностранную зарплату</dt>
                   <dd>
                     {formatCurrency(
                       convertAmountFromBase(
-                        taxSummary.thailandForeignSalary.pitOnForeignSalary,
+                        foreignDetail.pitOnForeignSalary ?? 0,
                         baseCurrency,
                         residenceLocalCurrency,
                       ),
@@ -229,7 +226,7 @@ function YearTaxBlock({
                   <dd>
                     {formatCurrency(
                       convertAmountFromBase(
-                        taxSummary.thailandForeignSalary.remittanceEstimate,
+                        foreignDetail.remittanceEstimate ?? 0,
                         baseCurrency,
                         residenceLocalCurrency,
                       ),
@@ -289,19 +286,19 @@ function YearTaxBlock({
               Способ переезда — ИП в стране проживания. Отдельного налога у источника в стране работы
               нет; доход облагается в {residenceCountry}.
             </p>
-          ) : showSourceTaxes && taxSummary.russiaSalary ? (
+          ) : showSourceTaxes && taxSummary.sourceSalary ? (
             <TaxBreakdown
               regimeName="НДФЛ (зарплата в России)"
               effectiveRate={
-                taxSummary.russiaSalary.grossAnnual > 0
-                  ? taxSummary.russiaSalary.ndfl / taxSummary.russiaSalary.grossAnnual
+                taxSummary.sourceSalary.grossAnnual > 0
+                  ? taxSummary.sourceSalary.ndfl / taxSummary.sourceSalary.grossAnnual
                   : 0
               }
-              breakdown={taxSummary.russiaSalary.breakdown}
+              breakdown={taxSummary.sourceSalary.breakdown}
               currency="RUB"
               footer={
-                taxSummary.russiaEmployerSocialInBase > 0
-                  ? `Взносы работодателя ≈ ${formatCurrency(taxSummary.russiaEmployerSocialInBase, settings.baseCurrency)} (информ.)`
+                taxSummary.sourceEmployerSocialInBase > 0
+                  ? `Взносы работодателя ≈ ${formatCurrency(taxSummary.sourceEmployerSocialInBase, settings.baseCurrency)} (информ.)`
                   : undefined
               }
               embedded
@@ -327,8 +324,8 @@ function YearTaxBlock({
                 taxRegimeId={taxSummary.residence.calculator.id}
                 result={residenceResultForDisplay!}
                 currency={residenceLocalCurrency}
-                paymentSchedule={spainPaymentsForDisplay}
-                quarterlyGross={taxSummary.spainSchedule?.quarterlyGross}
+                paymentSchedule={residencePaymentsForDisplay}
+                quarterlyGross={taxSummary.residenceTaxSchedule?.quarterlyGross}
                 embedded
                 footer={residenceDisplayNote ?? undefined}
               />
@@ -452,9 +449,9 @@ function aggregateTaxTotals(
   for (const yearSummary of yearSummaries) {
     yearSummary.parts.forEach((part, index) => {
       if (index === 0 && showSourceTaxes) {
-        employmentInBase += part.summary.russiaNdflInBase
-        employmentNative += part.summary.russiaSalary?.ndfl ?? 0
-        if (part.summary.russiaSalary || part.summary.russiaNdflInBase > 0) {
+        employmentInBase += part.summary.sourceIncomeTaxInBase
+        employmentNative += part.summary.sourceSalary?.ndfl ?? 0
+        if (part.summary.sourceSalary || part.summary.sourceIncomeTaxInBase > 0) {
           employmentParts.push(part)
         }
       }

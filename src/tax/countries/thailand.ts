@@ -9,6 +9,7 @@ import type {
 import { breakdownProgressiveTax, buildTaxResult, calculateProgressiveTax } from '../types'
 import type { ThailandDeductionSettings } from '../../types/budget'
 import { convertCurrency } from '../../lib/currency'
+import { formatCurrency } from '../../lib/format'
 
 /** Прогрессивная шкала PIT (налогооблагаемый доход, THB). */
 export const TH_PIT_BRACKETS: TaxBracket[] = [
@@ -51,32 +52,32 @@ export interface ThailandAllowances {
   total: number
 }
 
-export function formatThb(amount: number): string {
-  return `฿${Math.round(amount).toLocaleString('ru-RU')}`
+function formatLocal(amount: number): string {
+  return formatCurrency(amount, 'THB')
 }
 
 export function formatThBracketRange(from: number, to: number | null): string {
-  if (to === null) return `свыше ${formatThb(from)}`
-  return `${formatThb(from)} – ${formatThb(to)}`
+  if (to === null) return `свыше ${formatLocal(from)}`
+  return `${formatLocal(from)} – ${formatLocal(to)}`
 }
 
 function bracketBreakdownItems(lines: BracketTaxLine[]): TaxBreakdownItem[] {
   return lines.map((line) => ({
     label: `Ступень ${formatThBracketRange(line.from, line.to)}`,
     amount: line.tax,
-    description: `Налогооблагаемый доход в ступени: ${formatThb(line.taxableInBracket)}`,
-    formula: `${formatThb(line.taxableInBracket)} × ${(line.rate * 100).toFixed(0)}% = ${formatThb(line.tax)}`,
+    description: `Налогооблагаемый доход в ступени: ${formatLocal(line.taxableInBracket)}`,
+    formula: `${formatLocal(line.taxableInBracket)} × ${(line.rate * 100).toFixed(0)}% = ${formatLocal(line.tax)}`,
     kind: 'bracket' as const,
   }))
 }
 
 export function computeThailandAllowances(
   input: TaxInput,
-  grossThb: number,
+  gross: number,
   thaiSettings?: ThailandDeductionSettings,
 ): ThailandAllowances {
   const employmentExpense = Math.min(
-    grossThb * TH_EMPLOYMENT_EXPENSE_RATE,
+    gross * TH_EMPLOYMENT_EXPENSE_RATE,
     TH_EMPLOYMENT_EXPENSE_CAP,
   )
   const personal = TH_PERSONAL_ALLOWANCE
@@ -133,44 +134,44 @@ export function computeThailandAllowances(
   }
 }
 
-export function calculateThailandSsoEmployee(localEmploymentGrossThb: number): number {
+export function calculateThailandSsoEmployee(localEmploymentGross: number): number {
   const annualCapBase = TH_SSO_MONTHLY_SALARY_CAP * 12
-  const base = Math.min(localEmploymentGrossThb, annualCapBase)
+  const base = Math.min(localEmploymentGross, annualCapBase)
   return Math.min(base * TH_SSO_EMPLOYEE_RATE, TH_SOCIAL_SECURITY_EMPLOYEE_CAP)
 }
 
 export interface ThailandPitBreakdown {
-  grossThb: number
+  gross: number
   allowances: ThailandAllowances
-  taxableBaseThb: number
-  pitGrossThb: number
+  taxableBase: number
+  pitGross: number
   bracketLines: BracketTaxLine[]
-  socialContributionsThb: number
+  socialContributions: number
 }
 
 export function calculateThailandPitBreakdown(
-  grossThb: number,
+  gross: number,
   input: TaxInput,
   thaiSettings?: ThailandDeductionSettings,
-  options?: { localEmploymentGrossThb?: number; includeSocialSecurity?: boolean },
+  options?: { localEmploymentGross?: number; includeSocialSecurity?: boolean },
 ): ThailandPitBreakdown {
-  const allowances = computeThailandAllowances(input, grossThb, thaiSettings)
-  const taxableBaseThb = Math.max(0, grossThb - allowances.total)
-  const bracketLines = breakdownProgressiveTax(taxableBaseThb, TH_PIT_BRACKETS)
-  const pitGrossThb = calculateProgressiveTax(taxableBaseThb, TH_PIT_BRACKETS)
+  const allowances = computeThailandAllowances(input, gross, thaiSettings)
+  const taxableBase = Math.max(0, gross - allowances.total)
+  const bracketLines = breakdownProgressiveTax(taxableBase, TH_PIT_BRACKETS)
+  const pitGross = calculateProgressiveTax(taxableBase, TH_PIT_BRACKETS)
 
-  let socialContributionsThb = 0
-  if (options?.includeSocialSecurity && (options.localEmploymentGrossThb ?? 0) > 0) {
-    socialContributionsThb = calculateThailandSsoEmployee(options.localEmploymentGrossThb!)
+  let socialContributions = 0
+  if (options?.includeSocialSecurity && (options.localEmploymentGross ?? 0) > 0) {
+    socialContributions = calculateThailandSsoEmployee(options.localEmploymentGross!)
   }
 
   return {
-    grossThb,
+    gross,
     allowances,
-    taxableBaseThb,
-    pitGrossThb,
+    taxableBase,
+    pitGross,
     bracketLines,
-    socialContributionsThb,
+    socialContributions,
   }
 }
 
@@ -178,68 +179,68 @@ export function buildThailandBreakdownItems(
   breakdown: ThailandPitBreakdown,
   input: TaxInput,
   extras?: {
-    foreignSalaryTaxableThb?: number
-    foreignSalaryFullThb?: number
-    foreignSalaryExcludedThb?: number
-    remittanceFromExpensesThb?: number
-    localIncomeGrossThb?: number
-    foreignTaxCreditThb?: number
-    pitNetThb?: number
+    foreignSalaryTaxable?: number
+    foreignSalaryFull?: number
+    foreignSalaryExcluded?: number
+    remittanceFromExpenses?: number
+    localIncomeGross?: number
+    foreignTaxCredit?: number
+    pitNet?: number
   },
 ): TaxBreakdownItem[] {
-  const { allowances, grossThb, taxableBaseThb, pitGrossThb, bracketLines, socialContributionsThb } =
+  const { allowances, gross, taxableBase, pitGross, bracketLines, socialContributions } =
     breakdown
-  const pitNet = extras?.pitNetThb ?? pitGrossThb
+  const pitNet = extras?.pitNet ?? pitGross
 
   const items: TaxBreakdownItem[] = [
     {
       label: 'Валовой доход (assessable income)',
-      amount: grossThb,
+      amount: gross,
       description:
         'Сумма доходов, включаемых в тайскую декларацию PIT (в THB). Иностранный доход — при remittance и резидентстве (Por. 161/2566).',
       kind: 'gross',
     },
   ]
 
-  if (extras?.remittanceFromExpensesThb !== undefined && extras.remittanceFromExpensesThb >= 0) {
+  if (extras?.remittanceFromExpenses !== undefined && extras.remittanceFromExpenses >= 0) {
     items.push({
       label: 'Remittance (расходы в стране проживания)',
-      amount: extras.remittanceFromExpensesThb,
+      amount: extras.remittanceFromExpenses,
       description:
         'Оценка ввезённых средств: сумма годовых расходов с меткой «страна проживания». Иностранный доход в PIT ограничен этой суммой.',
       kind: 'info',
     })
   }
 
-  if (extras?.foreignSalaryFullThb && extras.foreignSalaryFullThb > 0) {
+  if (extras?.foreignSalaryFull && extras.foreignSalaryFull > 0) {
     items.push({
       label: 'Доход из России (полный)',
-      amount: extras.foreignSalaryFullThb,
+      amount: extras.foreignSalaryFull,
       description: 'Зарплата РФ с флагом «Учитывать в налогах проживания».',
       kind: 'info',
     })
   }
 
-  if (extras?.foreignSalaryTaxableThb && extras.foreignSalaryTaxableThb > 0) {
+  if (extras?.foreignSalaryTaxable && extras.foreignSalaryTaxable > 0) {
     items.push({
       label: 'в т.ч. доход из России (в PIT, remitted)',
-      amount: extras.foreignSalaryTaxableThb,
+      amount: extras.foreignSalaryTaxable,
       description: 'Часть зарплаты РФ, включаемая в декларацию: min(доход, remittance).',
       kind: 'info',
     })
   }
-  if (extras?.foreignSalaryExcludedThb && extras.foreignSalaryExcludedThb > 0) {
+  if (extras?.foreignSalaryExcluded && extras.foreignSalaryExcluded > 0) {
     items.push({
       label: 'Доход из России вне PIT (не remitted)',
-      amount: extras.foreignSalaryExcludedThb,
+      amount: extras.foreignSalaryExcluded,
       description: 'Превышение зарплаты над remittance — не облагается PIT в Таиланде.',
       kind: 'info',
     })
   }
-  if (extras?.localIncomeGrossThb !== undefined && extras.localIncomeGrossThb > 0) {
+  if (extras?.localIncomeGross !== undefined && extras.localIncomeGross > 0) {
     items.push({
       label: 'в т.ч. локальный доход в Таиланде',
-      amount: extras.localIncomeGrossThb,
+      amount: extras.localIncomeGross,
       kind: 'info',
     })
   }
@@ -248,7 +249,7 @@ export function buildThailandBreakdownItems(
     {
       label: 'Вычет на трудовой доход (50%, макс. ฿100 000)',
       amount: allowances.employmentExpense,
-      formula: `min(50% × ${formatThb(grossThb)}, ${formatThb(TH_EMPLOYMENT_EXPENSE_CAP)})`,
+      formula: `min(50% × ${formatLocal(gross)}, ${formatLocal(TH_EMPLOYMENT_EXPENSE_CAP)})`,
       kind: 'deduction',
     },
     {
@@ -325,7 +326,7 @@ export function buildThailandBreakdownItems(
 
   items.push({
     label: 'Налогооблагаемый доход (net taxable income)',
-    amount: taxableBaseThb,
+    amount: taxableBase,
     description: 'База для прогрессивной шкалы PIT.',
     kind: 'base',
   })
@@ -334,14 +335,14 @@ export function buildThailandBreakdownItems(
 
   items.push({
     label: 'PIT до зачёта',
-    amount: pitGrossThb,
+    amount: pitGross,
     kind: 'tax',
   })
 
-  if (extras?.foreignTaxCreditThb && extras.foreignTaxCreditThb > 0) {
+  if (extras?.foreignTaxCredit && extras.foreignTaxCredit > 0) {
     items.push({
       label: 'Зачёт НДФЛ РФ (договор РФ–Таиланд, упрощ.)',
-      amount: extras.foreignTaxCreditThb,
+      amount: extras.foreignTaxCredit,
       description:
         'Кредит на уплаченный в России налог на доход из РФ, включённый в тайскую декларацию (Art. 23 DTT, упрощ.).',
       kind: 'deduction',
@@ -354,11 +355,11 @@ export function buildThailandBreakdownItems(
     kind: 'tax',
   })
 
-  if (socialContributionsThb > 0) {
+  if (socialContributions > 0) {
     items.push({
       label: 'Social Security (SSO) — работник',
-      amount: socialContributionsThb,
-      description: `5% от зарплаты в Таиланде, макс. ${formatThb(TH_SOCIAL_SECURITY_EMPLOYEE_CAP)}/год.`,
+      amount: socialContributions,
+      description: `5% от зарплаты в Таиланде, макс. ${formatLocal(TH_SOCIAL_SECURITY_EMPLOYEE_CAP)}/год.`,
       kind: 'tax',
     })
   }
@@ -366,11 +367,11 @@ export function buildThailandBreakdownItems(
   return items
 }
 
-function thbToBase(amountThb: number, baseCurrency: string): number {
-  return convertCurrency(amountThb, 'THB', baseCurrency)
+function toBase(amount: number, baseCurrency: string): number {
+  return convertCurrency(amount, 'THB', baseCurrency)
 }
 
-function baseToThb(amount: number, baseCurrency: string): number {
+function fromBase(amount: number, baseCurrency: string): number {
   return convertCurrency(amount, baseCurrency, 'THB')
 }
 
@@ -392,52 +393,55 @@ export function buildThailandTaxResult(
     foreignSalaryGrossBase?: number
   },
 ): TaxResult {
-  const grossThb = baseToThb(grossBase, baseCurrency)
-  const localEmploymentThb = options?.localEmploymentGrossBase
-    ? baseToThb(options.localEmploymentGrossBase, baseCurrency)
+  const grossLocal = fromBase(grossBase, baseCurrency)
+  const localEmploymentGrossLocal = options?.localEmploymentGrossBase
+    ? fromBase(options.localEmploymentGrossBase, baseCurrency)
     : 0
 
-  const breakdown = calculateThailandPitBreakdown(grossThb, input, thaiSettings, {
-    localEmploymentGrossThb: localEmploymentThb,
+  const breakdown = calculateThailandPitBreakdown(grossLocal, input, thaiSettings, {
+    localEmploymentGross: localEmploymentGrossLocal,
     includeSocialSecurity: options?.includeSocialSecurity,
   })
 
-  const pitNetThb =
+  const pitNetLocal =
     options?.pitNetBase !== undefined
-      ? baseToThb(options.pitNetBase, baseCurrency)
-      : breakdown.pitGrossThb - (options?.foreignTaxCreditBase ? baseToThb(options.foreignTaxCreditBase, baseCurrency) : 0)
+      ? fromBase(options.pitNetBase, baseCurrency)
+      : breakdown.pitGross -
+        (options?.foreignTaxCreditBase
+          ? fromBase(options.foreignTaxCreditBase, baseCurrency)
+          : 0)
 
   const foreignTaxableBase =
     options?.foreignSalaryTaxableBase ?? options?.foreignSalaryGrossBase
   const foreignFullBase = options?.foreignSalaryFullBase ?? foreignTaxableBase
 
   const breakdownItems = buildThailandBreakdownItems(breakdown, input, {
-    remittanceFromExpensesThb:
+    remittanceFromExpenses:
       options?.remittanceFromExpensesBase !== undefined
-        ? baseToThb(options.remittanceFromExpensesBase, baseCurrency)
+        ? fromBase(options.remittanceFromExpensesBase, baseCurrency)
         : undefined,
-    foreignSalaryFullThb: foreignFullBase
-      ? baseToThb(foreignFullBase, baseCurrency)
+    foreignSalaryFull: foreignFullBase
+      ? fromBase(foreignFullBase, baseCurrency)
       : undefined,
-    foreignSalaryTaxableThb: foreignTaxableBase
-      ? baseToThb(foreignTaxableBase, baseCurrency)
+    foreignSalaryTaxable: foreignTaxableBase
+      ? fromBase(foreignTaxableBase, baseCurrency)
       : undefined,
-    foreignSalaryExcludedThb: options?.foreignSalaryExcludedBase
-      ? baseToThb(options.foreignSalaryExcludedBase, baseCurrency)
+    foreignSalaryExcluded: options?.foreignSalaryExcludedBase
+      ? fromBase(options.foreignSalaryExcludedBase, baseCurrency)
       : undefined,
-    localIncomeGrossThb:
-      localEmploymentThb > 0
-        ? grossThb -
-          (foreignTaxableBase ? baseToThb(foreignTaxableBase, baseCurrency) : 0)
+    localIncomeGross:
+      localEmploymentGrossLocal > 0
+        ? grossLocal -
+          (foreignTaxableBase ? fromBase(foreignTaxableBase, baseCurrency) : 0)
         : undefined,
-    foreignTaxCreditThb: options?.foreignTaxCreditBase
-      ? baseToThb(options.foreignTaxCreditBase, baseCurrency)
+    foreignTaxCredit: options?.foreignTaxCreditBase
+      ? fromBase(options.foreignTaxCreditBase, baseCurrency)
       : undefined,
-    pitNetThb,
+    pitNet: pitNetLocal,
   })
 
-  const incomeTax = thbToBase(pitNetThb, baseCurrency)
-  const socialContributions = thbToBase(breakdown.socialContributionsThb, baseCurrency)
+  const incomeTax = toBase(pitNetLocal, baseCurrency)
+  const socialContributions = toBase(breakdown.socialContributions, baseCurrency)
 
   return buildTaxResult(
     grossBase,
@@ -445,14 +449,14 @@ export function buildThailandTaxResult(
     socialContributions,
     breakdownItems.map((item) => ({
       ...item,
-      amount: thbToBase(item.amount, baseCurrency),
+      amount: toBase(item.amount, baseCurrency),
     })),
     breakdown.bracketLines.map((line) => ({
       ...line,
-      from: thbToBase(line.from, baseCurrency),
-      to: line.to === null ? null : thbToBase(line.to, baseCurrency),
-      taxableInBracket: thbToBase(line.taxableInBracket, baseCurrency),
-      tax: thbToBase(line.tax, baseCurrency),
+      from: toBase(line.from, baseCurrency),
+      to: line.to === null ? null : toBase(line.to, baseCurrency),
+      taxableInBracket: toBase(line.taxableInBracket, baseCurrency),
+      tax: toBase(line.tax, baseCurrency),
     })),
   )
 }

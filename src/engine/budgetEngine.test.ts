@@ -540,3 +540,34 @@ describe('getDayLedger', () => {
     expect(shiftIsoDate('2026-03-01', -1)).toBe('2026-02-28')
   })
 })
+
+describe('RUB savings account interest', () => {
+  it('accrues monthly interest on last day when enabled', () => {
+    const settings = {
+      ...DEFAULT_SETTINGS,
+      taxRegimeId: 'ae-none',
+      baseCurrency: 'EUR',
+      horizonMonths: 1,
+      initialBalance: 120_000,
+      initialBalanceCurrency: 'RUB',
+      initialBalanceDate: '2026-01-01',
+      parkRubOnSavingsAccount: true,
+      rubSavingsAnnualRate: 12,
+    }
+    const days = calculateDailyBudgetProjection([], [], [], settings)
+    const last = days[days.length - 1]
+    expect(last.date).toBe('2026-01-31')
+    const expectedInterestBase = convertCurrency(1200, 'RUB', 'EUR')
+    expect(last.savingsInterest).toBeCloseTo(expectedInterestBase, 5)
+
+    const off = calculateDailyBudgetProjection([], [], [], {
+      ...settings,
+      parkRubOnSavingsAccount: false,
+    })
+    expect(off[off.length - 1].savingsInterest).toBe(0)
+    expect(last.cumulativeBalance).toBeCloseTo(
+      off[off.length - 1].cumulativeBalance + expectedInterestBase,
+      5,
+    )
+  })
+})

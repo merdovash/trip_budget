@@ -274,6 +274,37 @@ export function BudgetSettingsPanel() {
           />
         </Field>
 
+        <Field label="Накопительный счёт в России (RUB)">
+          <Select
+            value={settings.parkRubOnSavingsAccount ? 'yes' : 'no'}
+            onChange={(e) =>
+              setSettings({ parkRubOnSavingsAccount: e.target.value === 'yes' })
+            }
+          >
+            <option value="no">Нет</option>
+            <option value="yes">Да</option>
+          </Select>
+          <p className="mt-1 text-xs text-slate-500">
+            Положительный остаток рублей учитывается на накопительном счёте; проценты
+            начисляются в последний день месяца.
+          </p>
+        </Field>
+
+        {settings.parkRubOnSavingsAccount && (
+          <Field label="Ставка накопительного счёта (% годовых)">
+            <Input
+              type="number"
+              min={0}
+              max={100}
+              step={0.1}
+              value={settings.rubSavingsAnnualRate ?? 16}
+              onChange={(e) =>
+                setSettings({ rubSavingsAnnualRate: Number(e.target.value) || 0 })
+              }
+            />
+          </Field>
+        )}
+
         <Field label="Размер семьи">
           <Input
             type="number"
@@ -444,6 +475,8 @@ export function BudgetSettingsPanel() {
               relocationProgramId: RELOCATION_PROGRAM_NONE,
               relocationMode: 'remote_employment',
               employmentCountryCode: 'RU',
+              parkRubOnSavingsAccount: false,
+              rubSavingsAnnualRate: 16,
             })
           }
         >

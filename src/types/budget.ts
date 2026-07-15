@@ -107,6 +107,10 @@ export interface BudgetSettings {
   initialBalance: number
   initialBalanceCurrency: string
   initialBalanceDate: string
+  /** Класть положительный остаток рублей на накопительный счёт в РФ. */
+  parkRubOnSavingsAccount?: boolean
+  /** Годовая ставка накопительного счёта (%). По умолчанию 16. */
+  rubSavingsAnnualRate?: number
 }
 
 export interface MonthlySnapshot {
@@ -117,6 +121,8 @@ export interface MonthlySnapshot {
   oneTimeExpenses: number
   /** Выдача кредита в этом месяце (приток, не расход). */
   loanDisbursement: number
+  /** Проценты накопительного счёта (RUB → base). */
+  savingsInterest: number
   taxes: number
   balance: number
   cumulativeBalance: number
@@ -130,6 +136,8 @@ export interface DailySnapshot {
   oneTimeExpenses: number
   /** Выдача кредита в этот день (приток, не расход). */
   loanDisbursement: number
+  /** Проценты накопительного счёта (RUB → base). */
+  savingsInterest: number
   taxes: number
   balance: number
   cumulativeBalance: number
@@ -151,6 +159,8 @@ export const DEFAULT_SETTINGS: BudgetSettings = {
   relocationProgramId: 'none',
   relocationMode: 'remote_employment',
   employmentCountryCode: 'RU',
+  parkRubOnSavingsAccount: false,
+  rubSavingsAnnualRate: 16,
 }
 
 export const CURRENCIES = ['EUR', 'USD', 'RUB', 'THB', 'MYR', 'GBP', 'AED', 'GEL', 'MXN', 'IDR', 'VND'] as const

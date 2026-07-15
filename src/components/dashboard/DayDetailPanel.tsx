@@ -19,6 +19,8 @@ function kindLabel(kind: DayLedgerLine['kind']): string {
       return 'Кредит'
     case 'loan_disbursement':
       return 'Выдача кредита'
+    case 'savings_interest':
+      return 'Накопительный счёт'
     case 'food':
       return 'Еда'
     case 'once':

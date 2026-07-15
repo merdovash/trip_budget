@@ -128,12 +128,11 @@ export function summarizeRussiaSalaries(
   return calculateRussiaSalaryTax(grossAnnualRub, dependents)
 }
 
-export function russiaSourceTaxForDay(
+export function russiaSourceNdflRubForDay(
   incomes: RecurringItem[],
   dateStr: string,
   dependents: number,
   tracker: RussiaYtdTracker,
-  baseCurrency: string,
 ): number {
   const { year, month, day } = parseDate(dateStr)
   let total = 0
@@ -141,11 +140,21 @@ export function russiaSourceTaxForDay(
   for (const item of incomes) {
     if (!isRussiaSourceTaxable(item)) continue
     const grossRub = paymentGrossRubOnDay(item, year, month, day)
-    const ndflRub = calculateRussiaSourceTaxForPayment(item, grossRub, dependents, tracker)
-    total += convertCurrency(ndflRub, 'RUB', baseCurrency)
+    total += calculateRussiaSourceTaxForPayment(item, grossRub, dependents, tracker)
   }
 
   return total
+}
+
+export function russiaSourceTaxForDay(
+  incomes: RecurringItem[],
+  dateStr: string,
+  dependents: number,
+  tracker: RussiaYtdTracker,
+  baseCurrency: string,
+): number {
+  const ndflRub = russiaSourceNdflRubForDay(incomes, dateStr, dependents, tracker)
+  return convertCurrency(ndflRub, 'RUB', baseCurrency)
 }
 
 function parseDate(iso: string): { year: number; month: number; day: number } {

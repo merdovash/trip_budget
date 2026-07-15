@@ -43,10 +43,17 @@ import {
   createRussiaYtdTracker,
   filterResidenceTaxableIncomes,
   russiaEmployerSocialAnnualInBase,
-  russiaSourceTaxForDay,
+  russiaSourceNdflRubForDay,
   russiaSourceTaxForMonth,
   summarizeRussiaSalaries,
 } from '../tax/incomeSourceTax'
+import {
+  getInitialRubBalance,
+  getRubSavingsAnnualRate,
+  isLastDayOfMonth,
+  isRubSavingsEnabled,
+  monthlyRubSavingsInterest,
+} from '../lib/rubSavings'
 
 
 
@@ -507,6 +514,110 @@ function onceExpensesForDay(
   }, 0)
 }
 
+/** Сумма статьи дохода в исходной валюте за день (0 если не в этот день). */
+function incomeAmountNativeForDay(
+  item: RecurringItem,
+  dateStr: string,
+  settings: BudgetSettings,
+): number {
+  if (!isActiveOnDay(item, dateStr, settings)) return 0
+  const { year, month, day } = parseIsoDate(dateStr)
+
+  if (item.payments && item.payments.length > 0) {
+    return item.payments.reduce((paymentSum, payment) => {
+      if (!payment.dayOfMonth || !paymentDayMatches(year, month, day, payment.dayOfMonth)) {
+        return paymentSum
+      }
+      return paymentSum + payment.amount
+    }, 0)
+  }
+
+  switch (item.frequency) {
+    case 'monthly':
+      return scheduledDayMatches(year, month, day, item, settings) ? item.amount : 0
+    case 'weekly':
+      return daysBetween(getEffectiveStartDate(item, settings), dateStr) % 7 === 0 ? item.amount : 0
+    case 'yearly':
+      return yearlyDayMatches(dateStr, item, settings) ? item.amount : 0
+    case 'once':
+      return dateStr === getEffectiveStartDate(item, settings) ? item.amount : 0
+    default:
+      return 0
+  }
+}
+
+function expenseAmountNativeForDay(
+  item: RecurringItem,
+  dateStr: string,
+  settings: BudgetSettings,
+): number {
+  if (isLoanExpense(item)) {
+    if (isLoanPaymentOnDay(item, dateStr)) return loanMonthlyPayment(item)
+    return 0
+  }
+  if (!isActiveOnDay(item, dateStr, settings)) return 0
+  if (item.frequency === 'once') {
+    return dateStr === getEffectiveStartDate(item, settings) ? item.amount : 0
+  }
+  if (isFoodExpense(item) && item.frequency === 'monthly') {
+    return foodDailyAmount(item.amount)
+  }
+  const { year, month, day } = parseIsoDate(dateStr)
+  switch (item.frequency) {
+    case 'monthly':
+      return scheduledDayMatches(year, month, day, item, settings) ? item.amount : 0
+    case 'weekly':
+      return daysBetween(getEffectiveStartDate(item, settings), dateStr) % 7 === 0 ? item.amount : 0
+    case 'yearly':
+      return yearlyDayMatches(dateStr, item, settings) ? item.amount : 0
+    default:
+      return 0
+  }
+}
+
+/** Чистый рублёвый поток дня: доходы − расходы + выдача кредита (до НДФЛ). */
+function rubNetCashflowBeforeNdflForDay(
+  incomes: RecurringItem[],
+  expenses: RecurringItem[],
+  oneTimeExpenses: OneTimeExpense[],
+  dateStr: string,
+  settings: BudgetSettings,
+): number {
+  let net = 0
+  for (const item of incomes) {
+    if (item.currency !== 'RUB') continue
+    net += incomeAmountNativeForDay(item, dateStr, settings)
+  }
+  for (const item of expenses) {
+    if (item.currency !== 'RUB') continue
+    if (isLoanExpense(item) && isLoanDisbursementDay(item, dateStr)) {
+      net += item.principal ?? item.amount
+    }
+    net -= expenseAmountNativeForDay(item, dateStr, settings)
+  }
+  for (const item of oneTimeExpenses) {
+    if (item.currency !== 'RUB' || item.date !== dateStr) continue
+    net -= item.amount
+  }
+  return net
+}
+
+function accrueRubSavingsInterestForDay(
+  rubBalance: number,
+  dateStr: string,
+  settings: BudgetSettings,
+): { interestRub: number; interestBase: number; nextRubBalance: number } {
+  if (!isRubSavingsEnabled(settings) || !isLastDayOfMonth(dateStr)) {
+    return { interestRub: 0, interestBase: 0, nextRubBalance: rubBalance }
+  }
+  const interestRub = monthlyRubSavingsInterest(rubBalance, getRubSavingsAnnualRate(settings))
+  return {
+    interestRub,
+    interestBase: toBaseCurrency(interestRub, 'RUB', settings.baseCurrency),
+    nextRubBalance: rubBalance + interestRub,
+  }
+}
+
 export type DayLedgerKind =
   | 'income'
   | 'expense'
@@ -514,6 +625,7 @@ export type DayLedgerKind =
   | 'food'
   | 'loan_payment'
   | 'loan_disbursement'
+  | 'savings_interest'
 
 export interface DayLedgerLine {
   id: string
@@ -693,6 +805,47 @@ export function getDayLedger(
       amountInBase: toBaseCurrency(item.amount, item.currency, baseCurrency),
       detail: 'Разовый расход',
     })
+  }
+
+  if (isRubSavingsEnabled(settings) && isLastDayOfMonth(dateStr)) {
+    let rubBalance = getInitialRubBalance(settings)
+    let russiaTracker = createRussiaYtdTracker()
+    let trackerYear = -1
+    const dayKeys = generateDayKeys(getProjectionStartDate(settings), settings.horizonMonths)
+    for (const dayKey of dayKeys) {
+      if (dayKey > dateStr) break
+      const { year: y } = parseIsoDate(dayKey)
+      if (y !== trackerYear) {
+        russiaTracker = createRussiaYtdTracker()
+        trackerYear = y
+      }
+      const ndflRub = russiaSourceNdflRubForDay(incomes, dayKey, settings.dependents, russiaTracker)
+      rubBalance += rubNetCashflowBeforeNdflForDay(
+        incomes,
+        expenses,
+        oneTimeExpenses,
+        dayKey,
+        settings,
+      )
+      rubBalance -= ndflRub
+      if (dayKey === dateStr) {
+        const interestRub = monthlyRubSavingsInterest(rubBalance, getRubSavingsAnnualRate(settings))
+        if (interestRub > 0) {
+          inflowLines.push({
+            id: 'savings-interest',
+            name: 'Проценты накопительного счёта',
+            kind: 'savings_interest',
+            amountOriginal: interestRub,
+            currency: 'RUB',
+            amountInBase: toBaseCurrency(interestRub, 'RUB', baseCurrency),
+            detail: `${getRubSavingsAnnualRate(settings)}% годовых`,
+          })
+        }
+        break
+      }
+      const accrued = accrueRubSavingsInterestForDay(rubBalance, dayKey, settings)
+      rubBalance = accrued.nextRubBalance
+    }
   }
 
   return {
@@ -892,6 +1045,7 @@ export function calculateDailyBudgetProjection(
   let trackerYear = -1
 
   let cumulativeBalance = getInitialBalanceInBase(settings)
+  let rubBalance = getInitialRubBalance(settings)
 
   return dayKeys.map((date) => {
     const { year } = parseIsoDate(date)
@@ -906,13 +1060,13 @@ export function calculateDailyBudgetProjection(
       onceExpensesForDay(expenses, date, baseCurrency, settings) +
       sumOneTimeForDay(oneTimeExpenses, date, baseCurrency)
 
-    const russiaTax = russiaSourceTaxForDay(
+    const russiaTaxRub = russiaSourceNdflRubForDay(
       incomes,
       date,
       settings.dependents,
       russiaTracker,
-      baseCurrency,
     )
+    const russiaTax = toBaseCurrency(russiaTaxRub, 'RUB', baseCurrency)
 
     const scheduled = scheduledTaxMap.get(date)
     let residenceTax = 0
@@ -929,7 +1083,26 @@ export function calculateDailyBudgetProjection(
     const netIncome = grossIncome - taxes
     const loanDisbursement = loanDisbursementForDay(expenses, date, baseCurrency)
 
-    const balance = netIncome - recurringExpenses - oneTimeTotal + loanDisbursement
+    if (isRubSavingsEnabled(settings)) {
+      rubBalance += rubNetCashflowBeforeNdflForDay(
+        incomes,
+        expenses,
+        oneTimeExpenses,
+        date,
+        settings,
+      )
+      rubBalance -= russiaTaxRub
+    }
+
+    const { interestBase, nextRubBalance } = accrueRubSavingsInterestForDay(
+      rubBalance,
+      date,
+      settings,
+    )
+    rubBalance = nextRubBalance
+
+    const balance =
+      netIncome - recurringExpenses - oneTimeTotal + loanDisbursement + interestBase
     cumulativeBalance += balance
 
     return {
@@ -939,6 +1112,7 @@ export function calculateDailyBudgetProjection(
       recurringExpenses,
       oneTimeExpenses: oneTimeTotal,
       loanDisbursement,
+      savingsInterest: interestBase,
       taxes,
       balance,
       cumulativeBalance,
@@ -993,6 +1167,7 @@ export function calculateBudgetProjection(
   const useScheduled = calculator?.taxDistribution === 'scheduled'
 
   let cumulativeBalance = getInitialBalanceInBase(settings)
+  let rubBalance = getInitialRubBalance(settings)
 
   return monthKeys.map((month) => {
     const grossIncome = sumRecurringForMonth(incomes, month, baseCurrency, settings)
@@ -1020,36 +1195,58 @@ export function calculateBudgetProjection(
     const netIncome = grossIncome - taxes
     const loanDisbursement = loanDisbursementForMonth(expenses, month, baseCurrency)
 
-    const balance = netIncome - recurringExpenses - oneTimeTotal + loanDisbursement
+    let savingsInterest = 0
+    if (isRubSavingsEnabled(settings)) {
+      const [year, monthNum] = month.split('-').map(Number)
+      const daysInMonth = getDaysInMonth(year, monthNum)
+      let russiaTracker = createRussiaYtdTracker()
+      for (let m = 1; m < monthNum; m++) {
+        const dim = getDaysInMonth(year, m)
+        for (let day = 1; day <= dim; day++) {
+          const dateStr = `${year}-${String(m).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+          russiaSourceNdflRubForDay(incomes, dateStr, settings.dependents, russiaTracker)
+        }
+      }
+      for (let day = 1; day <= daysInMonth; day++) {
+        const dateStr = `${month}-${String(day).padStart(2, '0')}`
+        const ndflRub = russiaSourceNdflRubForDay(
+          incomes,
+          dateStr,
+          settings.dependents,
+          russiaTracker,
+        )
+        rubBalance += rubNetCashflowBeforeNdflForDay(
+          incomes,
+          expenses,
+          oneTimeExpenses,
+          dateStr,
+          settings,
+        )
+        rubBalance -= ndflRub
+        const accrued = accrueRubSavingsInterestForDay(rubBalance, dateStr, settings)
+        rubBalance = accrued.nextRubBalance
+        savingsInterest += accrued.interestBase
+      }
+    }
+
+    const balance =
+      netIncome - recurringExpenses - oneTimeTotal + loanDisbursement + savingsInterest
 
     cumulativeBalance += balance
 
-
-
     return {
-
       month,
-
       grossIncome,
-
       netIncome,
-
       recurringExpenses,
-
       oneTimeExpenses: oneTimeTotal,
-
       loanDisbursement,
-
+      savingsInterest,
       taxes,
-
       balance,
-
       cumulativeBalance,
-
     }
-
   })
-
 }
 
 /** Средние за горизонт: приток (доход + выдача кредитов) и расходы сходятся с итоговым остатком. */
@@ -1075,6 +1272,7 @@ export function computeSummaryAverages(snapshots: MonthlySnapshot[]): {
 
   const avgNetIncome = snapshots.reduce((s, m) => s + m.netIncome, 0) / n
   const avgLoanDisbursement = snapshots.reduce((s, m) => s + m.loanDisbursement, 0) / n
+  const avgSavingsInterest = snapshots.reduce((s, m) => s + (m.savingsInterest ?? 0), 0) / n
   const avgRecurringExpenses = snapshots.reduce((s, m) => s + m.recurringExpenses, 0) / n
   const avgOneTimeExpenses = snapshots.reduce((s, m) => s + m.oneTimeExpenses, 0) / n
 
@@ -1083,7 +1281,7 @@ export function computeSummaryAverages(snapshots: MonthlySnapshot[]): {
     avgLoanDisbursement,
     avgRecurringExpenses,
     avgOneTimeExpenses,
-    avgInflow: avgNetIncome + avgLoanDisbursement,
+    avgInflow: avgNetIncome + avgLoanDisbursement + avgSavingsInterest,
     avgExpenses: avgRecurringExpenses + avgOneTimeExpenses,
   }
 }

@@ -96,6 +96,12 @@ function migratePersistedState(persisted: PersistedBudgetState, current: BudgetS
   if (!mergedSettings.employmentCountryCode) {
     mergedSettings.employmentCountryCode = 'RU'
   }
+  if (mergedSettings.parkRubOnSavingsAccount == null) {
+    mergedSettings.parkRubOnSavingsAccount = false
+  }
+  if (mergedSettings.rubSavingsAnnualRate == null) {
+    mergedSettings.rubSavingsAnnualRate = 16
+  }
 
   let expenses = persisted.expenses ?? current.expenses
   const oneTimeExpenses = persisted.oneTimeExpenses ?? []

@@ -11,6 +11,8 @@ import {
   generateDayKeys,
   generateMonthKeys,
   getDayLedger,
+  getTaxSummariesByHorizon,
+  scopeIncomeItemToYear,
   shiftIsoDate,
   toMonthlyAmount,
 } from './budgetEngine'
@@ -434,6 +436,53 @@ describe('relocation date in projection', () => {
     expect(snapshots[0].recurringExpenses).toBe(0)
     expect(snapshots[1].recurringExpenses).toBe(0)
     expect(snapshots[2].recurringExpenses).toBeCloseTo(1000)
+  })
+})
+
+describe('getTaxSummariesByHorizon', () => {
+  it('returns a summary per calendar year in the horizon', () => {
+    const incomes: RecurringItem[] = [
+      {
+        id: 'salary',
+        name: 'Зарплата',
+        amount: 2000,
+        currency: 'EUR',
+        frequency: 'monthly',
+        categoryId: 'salary',
+        startDate: '2026-01-01',
+      },
+    ]
+    const settings = {
+      ...DEFAULT_SETTINGS,
+      taxRegimeId: 'ae-none',
+      horizonMonths: 18,
+      initialBalanceDate: '2026-07-01',
+    }
+    const years = getTaxSummariesByHorizon(incomes, settings, [], [])
+    expect(years.map((y) => y.year)).toEqual([2026, 2027])
+    expect(years[0].summary).toBeTruthy()
+    expect(years[1].summary).toBeTruthy()
+  })
+
+  it('scales yearly income by active months in the year', () => {
+    const incomes: RecurringItem[] = [
+      {
+        id: 'salary',
+        name: 'Зарплата',
+        amount: 12000,
+        currency: 'EUR',
+        frequency: 'yearly',
+        startDate: '2026-07-01',
+      },
+    ]
+    const settings = {
+      ...DEFAULT_SETTINGS,
+      taxRegimeId: 'ae-none',
+      initialBalanceDate: '2026-01-01',
+      horizonMonths: 12,
+    }
+    const scoped = scopeIncomeItemToYear(incomes[0], 2026, settings)
+    expect(scoped?.amount).toBeCloseTo(6000, 5)
   })
 })
 

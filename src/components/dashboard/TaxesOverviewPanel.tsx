@@ -7,6 +7,7 @@ import {
   convertTaxResultFromBase,
 } from '../../lib/taxCurrencyDisplay'
 import type { FullTaxSummary } from '../../engine/budgetEngine'
+import { taxSummaryTotalInBase } from '../../engine/budgetEngine'
 import { COUNTRY_LABELS } from '../../tax/registry'
 import {
   getEmploymentCountryCurrency,
@@ -22,8 +23,16 @@ import { SpainTaxDetailPanel } from './SpainTaxDetailPanel'
 import { ThailandTaxDetailPanel } from './ThailandTaxDetailPanel'
 import { TaxBreakdown } from './SummaryCards'
 
-interface TaxesOverviewPanelProps {
+interface YearTaxBlockProps {
   taxSummary: FullTaxSummary
+  settings: BudgetSettings
+  hasIncomes: boolean
+  showGrandTotalFooter: boolean
+  yearLabel?: string
+}
+
+interface TaxesOverviewPanelProps {
+  yearSummaries: { year: number; summary: FullTaxSummary }[]
   settings: BudgetSettings
   hasIncomes: boolean
 }
@@ -38,7 +47,13 @@ function SectionDivider() {
   return <hr className="my-6 border-slate-100" />
 }
 
-export function TaxesOverviewPanel({ taxSummary, settings, hasIncomes }: TaxesOverviewPanelProps) {
+function YearTaxBlock({
+  taxSummary,
+  settings,
+  hasIncomes,
+  showGrandTotalFooter,
+  yearLabel,
+}: YearTaxBlockProps) {
   const residenceCountry = COUNTRY_LABELS[settings.countryCode] ?? settings.countryCode
   const relocationMode = getRelocationMode(settings)
   const showSourceTaxes = shouldShowSourceCountryTaxes(settings)
@@ -79,7 +94,10 @@ export function TaxesOverviewPanel({ taxSummary, settings, hasIncomes }: TaxesOv
 
   return (
     <div className="space-y-0">
-      {/* 1. Налоги в стране работы / родной стране */}
+      {yearLabel && (
+        <h3 className="mb-4 text-base font-semibold text-slate-900">{yearLabel}</h3>
+      )}
+
       <section>
         <SectionHeading>
           {relocationMode === 'sole_proprietorship'
@@ -119,7 +137,6 @@ export function TaxesOverviewPanel({ taxSummary, settings, hasIncomes }: TaxesOv
       {hasResidenceBlock && (
         <>
           <SectionDivider />
-          {/* 2. Налоги в стране релокации */}
           <section>
             <SectionHeading>Налоги в стране проживания ({residenceCountry})</SectionHeading>
             {taxSummary.residence?.calculator.countryCode === 'ES' ? (
@@ -171,7 +188,6 @@ export function TaxesOverviewPanel({ taxSummary, settings, hasIncomes }: TaxesOv
       {hasIncomes && (
         <>
           <SectionDivider />
-          {/* 3. Двойное налогообложение */}
           <section>
             <SectionHeading>
               Двойное налогообложение ({employmentLabel} → {residenceCountry})
@@ -186,9 +202,10 @@ export function TaxesOverviewPanel({ taxSummary, settings, hasIncomes }: TaxesOv
       )}
 
       <SectionDivider />
-      {/* 4. Итоговая сумма */}
       <section>
-        <SectionHeading>Итого налогов за год</SectionHeading>
+        <SectionHeading>
+          {showGrandTotalFooter ? 'Итого налогов за год' : `Итого за ${yearLabel ?? 'год'}`}
+        </SectionHeading>
         <dl className="space-y-3">
           {showSourceTaxes && sourceTaxTotalNative > 0 && (
             <div className="rounded-lg border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm">
@@ -247,11 +264,78 @@ export function TaxesOverviewPanel({ taxSummary, settings, hasIncomes }: TaxesOv
               </div>
             )}
         </dl>
+        {showGrandTotalFooter && (
+          <p className="mt-2 text-xs text-slate-500">
+            Итог по каждой стране — в её валюте (налоги в {employmentLabel} — в {sourceCurrency},
+            в {residenceCountry} — в {residenceLocalCurrency}
+            {residenceLocalCurrency !== baseCurrency ? `, ≈ ${baseCurrency} по курсу` : ''}). Взносы
+            работодателя в РФ не включены.
+          </p>
+        )}
+      </section>
+    </div>
+  )
+}
+
+export function TaxesOverviewPanel({
+  yearSummaries,
+  settings,
+  hasIncomes,
+}: TaxesOverviewPanelProps) {
+  const showSourceTaxes = shouldShowSourceCountryTaxes(settings)
+  const multiYear = yearSummaries.length > 1
+  const horizonTotalInBase = yearSummaries.reduce(
+    (sum, { summary }) => sum + taxSummaryTotalInBase(summary, settings, showSourceTaxes),
+    0,
+  )
+
+  if (yearSummaries.length === 0) return null
+
+  if (!multiYear) {
+    return (
+      <YearTaxBlock
+        taxSummary={yearSummaries[0].summary}
+        settings={settings}
+        hasIncomes={hasIncomes}
+        showGrandTotalFooter
+      />
+    )
+  }
+
+  return (
+    <div className="space-y-0">
+      {yearSummaries.map(({ year, summary }, index) => (
+        <div key={year}>
+          {index > 0 && <SectionDivider />}
+          <YearTaxBlock
+            taxSummary={summary}
+            settings={settings}
+            hasIncomes={hasIncomes}
+            showGrandTotalFooter={false}
+            yearLabel={`${year} год`}
+          />
+        </div>
+      ))}
+
+      <SectionDivider />
+      <section>
+        <SectionHeading>Общая сумма по всем годам</SectionHeading>
+        <div className="flex justify-between gap-4 rounded-lg border border-slate-300 bg-white px-4 py-3 text-base">
+          <dt className="font-medium text-slate-800">
+            Итого за {yearSummaries.length}{' '}
+            {yearSummaries.length === 1
+              ? 'год'
+              : yearSummaries.length < 5
+                ? 'года'
+                : 'лет'}
+          </dt>
+          <dd className="font-bold text-slate-900">
+            {formatCurrency(horizonTotalInBase, settings.baseCurrency)}
+          </dd>
+        </div>
         <p className="mt-2 text-xs text-slate-500">
-          Итог по каждой стране — в её валюте (налоги в {employmentLabel} — в {sourceCurrency},
-          в {residenceCountry} — в {residenceLocalCurrency}
-          {residenceLocalCurrency !== baseCurrency ? `, ≈ ${baseCurrency} по курсу` : ''}). Взносы
-          работодателя в РФ не включены.
+          Сумма годовых налогов по календарным годам горизонта планирования (в{' '}
+          {settings.baseCurrency}, оценка по курсу). Взносы работодателя в РФ не включены.
         </p>
       </section>
     </div>

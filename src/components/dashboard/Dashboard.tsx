@@ -5,8 +5,9 @@ import {
   findCashGapDays,
   getDayLedger,
   getInitialBalanceInBase,
-  getTaxSummary,
+  getTaxSummariesByHorizon,
   shiftIsoDate,
+  taxSummaryTotalInBase,
 } from '../../engine/budgetEngine'
 import { formatCurrency, formatDateDisplay } from '../../lib/format'
 import { useBudgetStore } from '../../store/budgetStore'
@@ -40,8 +41,8 @@ export function Dashboard() {
 
   const cashGapDays = useMemo(() => findCashGapDays(dailySnapshots), [dailySnapshots])
 
-  const taxSummary = useMemo(
-    () => getTaxSummary(incomes, settings, expenses, oneTimeExpenses),
+  const yearTaxSummaries = useMemo(
+    () => getTaxSummariesByHorizon(incomes, settings, expenses, oneTimeExpenses),
     [incomes, expenses, oneTimeExpenses, settings, rateDate],
   )
 
@@ -74,11 +75,17 @@ export function Dashboard() {
     )
   }
 
+  const showSourceTaxes = shouldShowSourceCountryTaxes(settings)
   const annualTaxes =
-    (taxSummary.residence?.result.incomeTax ?? 0) +
-    (taxSummary.residence?.result.socialContributions ?? 0) +
-    (shouldShowSourceCountryTaxes(settings) ? taxSummary.russiaNdflInBase : 0)
+    yearTaxSummaries.length > 0
+      ? yearTaxSummaries.reduce(
+          (sum, { summary }) => sum + taxSummaryTotalInBase(summary, settings, showSourceTaxes),
+          0,
+        ) / yearTaxSummaries.length
+      : 0
   const initialBalance = getInitialBalanceInBase(settings)
+  const hasTaxContent =
+    incomes.length > 0 || yearTaxSummaries.some(({ summary }) => summary.residence)
 
   return (
     <div className="space-y-4">
@@ -122,10 +129,10 @@ export function Dashboard() {
           </p>
         </div>
       )}
-      {(incomes.length > 0 || taxSummary.residence) && (
+      {hasTaxContent && (
         <CollapsibleSection title="Налоги">
           <TaxesOverviewPanel
-            taxSummary={taxSummary}
+            yearSummaries={yearTaxSummaries}
             settings={settings}
             hasIncomes={incomes.length > 0}
           />

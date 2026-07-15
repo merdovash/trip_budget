@@ -1115,6 +1115,7 @@ export function getTaxSummary(
   settings: BudgetSettings,
   expenses: RecurringItem[] = [],
   oneTimeExpenses: OneTimeExpense[] = [],
+  taxYear: number = new Date().getFullYear(),
 ): FullTaxSummary {
   const residenceIncomes = filterResidenceTaxableIncomes(incomes)
   const grossAnnualIncome = calculateAnnualGrossIncome(residenceIncomes, settings.baseCurrency)
@@ -1147,7 +1148,7 @@ export function getTaxSummary(
 
   let spainSchedule: FullTaxSummary['spainSchedule']
   if (calculator?.countryCode === 'ES' && calculator.buildTaxSchedule) {
-    const year = new Date().getFullYear()
+    const year = taxYear
     const quarterlyGross =
       calculator.id === 'es-standard'
         ? getQuarterlyGrossFromIncomes(residenceIncomes, settings.baseCurrency, year, settings)
@@ -1174,6 +1175,108 @@ export function getTaxSummary(
     georgiaForeignSalary: adjusted?.georgiaForeignSalary,
     foreignTaxCredit: taxBurden.foreignTaxCredit,
   }
+}
+
+function countActiveMonthsInYear(
+  item: RecurringItem,
+  year: number,
+  settings: BudgetSettings,
+): number {
+  let count = 0
+  for (let month = 1; month <= 12; month++) {
+    const monthKey = `${year}-${String(month).padStart(2, '0')}`
+    if (isActiveInMonth(item, monthKey, settings)) count += 1
+  }
+  return count
+}
+
+/** Доход, приходящийся на календарный год (с учётом start/end и даты переезда). */
+export function scopeIncomeItemToYear(
+  item: RecurringItem,
+  year: number,
+  settings: BudgetSettings,
+): RecurringItem | null {
+  if (item.frequency === 'once') {
+    const startYear = Number(item.startDate.slice(0, 4))
+    if (startYear !== year) return null
+    if (!isActiveInMonth(item, item.startDate.slice(0, 7), settings)) return null
+    return { ...item }
+  }
+
+  const months = countActiveMonthsInYear(item, year, settings)
+  if (months === 0) return null
+
+  const fullYearAmount = toMonthlyAmount(item.amount, item.frequency) * 12
+  return {
+    ...item,
+    frequency: 'yearly',
+    amount: fullYearAmount * (months / 12),
+    payments: undefined,
+    startDate: `${year}-01-01`,
+    endDate: undefined,
+  }
+}
+
+export function settingsForTaxYear(settings: BudgetSettings, year: number): BudgetSettings {
+  return {
+    ...settings,
+    initialBalanceDate: `${year}-01-01`,
+    horizonMonths: 12,
+  }
+}
+
+export function getHorizonTaxYears(settings: BudgetSettings): number[] {
+  const dayKeys = generateDayKeys(getProjectionStartDate(settings), settings.horizonMonths)
+  return collectYearsFromDayKeys(dayKeys)
+}
+
+export function getTaxSummaryForYear(
+  incomes: RecurringItem[],
+  settings: BudgetSettings,
+  expenses: RecurringItem[] = [],
+  oneTimeExpenses: OneTimeExpense[] = [],
+  year: number,
+): FullTaxSummary {
+  const scopedIncomes = incomes
+    .map((item) => scopeIncomeItemToYear(item, year, settings))
+    .filter((item): item is RecurringItem => item != null)
+  const scopedOnce = oneTimeExpenses.filter((item) => item.date.startsWith(`${year}-`))
+  return getTaxSummary(
+    scopedIncomes,
+    settingsForTaxYear(settings, year),
+    expenses,
+    scopedOnce,
+    year,
+  )
+}
+
+export interface YearTaxSummary {
+  year: number
+  summary: FullTaxSummary
+}
+
+export function taxSummaryTotalInBase(
+  summary: FullTaxSummary,
+  settings: BudgetSettings,
+  includeSourceTaxes: boolean,
+): number {
+  const residence =
+    (summary.residence?.result.incomeTax ?? 0) +
+    (summary.residence?.result.socialContributions ?? 0)
+  return residence + (includeSourceTaxes ? summary.russiaNdflInBase : 0)
+}
+
+/** Налоговые сводки по каждому календарному году горизонта планирования. */
+export function getTaxSummariesByHorizon(
+  incomes: RecurringItem[],
+  settings: BudgetSettings,
+  expenses: RecurringItem[] = [],
+  oneTimeExpenses: OneTimeExpense[] = [],
+): YearTaxSummary[] {
+  return getHorizonTaxYears(settings).map((year) => ({
+    year,
+    summary: getTaxSummaryForYear(incomes, settings, expenses, oneTimeExpenses, year),
+  }))
 }
 
 

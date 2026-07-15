@@ -22,8 +22,10 @@ function SettingsSnapshotDetails({ id }: { id: string }) {
 
   const regime = getTaxCalculator(snapshot.settings.taxRegimeId)
   const rows: Array<{ label: string; value: string }> = [
-    { label: 'Страна проживания', value: COUNTRY_LABELS[snapshot.settings.countryCode] ?? snapshot.settings.countryCode },
-    { label: 'Налоговый режим', value: regime?.name ?? snapshot.settings.taxRegimeId },
+    {
+      label: 'Маршрут проживания',
+      value: describeResidenceRoute(snapshot.settings),
+    },
     { label: 'Базовая валюта', value: snapshot.settings.baseCurrency },
     { label: 'Начальный остаток', value: `${snapshot.settings.initialBalance ?? 0} ${snapshot.settings.initialBalanceCurrency ?? snapshot.settings.baseCurrency}` },
     { label: 'Дата начального остатка', value: formatDateDisplay(snapshot.settings.initialBalanceDate) },
@@ -33,14 +35,6 @@ function SettingsSnapshotDetails({ id }: { id: string }) {
         snapshot.settings.relocationMode === 'sole_proprietorship'
           ? 'ИП в стране проживания'
           : 'Работа в другой стране',
-    },
-    {
-      label: 'Дата переезда',
-      value: formatDateDisplay(snapshot.settings.relocationDate ?? snapshot.settings.initialBalanceDate),
-    },
-    {
-      label: 'Маршрут проживания',
-      value: describeResidenceRoute(snapshot.settings),
     },
     ...(snapshot.settings.relocationMode !== 'sole_proprietorship'
       ? [
@@ -119,7 +113,7 @@ export function SavedSettingsPanel() {
     <div className="mt-6 border-t border-slate-200 pt-6">
       <h3 className="text-base font-semibold text-slate-900">Сохранённые настройки</h3>
       <p className="mt-1 text-sm text-slate-500">
-        Сохраните текущий профиль ({COUNTRY_LABELS[settings.countryCode] ?? settings.countryCode}
+        Сохраните текущий профиль ({describeResidenceRoute(settings)}
         {currentRegime ? ` · ${currentRegime.name}` : ''}), чтобы позже открыть и сравнить или
         применить.
       </p>

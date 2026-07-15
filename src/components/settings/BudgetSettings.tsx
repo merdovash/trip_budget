@@ -1,11 +1,7 @@
 import { useBudgetStore } from '../../store/budgetStore'
 import { useExchangeRateStore } from '../../store/exchangeRateStore'
-import {
-  COUNTRY_LABELS,
-  getAvailableCountries,
-  getCalculatorsByCountry,
-} from '../../tax/registry'
-import { CURRENCIES } from '../../types/budget'
+import { getTaxCalculator } from '../../tax/registry'
+import { CURRENCIES, DEFAULT_SETTINGS } from '../../types/budget'
 import { todayIsoDate } from '../../lib/format'
 import { Button, Card, Field, Input, Select, DateInput } from '../ui/FormControls'
 import { CurrencySelect } from '../ui/CurrencySelect'
@@ -22,6 +18,12 @@ import {
   RELOCATION_MODE_LABELS,
   suggestTaxRegimeForMode,
 } from '../../config/relocationMode'
+import {
+  ensureExplicitResidenceRoute,
+  getResidenceRoute,
+  routeIncludesCountry,
+  syncLegacyFromRoute,
+} from '../../config/residenceRoute'
 import type { RelocationMode } from '../../types/budget'
 import { formatCurrency } from '../../lib/format'
 
@@ -33,21 +35,30 @@ export function BudgetSettingsPanel() {
   const rateStatus = useExchangeRateStore((s) => s.status)
   const rateError = useExchangeRateStore((s) => s.error)
   const fetchRates = useExchangeRateStore((s) => s.fetchRates)
-  const countries = getAvailableCountries()
-  const regimes = getCalculatorsByCountry(settings.countryCode)
-  const selectedRegime = regimes.find((r) => r.id === settings.taxRegimeId)
   const relocationMode = getRelocationMode(settings)
-  const relocationPrograms = getRelocationProgramsForCountry(settings.countryCode, relocationMode)
+  const primaryCountry = settings.countryCode
+  const relocationPrograms = getRelocationProgramsForCountry(primaryCountry, relocationMode)
   const selectedProgram = relocationPrograms.find((p) => p.id === settings.relocationProgramId)
+  const route = getResidenceRoute(settings)
+  const showThailandDeductions = routeIncludesCountry(settings, 'TH')
+  const primaryRegime = getTaxCalculator(settings.taxRegimeId)
 
   function handleRelocationModeChange(mode: RelocationMode) {
-    const suggestedRegime = suggestTaxRegimeForMode(settings.countryCode, mode, settings.taxRegimeId)
-    const programs = getRelocationProgramsForCountry(settings.countryCode, mode)
+    const routePoints = ensureExplicitResidenceRoute(settings)
+    const first = [...routePoints].sort((a, b) => a.startDate.localeCompare(b.startDate))[0]
+    const suggestedRegime = suggestTaxRegimeForMode(first.countryCode, mode, first.taxRegimeId)
+    const programs = getRelocationProgramsForCountry(first.countryCode, mode)
     const programStillValid = programs.some((p) => p.id === settings.relocationProgramId)
+    const nextRoute = suggestedRegime
+      ? routePoints.map((point) =>
+          point.id === first.id ? { ...point, taxRegimeId: suggestedRegime } : point,
+        )
+      : routePoints
     setSettings({
+      ...syncLegacyFromRoute(nextRoute),
       relocationMode: mode,
-      employmentCountryCode: mode === 'remote_employment' ? settings.employmentCountryCode ?? 'RU' : undefined,
-      ...(suggestedRegime ? { taxRegimeId: suggestedRegime } : {}),
+      employmentCountryCode:
+        mode === 'remote_employment' ? settings.employmentCountryCode ?? 'RU' : undefined,
       ...(!programStillValid ? { relocationProgramId: RELOCATION_PROGRAM_NONE } : {}),
     })
   }
@@ -56,38 +67,7 @@ export function BudgetSettingsPanel() {
     <Card>
       <h2 className="mb-4 text-lg font-semibold text-slate-900">Настройки бюджета</h2>
       <div className="grid gap-4 md:grid-cols-2">
-        <Field label="Страна проживания">
-          <Select
-            value={settings.countryCode}
-            onChange={(e) => {
-              const countryCode = e.target.value
-              const firstRegime = getCalculatorsByCountry(countryCode)[0]
-              setSettings({
-                countryCode,
-                taxRegimeId: firstRegime?.id ?? settings.taxRegimeId,
-              })
-            }}
-          >
-            {countries.map((code) => (
-              <option key={code} value={code}>
-                {COUNTRY_LABELS[code] ?? code}
-              </option>
-            ))}
-          </Select>
-        </Field>
-
-        <Field label="Налоговый режим">
-          <Select
-            value={settings.taxRegimeId}
-            onChange={(e) => setSettings({ taxRegimeId: e.target.value })}
-          >
-            {regimes.map((regime) => (
-              <option key={regime.id} value={regime.id}>
-                {regime.name}
-              </option>
-            ))}
-          </Select>
-        </Field>
+        <ResidenceRouteEditor settings={settings} onChange={setSettings} />
 
         <Field label="Базовая валюта">
           <Select
@@ -188,8 +168,8 @@ export function BudgetSettingsPanel() {
           </Select>
           <p className="mt-1 text-xs text-slate-500">
             {relocationMode === 'sole_proprietorship'
-              ? 'Доход как ИП облагается в стране проживания. Подбирается режим для самозанятых.'
-              : 'Зарплата от работодателя в выбранной стране; налоги у источника и в стране проживания.'}
+              ? 'Доход как ИП облагается в стране проживания. Подбирается режим для первой точки маршрута.'
+              : 'Зарплата от работодателя в выбранной стране; налоги у источника и по маршруту проживания.'}
           </p>
         </Field>
 
@@ -208,19 +188,6 @@ export function BudgetSettingsPanel() {
           </Field>
         )}
 
-        <Field label="Дата переезда">
-          <DateInput
-            value={settings.relocationDate ?? settings.initialBalanceDate}
-            onChange={(relocationDate) => setSettings({ relocationDate })}
-          />
-          <p className="mt-1 text-xs text-slate-500">
-            С этой даты начинается жизнь в первой стране проживания (если маршрут не задан —
-            единственная дата переезда).
-          </p>
-        </Field>
-
-        <ResidenceRouteEditor settings={settings} onChange={setSettings} />
-
         <Field label="Программа переезда">
           <Select
             value={settings.relocationProgramId ?? RELOCATION_PROGRAM_NONE}
@@ -233,6 +200,10 @@ export function BudgetSettingsPanel() {
               </option>
             ))}
           </Select>
+          <p className="mt-1 text-xs text-slate-500">
+            Шаблоны для первой страны маршрута (
+            {route[0] ? route[0].countryCode : primaryCountry}).
+          </p>
         </Field>
 
         {selectedProgram && (
@@ -262,7 +233,8 @@ export function BudgetSettingsPanel() {
               Добавить разовые расходы программы
             </Button>
             <p className="mt-2 text-xs text-slate-500">
-              Статьи появятся в разделе «Расходы» (вид «Разовый») с датами относительно переезда.
+              Статьи появятся в разделе «Расходы» (вид «Разовый») с датами относительно начала
+              маршрута.
             </p>
           </div>
         )}
@@ -288,8 +260,8 @@ export function BudgetSettingsPanel() {
             <option value="yes">Да</option>
           </Select>
           <p className="mt-1 text-xs text-slate-500">
-            Положительный остаток рублей учитывается на накопительном счёте; проценты
-            начисляются в последний день месяца.
+            Положительный остаток рублей учитывается на накопительном счёте; проценты начисляются в
+            последний день месяца.
           </p>
         </Field>
 
@@ -324,14 +296,14 @@ export function BudgetSettingsPanel() {
             value={settings.dependents}
             onChange={(e) => setSettings({ dependents: Number(e.target.value) })}
           />
-          {settings.countryCode === 'TH' && (
+          {showThailandDeductions && (
             <p className="mt-1 text-xs text-slate-500">
               Для PIT Таиланда: вычет ฿30 000 на каждого ребёнка.
             </p>
           )}
         </Field>
 
-        {settings.countryCode === 'TH' && (
+        {showThailandDeductions && (
           <div className="md:col-span-2">
             <h3 className="mb-3 text-sm font-semibold text-slate-800">
               Вычеты PIT Таиланда (суммы в THB)
@@ -383,7 +355,7 @@ export function BudgetSettingsPanel() {
                   }
                 />
               </Field>
-              <Field label="Ипотека (проценты)">
+              <Field label="Проценты по ипотеке">
                 <Input
                   type="number"
                   min={0}
@@ -398,7 +370,7 @@ export function BudgetSettingsPanel() {
                   }
                 />
               </Field>
-              <Field label="Provident Fund (PVD)">
+              <Field label="Provident Fund">
                 <Input
                   type="number"
                   min={0}
@@ -413,7 +385,7 @@ export function BudgetSettingsPanel() {
                   }
                 />
               </Field>
-              <Field label="RMF / SSF">
+              <Field label="Взносы RMF">
                 <Input
                   type="number"
                   min={0}
@@ -428,7 +400,7 @@ export function BudgetSettingsPanel() {
                   }
                 />
               </Field>
-              <Field label="Social Security (уплачено)">
+              <Field label="Уплаченный Social Security">
                 <Input
                   type="number"
                   min={0}
@@ -444,18 +416,14 @@ export function BudgetSettingsPanel() {
                 />
               </Field>
             </div>
-            <p className="mt-2 text-xs text-slate-500">
-              Супруг(а): вычет ฿60 000 при размере семьи ≥ 2. Трудовой вычет 50% (макс. ฿100 000)
-              и личный ฿60 000 применяются автоматически.
-            </p>
           </div>
         )}
       </div>
 
-      {selectedRegime && (
+      {primaryRegime && route.length === 1 && (
         <div className="mt-4 rounded-lg bg-slate-50 p-4 text-sm text-slate-600">
-          <p className="font-medium text-slate-800">{selectedRegime.name}</p>
-          <p className="mt-1">{selectedRegime.description}</p>
+          <p className="font-medium text-slate-800">{primaryRegime.name}</p>
+          <p className="mt-1">{primaryRegime.description}</p>
         </div>
       )}
 
@@ -463,25 +431,7 @@ export function BudgetSettingsPanel() {
         <Button
           variant="secondary"
           type="button"
-          onClick={() =>
-            setSettings({
-              baseCurrency: 'EUR',
-              countryCode: 'ES',
-              taxRegimeId: 'es-employed',
-              familySize: 2,
-              dependents: 0,
-              horizonMonths: 12,
-              initialBalance: 0,
-              initialBalanceCurrency: 'EUR',
-              initialBalanceDate: todayIsoDate(),
-              relocationDate: todayIsoDate(),
-              relocationProgramId: RELOCATION_PROGRAM_NONE,
-              relocationMode: 'remote_employment',
-              employmentCountryCode: 'RU',
-              parkRubOnSavingsAccount: false,
-              rubSavingsAnnualRate: 16,
-            })
-          }
+          onClick={() => setSettings({ ...DEFAULT_SETTINGS })}
         >
           Сбросить настройки
         </Button>

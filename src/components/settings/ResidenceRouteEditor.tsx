@@ -2,12 +2,13 @@ import {
   COUNTRY_LABELS,
   getAvailableCountries,
   getCalculatorsByCountry,
+  getTaxCalculator,
 } from '../../tax/registry'
 import type { BudgetSettings, ResidenceRoutePoint } from '../../types/budget'
 import {
   createResidenceRoutePoint,
+  ensureExplicitResidenceRoute,
   getResidenceRoute,
-  hasExplicitResidenceRoute,
   syncLegacyFromRoute,
 } from '../../config/residenceRoute'
 import { Button, DateInput, Field, Select } from '../ui/FormControls'
@@ -19,33 +20,18 @@ interface ResidenceRouteEditorProps {
 
 export function ResidenceRouteEditor({ settings, onChange }: ResidenceRouteEditorProps) {
   const countries = getAvailableCountries()
-  const explicit = hasExplicitResidenceRoute(settings)
   const route = getResidenceRoute(settings)
 
   function commit(next: ResidenceRoutePoint[]) {
     onChange(syncLegacyFromRoute(next))
   }
 
-  function ensureExplicit(): ResidenceRoutePoint[] {
-    if (explicit) return [...(settings.residenceRoute ?? [])]
-    const start = settings.relocationDate ?? settings.initialBalanceDate
-    const end = new Date(start)
-    end.setMonth(end.getMonth() + Math.max(settings.horizonMonths, 1) - 1)
-    const endDate = new Date(Date.UTC(end.getFullYear(), end.getMonth() + 1, 0))
-      .toISOString()
-      .slice(0, 10)
-    return [
-      createResidenceRoutePoint({
-        countryCode: settings.countryCode,
-        taxRegimeId: settings.taxRegimeId,
-        startDate: start,
-        endDate,
-      }),
-    ]
+  function workingRoute(): ResidenceRoutePoint[] {
+    return ensureExplicitResidenceRoute(settings)
   }
 
   function updatePoint(id: string, patch: Partial<ResidenceRoutePoint>) {
-    const next = ensureExplicit().map((point) => {
+    const next = workingRoute().map((point) => {
       if (point.id !== id) return point
       const countryCode = patch.countryCode ?? point.countryCode
       let taxRegimeId = patch.taxRegimeId ?? point.taxRegimeId
@@ -58,29 +44,32 @@ export function ResidenceRouteEditor({ settings, onChange }: ResidenceRouteEdito
   }
 
   function addPoint() {
-    const base = ensureExplicit()
+    const base = workingRoute()
     const last = [...base].sort((a, b) => a.endDate.localeCompare(b.endDate)).at(-1)
-    const startDate = last ? last.endDate : settings.relocationDate ?? settings.initialBalanceDate
+    const startDate = last
+      ? last.endDate === '9999-12-31'
+        ? last.startDate
+        : last.endDate
+      : settings.relocationDate ?? settings.initialBalanceDate
     const nextPoint = createResidenceRoutePoint({
-      countryCode: settings.countryCode,
-      taxRegimeId: settings.taxRegimeId,
+      countryCode: last?.countryCode ?? settings.countryCode,
+      taxRegimeId: last?.taxRegimeId ?? settings.taxRegimeId,
       startDate,
       endDate: startDate,
     })
-    commit([...base, nextPoint])
+    // Закрываем «открытый» конец предыдущей точки перед добавлением следующей
+    const closed = base.map((point) =>
+      point.id === last?.id && point.endDate === '9999-12-31'
+        ? { ...point, endDate: startDate }
+        : point,
+    )
+    commit([...closed, nextPoint])
   }
 
   function removePoint(id: string) {
-    const next = ensureExplicit().filter((point) => point.id !== id)
-    if (next.length === 0) {
-      onChange({ residenceRoute: undefined })
-      return
-    }
+    const next = workingRoute().filter((point) => point.id !== id)
+    if (next.length === 0) return
     commit(next)
-  }
-
-  function clearRoute() {
-    onChange({ residenceRoute: undefined })
   }
 
   return (
@@ -89,44 +78,22 @@ export function ResidenceRouteEditor({ settings, onChange }: ResidenceRouteEdito
         <div>
           <h3 className="text-sm font-semibold text-slate-800">Маршрут проживания</h3>
           <p className="mt-1 text-xs text-slate-500">
-            Произвольное число стран с датами начала и окончания. Налоги и режим считаются по
-            активной точке на каждую дату.
+            Страна, налоговый режим и даты каждого периода. Налоги считаются по активной точке на
+            каждую дату.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          {!explicit && (
-            <Button type="button" variant="secondary" onClick={() => commit(ensureExplicit())}>
-              Включить маршрут
-            </Button>
-          )}
-          {explicit && (
-            <Button type="button" variant="secondary" onClick={clearRoute}>
-              Сбросить к одной стране
-            </Button>
-          )}
-          <Button type="button" onClick={addPoint}>
-            Добавить точку
-          </Button>
-        </div>
+        <Button type="button" onClick={addPoint}>
+          Добавить точку
+        </Button>
       </div>
 
-      {!explicit && (
-        <p className="text-sm text-slate-600">
-          Сейчас используется одна страна: {COUNTRY_LABELS[settings.countryCode] ?? settings.countryCode}{' '}
-          с {settings.relocationDate ?? settings.initialBalanceDate}. Нажмите «Включить маршрут» или
-          «Добавить точку», чтобы задать несколько периодов.
-        </p>
-      )}
-
-      {explicit && (
-        <div className="space-y-3">
-          {route.map((point, index) => {
-            const regimes = getCalculatorsByCountry(point.countryCode)
-            return (
-              <div
-                key={point.id}
-                className="grid gap-3 rounded-lg border border-slate-200 bg-white p-3 sm:grid-cols-2 lg:grid-cols-5"
-              >
+      <div className="space-y-3">
+        {route.map((point, index) => {
+          const regimes = getCalculatorsByCountry(point.countryCode)
+          const regime = getTaxCalculator(point.taxRegimeId)
+          return (
+            <div key={point.id} className="space-y-2 rounded-lg border border-slate-200 bg-white p-3">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
                 <Field label={`Точка ${index + 1}: страна`}>
                   <Select
                     value={point.countryCode}
@@ -144,9 +111,9 @@ export function ResidenceRouteEditor({ settings, onChange }: ResidenceRouteEdito
                     value={point.taxRegimeId}
                     onChange={(e) => updatePoint(point.id, { taxRegimeId: e.target.value })}
                   >
-                    {regimes.map((regime) => (
-                      <option key={regime.id} value={regime.id}>
-                        {regime.name}
+                    {regimes.map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.name}
                       </option>
                     ))}
                   </Select>
@@ -159,26 +126,47 @@ export function ResidenceRouteEditor({ settings, onChange }: ResidenceRouteEdito
                 </Field>
                 <Field label="Дата окончания">
                   <DateInput
-                    value={point.endDate}
-                    onChange={(endDate) => updatePoint(point.id, { endDate })}
+                    value={point.endDate === '9999-12-31' ? '' : point.endDate}
+                    onChange={(endDate) =>
+                      updatePoint(point.id, {
+                        endDate: endDate || '9999-12-31',
+                      })
+                    }
                   />
+                  <p className="mt-1 text-[11px] text-slate-400">Пусто = без ограничения срока</p>
                 </Field>
-                <div className="flex items-end">
-                  <Button
+                <div className="flex items-end justify-end">
+                  <button
                     type="button"
-                    variant="secondary"
-                    className="w-full"
+                    className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:border-red-200 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-40"
                     onClick={() => removePoint(point.id)}
                     disabled={route.length <= 1}
+                    aria-label="Удалить точку маршрута"
+                    title="Удалить"
                   >
-                    Удалить
-                  </Button>
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                      className="h-5 w-5"
+                      aria-hidden="true"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M8.75 1A1.75 1.75 0 0 0 7 2.75V3H4.25a.75.75 0 0 0 0 1.5h.34l.92 11.03A2.25 2.25 0 0 0 7.75 17.5h4.5a2.25 2.25 0 0 0 2.24-1.97L15.41 4.5h.34a.75.75 0 0 0 0-1.5H13v-.25A1.75 1.75 0 0 0 11.25 1h-2.5ZM9.5 3h1v-.25a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25V3h2Zm-1.8 3.25a.75.75 0 0 0-1.5.1l.5 8a.75.75 0 0 0 1.5-.1l-.5-8Zm5.1.1a.75.75 0 1 0-1.5-.1l-.5 8a.75.75 0 0 0 1.5.1l.5-8ZM10 6.5a.75.75 0 0 0-.75.75v8a.75.75 0 0 0 1.5 0v-8A.75.75 0 0 0 10 6.5Z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                  </button>
                 </div>
               </div>
-            )
-          })}
-        </div>
-      )}
+              {regime?.description && (
+                <p className="text-xs text-slate-500">{regime.description}</p>
+              )}
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }

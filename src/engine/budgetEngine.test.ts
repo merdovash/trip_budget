@@ -432,6 +432,15 @@ describe('relocation date in projection', () => {
       horizonMonths: 4,
       initialBalanceDate: '2026-01-01',
       relocationDate: '2026-03-01',
+      residenceRoute: [
+        {
+          id: 'r1',
+          countryCode: 'ES',
+          taxRegimeId: 'ae-none',
+          startDate: '2026-03-01',
+          endDate: '9999-12-31',
+        },
+      ],
     })
     expect(snapshots[0].recurringExpenses).toBe(0)
     expect(snapshots[1].recurringExpenses).toBe(0)

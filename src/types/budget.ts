@@ -176,6 +176,15 @@ export const DEFAULT_SETTINGS: BudgetSettings = {
   employmentCountryCode: 'RU',
   parkRubOnSavingsAccount: false,
   rubSavingsAnnualRate: 16,
+  residenceRoute: [
+    {
+      id: 'default',
+      countryCode: 'ES',
+      taxRegimeId: 'es-employed',
+      startDate: todayIsoDate(),
+      endDate: '9999-12-31',
+    },
+  ],
 }
 
 export const CURRENCIES = ['EUR', 'USD', 'RUB', 'THB', 'MYR', 'GBP', 'AED', 'GEL', 'MXN', 'IDR', 'VND'] as const

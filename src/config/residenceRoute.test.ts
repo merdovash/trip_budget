@@ -15,6 +15,7 @@ describe('residenceRoute', () => {
       countryCode: 'GE',
       taxRegimeId: 'ge-standard',
       relocationDate: '2026-03-01',
+      residenceRoute: undefined,
     }
     expect(hasExplicitResidenceRoute(settings)).toBe(false)
     const route = getResidenceRoute(settings)

@@ -25,6 +25,29 @@ export function hasExplicitResidenceRoute(settings: BudgetSettings): boolean {
   return Boolean(settings.residenceRoute && settings.residenceRoute.length > 0)
 }
 
+/** Гарантирует явный маршрут (миграция с legacy countryCode + taxRegimeId). */
+export function ensureExplicitResidenceRoute(settings: BudgetSettings): ResidenceRoutePoint[] {
+  if (hasExplicitResidenceRoute(settings)) {
+    return settings.residenceRoute!
+  }
+  return [
+    createResidenceRoutePoint({
+      countryCode: settings.countryCode,
+      taxRegimeId: settings.taxRegimeId,
+      startDate: legacyRelocationDate(settings),
+      endDate: '9999-12-31',
+    }),
+  ]
+}
+
+export function routeIncludesCountry(settings: BudgetSettings, countryCode: string): boolean {
+  return getResidenceRoute(settings).some((point) => point.countryCode === countryCode)
+}
+
+export function getPrimaryResidenceCountry(settings: BudgetSettings): string {
+  return getResidenceRoute(settings)[0]?.countryCode ?? settings.countryCode
+}
+
 /** Дата начала жизни за рубежом = старт первой точки маршрута. */
 export function getRouteStartDate(settings: BudgetSettings): string {
   const route = getResidenceRoute(settings)
@@ -99,8 +122,10 @@ export function createResidenceRoutePoint(
 
 export function describeResidenceRoute(settings: BudgetSettings): string {
   const route = getResidenceRoute(settings)
-  if (!hasExplicitResidenceRoute(settings) && route.length === 1) {
-    return `${route[0].countryCode} с ${route[0].startDate}`
-  }
-  return route.map((p) => `${p.countryCode}: ${p.startDate}–${p.endDate}`).join(' → ')
+  return route
+    .map((p) => {
+      const end = p.endDate === '9999-12-31' ? '…' : p.endDate
+      return `${p.countryCode}: ${p.startDate}–${end}`
+    })
+    .join(' → ')
 }

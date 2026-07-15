@@ -17,6 +17,7 @@ import {
   getRelocationDate,
   getRelocationProgram,
 } from '../config/relocationPrograms'
+import { ensureExplicitResidenceRoute, syncLegacyFromRoute } from '../config/residenceRoute'
 
 export interface ActivePreset {
   id: string
@@ -102,6 +103,29 @@ function migratePersistedState(persisted: PersistedBudgetState, current: BudgetS
   if (mergedSettings.rubSavingsAnnualRate == null) {
     mergedSettings.rubSavingsAnnualRate = 16
   }
+  if (!mergedSettings.residenceRoute?.length) {
+    const start =
+      mergedSettings.relocationDate ??
+      mergedSettings.initialBalanceDate ??
+      current.settings.relocationDate
+    mergedSettings.residenceRoute = [
+      {
+        id: 'migrated',
+        countryCode: mergedSettings.countryCode,
+        taxRegimeId: mergedSettings.taxRegimeId,
+        startDate: start,
+        endDate: '9999-12-31',
+      },
+    ]
+    mergedSettings.relocationDate = start
+  } else {
+    const first = [...mergedSettings.residenceRoute].sort((a, b) =>
+      a.startDate.localeCompare(b.startDate),
+    )[0]
+    mergedSettings.countryCode = first.countryCode
+    mergedSettings.taxRegimeId = first.taxRegimeId
+    mergedSettings.relocationDate = first.startDate
+  }
 
   let expenses = persisted.expenses ?? current.expenses
   const oneTimeExpenses = persisted.oneTimeExpenses ?? []
@@ -139,7 +163,16 @@ export const useBudgetStore = create<BudgetState>()(
       presetBaseline: null,
 
       setSettings: (partial) =>
-        set((state) => ({ settings: { ...state.settings, ...partial } })),
+        set((state) => {
+          const merged = { ...state.settings, ...partial }
+          if (partial.residenceRoute) {
+            return { settings: { ...merged, ...syncLegacyFromRoute(partial.residenceRoute) } }
+          }
+          if (!merged.residenceRoute?.length) {
+            return { settings: { ...merged, ...syncLegacyFromRoute(ensureExplicitResidenceRoute(merged)) } }
+          }
+          return { settings: merged }
+        }),
 
       addIncome: (item) =>
         set((state) => ({

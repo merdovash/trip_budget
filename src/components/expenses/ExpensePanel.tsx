@@ -809,11 +809,13 @@ function ExpenseList({
     )
     const folderIds = new Set(sortedFolders.map((f) => f.id))
     const ungrouped = expenses.filter((item) => !item.folderId || !folderIds.has(item.folderId))
-    const groups = sortedFolders.map((folder) => ({
-      id: folder.id,
-      name: folder.name,
-      items: expenses.filter((item) => item.folderId === folder.id),
-    }))
+    const groups = sortedFolders
+      .map((folder) => ({
+        id: folder.id,
+        name: folder.name,
+        items: expenses.filter((item) => item.folderId === folder.id),
+      }))
+      .filter((group) => group.items.length > 0)
     return { groups, ungrouped }
   }, [expenses, folders])
 
@@ -858,28 +860,25 @@ function ExpenseList({
           </button>
           {!collapsed[group.id] && (
             <div className="overflow-x-auto border-t border-slate-100 px-3 pb-2">
-              {group.items.length === 0 ? (
-                <p className="py-3 text-sm text-slate-500">В папке пока нет расходов.</p>
-              ) : (
-                <table className="w-full text-sm">
-                  <thead>{tableHead}</thead>
-                  <tbody>
-                    <ExpenseRows
-                      items={group.items}
-                      editingId={editingId}
-                      onEdit={onEdit}
-                      onRemove={onRemove}
-                      baseCurrency={settings.baseCurrency}
-                      settings={settings}
-                    />
-                  </tbody>
-                </table>
-              )}
+              <table className="w-full text-sm">
+                <thead>{tableHead}</thead>
+                <tbody>
+                  <ExpenseRows
+                    items={group.items}
+                    editingId={editingId}
+                    onEdit={onEdit}
+                    onRemove={onRemove}
+                    baseCurrency={settings.baseCurrency}
+                    settings={settings}
+                  />
+                </tbody>
+              </table>
             </div>
           )}
         </div>
       ))}
 
+      {grouped.ungrouped.length > 0 && (
       <div className="rounded-lg border border-slate-200">
         <button
           type="button"
@@ -894,26 +893,23 @@ function ExpenseList({
         </button>
         {!collapsed.__none && (
           <div className="overflow-x-auto border-t border-slate-100 px-3 pb-2">
-            {grouped.ungrouped.length === 0 ? (
-              <p className="py-3 text-sm text-slate-500">Нет расходов вне папок.</p>
-            ) : (
-              <table className="w-full text-sm">
-                <thead>{tableHead}</thead>
-                <tbody>
-                  <ExpenseRows
-                    items={grouped.ungrouped}
-                    editingId={editingId}
-                    onEdit={onEdit}
-                    onRemove={onRemove}
-                    baseCurrency={settings.baseCurrency}
-                    settings={settings}
-                  />
-                </tbody>
-              </table>
-            )}
+            <table className="w-full text-sm">
+              <thead>{tableHead}</thead>
+              <tbody>
+                <ExpenseRows
+                  items={grouped.ungrouped}
+                  editingId={editingId}
+                  onEdit={onEdit}
+                  onRemove={onRemove}
+                  baseCurrency={settings.baseCurrency}
+                  settings={settings}
+                />
+              </tbody>
+            </table>
           </div>
         )}
       </div>
+      )}
     </div>
   )
 }

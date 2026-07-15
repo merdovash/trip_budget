@@ -544,6 +544,58 @@ describe('getDayLedger', () => {
     expect(ledger.incomeTotal).toBeCloseTo(day.grossIncome, 5)
   })
 
+  it('shows Russian salary net of withheld NDFL and matches cash after tax', () => {
+    const incomes: RecurringItem[] = [
+      {
+        id: 'ru-salary',
+        name: 'Зарплата РФ',
+        amount: 150_000,
+        currency: 'RUB',
+        frequency: 'monthly',
+        categoryId: 'salary',
+        salaryCountryCode: 'RU',
+        startDate: '2026-01-01',
+        payments: [
+          { label: 'Аванс', amount: 50_000, dayOfMonth: 25 },
+          { label: 'Зарплата', amount: 100_000, dayOfMonth: 10 },
+        ],
+      },
+    ]
+    const settings = {
+      ...DEFAULT_SETTINGS,
+      taxRegimeId: 'ae-none',
+      countryCode: 'AE',
+      baseCurrency: 'RUB',
+      dependents: 0,
+      horizonMonths: 1,
+      initialBalanceDate: '2026-01-01',
+      residenceRoute: [
+        {
+          id: 'ae',
+          countryCode: 'AE',
+          taxRegimeId: 'ae-none',
+          startDate: '2026-01-01',
+          endDate: '2027-12-31',
+        },
+      ],
+    }
+
+    const days = calculateDailyBudgetProjection(incomes, [], [], settings)
+    const payday = days.find((d) => d.date === '2026-01-10')!
+    const ledger = getDayLedger(incomes, [], [], '2026-01-10', settings)
+
+    expect(payday.grossIncome).toBe(100_000)
+    expect(payday.taxes).toBeCloseTo(13_000, 5)
+    expect(payday.netIncome).toBeCloseTo(87_000, 5)
+
+    expect(ledger.incomes).toHaveLength(1)
+    expect(ledger.incomes[0].amountOriginal).toBeCloseTo(87_000, 5)
+    expect(ledger.incomes[0].detail).toMatch(/на руки/)
+    expect(ledger.incomes[0].detail).toMatch(/НДФЛ/)
+    // Расшифровка = на руки; в проекции gross − tax даёт тот же денежный эффект
+    expect(ledger.incomeTotal).toBeCloseTo(payday.netIncome, 5)
+  })
+
   it('shiftIsoDate moves across month boundary', () => {
     expect(shiftIsoDate('2026-01-31', 1)).toBe('2026-02-01')
     expect(shiftIsoDate('2026-03-01', -1)).toBe('2026-02-28')

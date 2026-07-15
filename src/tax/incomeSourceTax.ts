@@ -67,7 +67,39 @@ export function createRussiaYtdTracker(): RussiaYtdTracker {
   return { byItem: {} }
 }
 
-export function paymentGrossRubOnDay(
+function paymentDayMatches(year: number, month: number, day: number, dayOfMonth: number): boolean {
+  const daysInMonth = new Date(year, month, 0).getDate()
+  return day === Math.min(dayOfMonth, daysInMonth)
+}
+
+function isActivePaymentDay(
+  item: RecurringItem,
+  year: number,
+  month: number,
+  day: number,
+): boolean {
+  const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+  if (dateStr < item.startDate) return false
+  if (item.endDate && dateStr > item.endDate) return false
+  return true
+}
+
+function daysBetweenIso(startIso: string, endIso: string): number {
+  const start = Date.UTC(
+    Number(startIso.slice(0, 4)),
+    Number(startIso.slice(5, 7)) - 1,
+    Number(startIso.slice(8, 10)),
+  )
+  const end = Date.UTC(
+    Number(endIso.slice(0, 4)),
+    Number(endIso.slice(5, 7)) - 1,
+    Number(endIso.slice(8, 10)),
+  )
+  return Math.round((end - start) / 86_400_000)
+}
+
+/** Сумма выплаты дохода в исходной валюте в указанный день (0 если не день платежа). */
+export function paymentAmountNativeOnDay(
   item: RecurringItem,
   year: number,
   month: number,
@@ -84,24 +116,35 @@ export function paymentGrossRubOnDay(
     }, 0)
   }
 
-  return item.amount
+  const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+  const startDay = Number(item.startDate.slice(8, 10))
+  const startMonth = Number(item.startDate.slice(5, 7))
+
+  switch (item.frequency) {
+    case 'monthly':
+      return paymentDayMatches(year, month, day, startDay) ? item.amount : 0
+    case 'yearly':
+      return month === startMonth && paymentDayMatches(year, month, day, startDay)
+        ? item.amount
+        : 0
+    case 'once':
+      return dateStr === item.startDate ? item.amount : 0
+    case 'weekly':
+      return daysBetweenIso(item.startDate, dateStr) % 7 === 0 ? item.amount : 0
+    default:
+      return 0
+  }
 }
 
-function paymentDayMatches(year: number, month: number, day: number, dayOfMonth: number): boolean {
-  const daysInMonth = new Date(year, month, 0).getDate()
-  return day === Math.min(dayOfMonth, daysInMonth)
-}
-
-function isActivePaymentDay(
+export function paymentGrossRubOnDay(
   item: RecurringItem,
   year: number,
   month: number,
   day: number,
-): boolean {
-  const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
-  if (dateStr < item.startDate) return false
-  if (item.endDate && dateStr > item.endDate) return false
-  return true
+): number {
+  const native = paymentAmountNativeOnDay(item, year, month, day)
+  if (native <= 0) return 0
+  return convertCurrency(native, item.currency, 'RUB')
 }
 
 export function calculateRussiaSourceTaxForPayment(
@@ -126,6 +169,27 @@ export function summarizeRussiaSalaries(
 
   const grossAnnualRub = ruSalaries.reduce((sum, item) => sum + annualGrossInRub(item), 0)
   return calculateRussiaSalaryTax(grossAnnualRub, dependents)
+}
+
+/** YTD-трекер НДФЛ до указанной даты (не включая сам день). */
+export function buildRussiaYtdTrackerBeforeDate(
+  incomes: RecurringItem[],
+  dateStr: string,
+  dependents: number,
+): RussiaYtdTracker {
+  const tracker = createRussiaYtdTracker()
+  const { year, month, day } = parseDate(dateStr)
+
+  for (let m = 1; m <= month; m++) {
+    const daysInMonth = new Date(year, m, 0).getDate()
+    const lastDay = m === month ? day - 1 : daysInMonth
+    for (let d = 1; d <= lastDay; d++) {
+      const prior = `${year}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+      russiaSourceNdflRubForDay(incomes, prior, dependents, tracker)
+    }
+  }
+
+  return tracker
 }
 
 export function russiaSourceNdflRubForDay(

@@ -45,6 +45,8 @@ import {
 import type { ScheduledTaxPayment, TaxResult } from '../tax/types'
 import { isRussiaSourceTaxable } from '../tax/doubleTaxation'
 import {
+  buildRussiaYtdTrackerBeforeDate,
+  calculateRussiaSourceTaxForPayment,
   createRussiaYtdTracker,
   filterResidenceTaxableIncomes,
   russiaEmployerSocialAnnualInBase,
@@ -671,6 +673,46 @@ export function getDayLedger(
   const incomeLines: DayLedgerLine[] = []
   const expenseLines: DayLedgerLine[] = []
   const inflowLines: DayLedgerLine[] = []
+  /** YTD НДФЛ до этого дня — зарплата РФ в расшифровке идёт нетто (удержание у источника). */
+  const russiaTracker = buildRussiaYtdTrackerBeforeDate(
+    incomes,
+    dateStr,
+    settings.dependents,
+  )
+
+  function pushRussiaNetIncomeLine(params: {
+    id: string
+    name: string
+    grossNative: number
+    currency: string
+    detailPrefix?: string
+    item: RecurringItem
+  }) {
+    const { id, name, grossNative, currency, detailPrefix, item } = params
+    const grossRub = convertCurrency(grossNative, currency, 'RUB')
+    const ndflRub = calculateRussiaSourceTaxForPayment(
+      item,
+      grossRub,
+      settings.dependents,
+      russiaTracker,
+    )
+    const netRub = Math.max(0, grossRub - ndflRub)
+    const netNative = convertCurrency(netRub, 'RUB', currency)
+    const ndflNative = convertCurrency(ndflRub, 'RUB', currency)
+    const withhold =
+      ndflNative > 0
+        ? `на руки (удержан НДФЛ ${Math.round(ndflNative).toLocaleString('ru-RU')} ${currency})`
+        : 'на руки'
+    incomeLines.push({
+      id,
+      name,
+      kind: 'income',
+      amountOriginal: netNative,
+      currency,
+      amountInBase: toBaseCurrency(netNative, currency, baseCurrency),
+      detail: detailPrefix ? `${detailPrefix} · ${withhold}` : withhold,
+    })
+  }
 
   for (const item of incomes) {
     if (!isActiveOnDay(item, dateStr, settings)) continue
@@ -680,15 +722,26 @@ export function getDayLedger(
         if (!payment.dayOfMonth || !paymentDayMatches(year, month, day, payment.dayOfMonth)) {
           continue
         }
-        incomeLines.push({
-          id: `${item.id}:${payment.label}`,
-          name: item.name,
-          kind: 'income',
-          amountOriginal: payment.amount,
-          currency: item.currency,
-          amountInBase: toBaseCurrency(payment.amount, item.currency, baseCurrency),
-          detail: payment.label,
-        })
+        if (isRussiaSourceTaxable(item)) {
+          pushRussiaNetIncomeLine({
+            id: `${item.id}:${payment.label}`,
+            name: item.name,
+            grossNative: payment.amount,
+            currency: item.currency,
+            detailPrefix: payment.label,
+            item,
+          })
+        } else {
+          incomeLines.push({
+            id: `${item.id}:${payment.label}`,
+            name: item.name,
+            kind: 'income',
+            amountOriginal: payment.amount,
+            currency: item.currency,
+            amountInBase: toBaseCurrency(payment.amount, item.currency, baseCurrency),
+            detail: payment.label,
+          })
+        }
       }
       continue
     }
@@ -709,14 +762,24 @@ export function getDayLedger(
         break
     }
     if (amount > 0) {
-      incomeLines.push({
-        id: item.id,
-        name: item.name,
-        kind: 'income',
-        amountOriginal: amount,
-        currency: item.currency,
-        amountInBase: toBaseCurrency(amount, item.currency, baseCurrency),
-      })
+      if (isRussiaSourceTaxable(item)) {
+        pushRussiaNetIncomeLine({
+          id: item.id,
+          name: item.name,
+          grossNative: amount,
+          currency: item.currency,
+          item,
+        })
+      } else {
+        incomeLines.push({
+          id: item.id,
+          name: item.name,
+          kind: 'income',
+          amountOriginal: amount,
+          currency: item.currency,
+          amountInBase: toBaseCurrency(amount, item.currency, baseCurrency),
+        })
+      }
     }
   }
 

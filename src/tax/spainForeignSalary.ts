@@ -1,4 +1,4 @@
-import type { BudgetSettings, RecurringItem } from '../types/budget'
+import type { BudgetSettings, OneTimeExpense, RecurringItem } from '../types/budget'
 import { convertCurrency } from '../lib/currency'
 import {
   calculateSpainEmployeeTax,
@@ -193,9 +193,17 @@ export function adjustResidenceTaxResult(
   residenceIncomes: RecurringItem[],
   settings: BudgetSettings,
   calculator: TaxCalculator,
+  expenses: RecurringItem[] = [],
+  oneTimeExpenses: OneTimeExpense[] = [],
 ): AdjustedResidenceTax {
   if (calculator.countryCode === 'TH') {
-    return adjustThailandResidenceTaxResult(residenceIncomes, settings, calculator)
+    return adjustThailandResidenceTaxResult(
+      residenceIncomes,
+      settings,
+      calculator,
+      expenses,
+      oneTimeExpenses,
+    )
   }
 
   if (calculator.countryCode === 'GE') {
@@ -221,6 +229,8 @@ export function computeAnnualTaxBurden(
   incomes: RecurringItem[],
   settings: BudgetSettings,
   calculator: TaxCalculator | undefined,
+  expenses: RecurringItem[] = [],
+  oneTimeExpenses: OneTimeExpense[] = [],
 ): {
   residenceIncomeTax: number
   residenceSocial: number
@@ -232,7 +242,13 @@ export function computeAnnualTaxBurden(
   }
 
   const residenceIncomes = filterResidenceTaxableIncomes(incomes)
-  const adjusted = adjustResidenceTaxResult(residenceIncomes, settings, calculator)
+  const adjusted = adjustResidenceTaxResult(
+    residenceIncomes,
+    settings,
+    calculator,
+    expenses,
+    oneTimeExpenses,
+  )
 
   const sourceRuItems = incomes.filter(
     (item) => isRussiaSalary(item) && !isIncludedInResidenceTax(item),

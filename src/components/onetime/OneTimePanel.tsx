@@ -3,21 +3,27 @@ import { todayIsoDate, formatCurrency, formatDateDisplay } from '../../lib/forma
 import { convertCurrency } from '../../lib/currency'
 import { useExchangeRateStore } from '../../store/exchangeRateStore'
 import { oneTimeExpenseSchema, type OneTimeExpenseFormData } from '../../lib/validation'
+import {
+  getExpenseCountryScope,
+  getExpenseCountryScopeLabel,
+  getExpenseCountryScopeOptions,
+} from '../../lib/expenseCountry'
 import { useBudgetStore } from '../../store/budgetStore'
-import type { OneTimeExpense } from '../../types/budget'
+import type { BudgetSettings, OneTimeExpense } from '../../types/budget'
 import { Button, Card, EmptyState, Field, Input, Select, DateInput } from '../ui/FormControls'
 import { CurrencySelect } from '../ui/CurrencySelect'
 import { CurrencyConversionHint } from '../ui/CurrencyConversionHint'
 
 const ONE_TIME_CATEGORIES = ['Переезд', 'Депозит', 'Мебель', 'Авто', 'Ремонт', 'Обучение', 'Другое']
 
-function oneTimeToFormData(item: OneTimeExpense): OneTimeExpenseFormData {
+function oneTimeToFormData(item: OneTimeExpense, settings: BudgetSettings): OneTimeExpenseFormData {
   return {
     name: item.name,
     amount: item.amount,
     currency: item.currency,
     date: item.date,
     category: item.category ?? '',
+    expenseCountryScope: getExpenseCountryScope(item, settings),
   }
 }
 
@@ -31,13 +37,14 @@ function OneTimeForm({ initialItem, onSubmit, onCancel }: OneTimeFormProps) {
   const settings = useBudgetStore((s) => s.settings)
   const [form, setForm] = useState<OneTimeExpenseFormData>(() =>
     initialItem
-      ? oneTimeToFormData(initialItem)
+      ? oneTimeToFormData(initialItem, settings)
       : {
           name: '',
           amount: 0,
           currency: settings.baseCurrency,
           date: todayIsoDate(),
           category: '',
+          expenseCountryScope: 'residence',
         },
   )
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -64,6 +71,7 @@ function OneTimeForm({ initialItem, onSubmit, onCancel }: OneTimeFormProps) {
         currency: settings.baseCurrency,
         date: todayIsoDate(),
         category: '',
+        expenseCountryScope: 'residence',
       })
     }
   }
@@ -112,6 +120,26 @@ function OneTimeForm({ initialItem, onSubmit, onCancel }: OneTimeFormProps) {
           ))}
         </Select>
       </Field>
+      <Field label="Страна расхода" error={errors.expenseCountryScope}>
+        <Select
+          value={form.expenseCountryScope}
+          onChange={(e) =>
+            setForm({
+              ...form,
+              expenseCountryScope: e.target.value as OneTimeExpenseFormData['expenseCountryScope'],
+            })
+          }
+        >
+          {getExpenseCountryScopeOptions(settings).map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </Select>
+        <p className="mt-1 text-xs text-slate-500">
+          Для remittance в Таиланде учитываются только расходы в стране проживания.
+        </p>
+      </Field>
       <div className="flex flex-wrap gap-2 md:col-span-2">
         <Button type="submit">{isEditing ? 'Сохранить' : 'Добавить трату'}</Button>
         {onCancel && (
@@ -155,6 +183,7 @@ function OneTimeList({
             <th className="py-2 pr-4">Сумма</th>
             <th className="py-2 pr-4">Дата</th>
             <th className="py-2 pr-4">Категория</th>
+            <th className="py-2 pr-4">Страна</th>
             <th className="py-2" />
           </tr>
         </thead>
@@ -179,6 +208,9 @@ function OneTimeList({
                 </td>
                 <td className="py-2 pr-4">{formatDateDisplay(item.date)}</td>
                 <td className="py-2 pr-4 text-slate-500">{item.category ?? '—'}</td>
+                <td className="py-2 pr-4 text-slate-500">
+                  {getExpenseCountryScopeLabel(getExpenseCountryScope(item, settings), settings)}
+                </td>
                 <td className="py-2 text-right">
                   <div className="flex justify-end gap-2">
                     <Button variant="secondary" type="button" onClick={() => onEdit(item.id)}>

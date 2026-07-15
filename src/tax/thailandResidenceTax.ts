@@ -1,5 +1,6 @@
-import type { BudgetSettings, RecurringItem } from '../types/budget'
+import type { BudgetSettings, OneTimeExpense, RecurringItem } from '../types/budget'
 import { convertCurrency } from '../lib/currency'
+import { calculateAnnualResidenceScopeExpenses } from '../lib/expenseRemittance'
 import {
   buildThailandTaxResult,
   calculateThailandPitBreakdown,
@@ -28,13 +29,16 @@ export const THAILAND_RU_SALARY_RULES = {
   summary:
     'По умолчанию зарплата РФ не входит в PIT Таиланда: НДФЛ у источника в России. Если включить в декларацию — доход облагается при remittance (Por. 161/2566, с 2024). Применяются тайские вычеты (50%/฿100k, personal, spouse, children).',
   remittance:
-    'Иностранный доход облагается, если вы резидент TH (180+ дней в год заработка) и переводите деньги в Таиланд. Доход до 01.01.2024 и доход в годы нерезидентства — вне PIT.',
+    'Иностранный доход облагается PIT только в объёме remittance — денег, ввезённых в Таиланд. Упрощение: remittance ≈ годовые расходы в стране проживания (укажите страну у каждого расхода). Доход до 01.01.2024 и доход в годы нерезидентства — вне PIT.',
   foreignCredit:
     'Опция «Зачёт НДФЛ в РФ»: уплаченный НДФЛ зачитывается против PIT на эту зарплату (договор об избежании двойного налогообложения, упрощ.).',
 } as const
 
 export interface ThailandForeignSalaryBreakdown {
   foreignSalaryGross: number
+  foreignSalaryTaxableGross: number
+  foreignSalaryExcluded: number
+  remittanceEstimate: number
   localIncomeGross: number
   taxableBaseThb: number
   pitGross: number
@@ -54,6 +58,8 @@ export function calculateThailandWithRussianIncome(
   residenceIncomes: RecurringItem[],
   settings: BudgetSettings,
   includeSocialSecurity: boolean,
+  expenses: RecurringItem[] = [],
+  oneTimeExpenses: OneTimeExpense[] = [],
 ): SpainAdjustedResidenceTax | null {
   const foreignItems = residenceIncomes.filter(isRussiaSalaryInThaiBase)
   if (foreignItems.length === 0) return null
@@ -63,16 +69,25 @@ export function calculateThailandWithRussianIncome(
   const foreignGross = sumAnnualGrossIncomes(foreignItems, baseCurrency)
   const localGross = Math.max(0, totalGross - foreignGross)
 
+  const remittanceEstimate = calculateAnnualResidenceScopeExpenses(
+    expenses,
+    oneTimeExpenses,
+    settings,
+  )
+  const foreignTaxableGross = Math.min(foreignGross, remittanceEstimate)
+  const foreignExcluded = Math.max(0, foreignGross - foreignTaxableGross)
+  const pitGrossIncome = localGross + foreignTaxableGross
+
   const localEmploymentItems = residenceIncomes.filter(isLocalThailandEmployment)
   const localEmploymentGross = sumAnnualGrossIncomes(localEmploymentItems, baseCurrency)
 
   const input = {
-    grossAnnualIncome: totalGross,
+    grossAnnualIncome: pitGrossIncome,
     familySize: settings.familySize,
     dependents: settings.dependents,
   }
 
-  const grossThb = convertCurrency(totalGross, baseCurrency, 'THB')
+  const grossThb = convertCurrency(pitGrossIncome, baseCurrency, 'THB')
   const pitBreakdown = calculateThailandPitBreakdown(
     grossThb,
     input,
@@ -84,7 +99,8 @@ export function calculateThailandWithRussianIncome(
   )
 
   const pitGross = convertCurrency(pitBreakdown.pitGrossThb, 'THB', baseCurrency)
-  const pitOnForeign = totalGross > 0 ? pitGross * (foreignGross / totalGross) : 0
+  const pitOnForeign =
+    pitGrossIncome > 0 ? pitGross * (foreignTaxableGross / pitGrossIncome) : 0
 
   const creditItems = foreignItems.filter(usesThailandForeignTaxCredit)
   const russianSummary =
@@ -99,20 +115,26 @@ export function calculateThailandWithRussianIncome(
   const totalTaxBurdenInBase =
     pitNetAfterCredit + socialOnLocal + russianNdflInBase - foreignTaxCredit
 
-  const result = buildThailandTaxResult(totalGross, baseCurrency, input, settings.thailandDeductions, {
+  const result = buildThailandTaxResult(pitGrossIncome, baseCurrency, input, settings.thailandDeductions, {
     localEmploymentGrossBase: localEmploymentGross,
     includeSocialSecurity,
-    foreignSalaryGrossBase: foreignGross,
+    foreignSalaryTaxableBase: foreignTaxableGross,
+    foreignSalaryFullBase: foreignGross,
+    foreignSalaryExcludedBase: foreignExcluded,
+    remittanceFromExpensesBase: remittanceEstimate,
     foreignTaxCreditBase: foreignTaxCredit,
     pitNetBase: pitNetAfterCredit,
   })
 
-  result.effectiveRate = totalGross > 0 ? totalTaxBurdenInBase / totalGross : 0
+  result.effectiveRate = pitGrossIncome > 0 ? totalTaxBurdenInBase / pitGrossIncome : 0
 
   return {
     result,
     thailandForeignSalary: {
       foreignSalaryGross: foreignGross,
+      foreignSalaryTaxableGross: foreignTaxableGross,
+      foreignSalaryExcluded: foreignExcluded,
+      remittanceEstimate,
       localIncomeGross: localGross,
       taxableBaseThb: pitBreakdown.taxableBaseThb,
       pitGross,
@@ -159,9 +181,17 @@ export function adjustThailandResidenceTaxResult(
   residenceIncomes: RecurringItem[],
   settings: BudgetSettings,
   calculator: TaxCalculator,
+  expenses: RecurringItem[] = [],
+  oneTimeExpenses: OneTimeExpense[] = [],
 ): SpainAdjustedResidenceTax {
   const includeSocialSecurity = calculator.id === 'th-employed'
-  const mixed = calculateThailandWithRussianIncome(residenceIncomes, settings, includeSocialSecurity)
+  const mixed = calculateThailandWithRussianIncome(
+    residenceIncomes,
+    settings,
+    includeSocialSecurity,
+    expenses,
+    oneTimeExpenses,
+  )
   if (mixed) return mixed
 
   return {

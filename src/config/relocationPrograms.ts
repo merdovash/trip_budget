@@ -199,5 +199,6 @@ export function buildProgramOneTimeExpenses(
     currency: template.currency,
     category: template.category,
     date: addDays(relocationDate, template.offsetDays),
+    expenseCountryScope: 'residence',
   }))
 }

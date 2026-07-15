@@ -178,7 +178,10 @@ export function buildThailandBreakdownItems(
   breakdown: ThailandPitBreakdown,
   input: TaxInput,
   extras?: {
-    foreignSalaryGrossThb?: number
+    foreignSalaryTaxableThb?: number
+    foreignSalaryFullThb?: number
+    foreignSalaryExcludedThb?: number
+    remittanceFromExpensesThb?: number
     localIncomeGrossThb?: number
     foreignTaxCreditThb?: number
     pitNetThb?: number
@@ -198,12 +201,38 @@ export function buildThailandBreakdownItems(
     },
   ]
 
-  if (extras?.foreignSalaryGrossThb && extras.foreignSalaryGrossThb > 0) {
+  if (extras?.remittanceFromExpensesThb !== undefined && extras.remittanceFromExpensesThb >= 0) {
     items.push({
-      label: 'в т.ч. доход из России (remitted)',
-      amount: extras.foreignSalaryGrossThb,
+      label: 'Remittance (расходы в стране проживания)',
+      amount: extras.remittanceFromExpensesThb,
       description:
-        'Зарплата РФ, включённая в декларацию («Учитывать в налогах проживания»). Облагается при переводе в Таиланд резидентом.',
+        'Оценка ввезённых средств: сумма годовых расходов с меткой «страна проживания». Иностранный доход в PIT ограничен этой суммой.',
+      kind: 'info',
+    })
+  }
+
+  if (extras?.foreignSalaryFullThb && extras.foreignSalaryFullThb > 0) {
+    items.push({
+      label: 'Доход из России (полный)',
+      amount: extras.foreignSalaryFullThb,
+      description: 'Зарплата РФ с флагом «Учитывать в налогах проживания».',
+      kind: 'info',
+    })
+  }
+
+  if (extras?.foreignSalaryTaxableThb && extras.foreignSalaryTaxableThb > 0) {
+    items.push({
+      label: 'в т.ч. доход из России (в PIT, remitted)',
+      amount: extras.foreignSalaryTaxableThb,
+      description: 'Часть зарплаты РФ, включаемая в декларацию: min(доход, remittance).',
+      kind: 'info',
+    })
+  }
+  if (extras?.foreignSalaryExcludedThb && extras.foreignSalaryExcludedThb > 0) {
+    items.push({
+      label: 'Доход из России вне PIT (не remitted)',
+      amount: extras.foreignSalaryExcludedThb,
+      description: 'Превышение зарплаты над remittance — не облагается PIT в Таиланде.',
       kind: 'info',
     })
   }
@@ -353,9 +382,14 @@ export function buildThailandTaxResult(
   options?: {
     localEmploymentGrossBase?: number
     includeSocialSecurity?: boolean
-    foreignSalaryGrossBase?: number
+    foreignSalaryTaxableBase?: number
+    foreignSalaryFullBase?: number
+    foreignSalaryExcludedBase?: number
+    remittanceFromExpensesBase?: number
     foreignTaxCreditBase?: number
     pitNetBase?: number
+    /** @deprecated используйте foreignSalaryTaxableBase */
+    foreignSalaryGrossBase?: number
   },
 ): TaxResult {
   const grossThb = baseToThb(grossBase, baseCurrency)
@@ -373,11 +407,29 @@ export function buildThailandTaxResult(
       ? baseToThb(options.pitNetBase, baseCurrency)
       : breakdown.pitGrossThb - (options?.foreignTaxCreditBase ? baseToThb(options.foreignTaxCreditBase, baseCurrency) : 0)
 
+  const foreignTaxableBase =
+    options?.foreignSalaryTaxableBase ?? options?.foreignSalaryGrossBase
+  const foreignFullBase = options?.foreignSalaryFullBase ?? foreignTaxableBase
+
   const breakdownItems = buildThailandBreakdownItems(breakdown, input, {
-    foreignSalaryGrossThb: options?.foreignSalaryGrossBase
-      ? baseToThb(options.foreignSalaryGrossBase, baseCurrency)
+    remittanceFromExpensesThb:
+      options?.remittanceFromExpensesBase !== undefined
+        ? baseToThb(options.remittanceFromExpensesBase, baseCurrency)
+        : undefined,
+    foreignSalaryFullThb: foreignFullBase
+      ? baseToThb(foreignFullBase, baseCurrency)
       : undefined,
-    localIncomeGrossThb: localEmploymentThb > 0 ? grossThb - (options?.foreignSalaryGrossBase ? baseToThb(options.foreignSalaryGrossBase!, baseCurrency) : 0) : undefined,
+    foreignSalaryTaxableThb: foreignTaxableBase
+      ? baseToThb(foreignTaxableBase, baseCurrency)
+      : undefined,
+    foreignSalaryExcludedThb: options?.foreignSalaryExcludedBase
+      ? baseToThb(options.foreignSalaryExcludedBase, baseCurrency)
+      : undefined,
+    localIncomeGrossThb:
+      localEmploymentThb > 0
+        ? grossThb -
+          (foreignTaxableBase ? baseToThb(foreignTaxableBase, baseCurrency) : 0)
+        : undefined,
     foreignTaxCreditThb: options?.foreignTaxCreditBase
       ? baseToThb(options.foreignTaxCreditBase, baseCurrency)
       : undefined,

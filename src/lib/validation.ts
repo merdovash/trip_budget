@@ -27,6 +27,9 @@ export const oneTimeExpenseSchema = z.object({
   currency: z.string().min(1),
   date: isoDateRequired,
   category: z.string().optional(),
+  expenseCountryScope: z.enum(['employment', 'residence', 'other'], {
+    errorMap: () => ({ message: 'Укажите страну расхода' }),
+  }),
 })
 
 const regularExpenseFormSchema = z.object({
@@ -36,6 +39,9 @@ const regularExpenseFormSchema = z.object({
   currency: z.string().min(1),
   frequency: z.enum(['monthly', 'yearly', 'weekly', 'once']),
   category: z.string().optional(),
+  expenseCountryScope: z.enum(['employment', 'residence', 'other'], {
+    errorMap: () => ({ message: 'Укажите страну расхода' }),
+  }),
   startDate: isoDateRequired,
   endDate: isoDateOptional,
 })
@@ -47,6 +53,9 @@ const loanExpenseFormSchema = z.object({
   currency: z.string().min(1),
   termMonths: z.coerce.number().int('Укажите целое число месяцев').min(1, 'Срок не менее 1 месяца'),
   annualRate: z.coerce.number().min(0, 'Ставка не может быть отрицательной'),
+  expenseCountryScope: z.enum(['employment', 'residence', 'other'], {
+    errorMap: () => ({ message: 'Укажите страну расхода' }),
+  }),
   startDate: isoDateRequired,
 })
 

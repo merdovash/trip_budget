@@ -1,4 +1,4 @@
-import type { RecurringItem } from '../types/budget'
+import type { ExpenseCountryScope, RecurringItem } from '../types/budget'
 import { LOAN_EXPENSE_CATEGORY } from '../types/budget'
 import { convertCurrency } from './currency'
 
@@ -126,6 +126,7 @@ export function buildLoanExpense(
     termMonths: number
     annualRate: number
     startDate: string
+    expenseCountryScope?: ExpenseCountryScope
   },
 ): Omit<RecurringItem, 'id'> {
   const payment = calculateAnnuityPayment(data.principal, data.annualRate, data.termMonths)
@@ -141,6 +142,7 @@ export function buildLoanExpense(
     category: LOAN_EXPENSE_CATEGORY,
     startDate: data.startDate,
     endDate: getLoanEndDate(data.startDate, data.termMonths),
+    expenseCountryScope: data.expenseCountryScope,
   }
 }
 

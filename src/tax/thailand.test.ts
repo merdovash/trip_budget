@@ -70,11 +70,75 @@ describe('adjustThailandResidenceTaxResult with RU salary', () => {
       initialBalance: 0,
       initialBalanceCurrency: 'THB',
       initialBalanceDate: '2026-01-01',
+      relocationDate: '2026-01-01',
     }
 
-    const adjusted = adjustThailandResidenceTaxResult([ruSalary], settings, thailandStandard)
+    const thLiving: RecurringItem = {
+      id: 'rent',
+      name: 'Rent',
+      amount: 80_000,
+      currency: 'THB',
+      frequency: 'monthly',
+      expenseCountryScope: 'residence',
+      startDate: '2026-01-01',
+    }
+
+    const adjusted = adjustThailandResidenceTaxResult(
+      [ruSalary],
+      settings,
+      thailandStandard,
+      [thLiving],
+      [],
+    )
     expect(adjusted.thailandForeignSalary).toBeDefined()
     expect(adjusted.result.breakdown.some((b) => b.kind === 'deduction')).toBe(true)
     expect(adjusted.result.breakdown.some((b) => b.kind === 'bracket')).toBe(true)
+  })
+
+  it('limits foreign salary PIT by remittance from expenses in Thailand', () => {
+    const salaryNoCredit: RecurringItem = { ...ruSalary, foreignTaxCredit: false }
+    const settings = {
+      baseCurrency: 'THB',
+      countryCode: 'TH',
+      taxRegimeId: 'th-standard',
+      familySize: 1,
+      dependents: 0,
+      horizonMonths: 12,
+      initialBalance: 0,
+      initialBalanceCurrency: 'THB',
+      initialBalanceDate: '2026-01-01',
+      relocationDate: '2026-01-01',
+    }
+
+    const thLiving: RecurringItem = {
+      id: 'rent',
+      name: 'Rent',
+      amount: 30_000,
+      currency: 'THB',
+      frequency: 'monthly',
+      expenseCountryScope: 'residence',
+      startDate: '2026-01-01',
+    }
+
+    const withoutExpenses = adjustThailandResidenceTaxResult(
+      [salaryNoCredit],
+      settings,
+      thailandStandard,
+      [],
+      [],
+    )
+    const withExpenses = adjustThailandResidenceTaxResult(
+      [salaryNoCredit],
+      settings,
+      thailandStandard,
+      [thLiving],
+      [],
+    )
+
+    expect(withoutExpenses.thailandForeignSalary?.foreignSalaryTaxableGross).toBe(0)
+    expect(withoutExpenses.thailandForeignSalary?.pitGross).toBe(0)
+    expect(withExpenses.thailandForeignSalary?.remittanceEstimate).toBe(30_000 * 12)
+    expect(withExpenses.thailandForeignSalary?.foreignSalaryTaxableGross).toBe(30_000 * 12)
+    expect(withExpenses.thailandForeignSalary?.pitGross).toBeGreaterThan(0)
   })
 })

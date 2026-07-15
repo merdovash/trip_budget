@@ -16,6 +16,8 @@ export interface IncomePayment {
 
 export type ItemLifecycle = 'destination' | 'origin' | 'any'
 
+export type ExpenseCountryScope = 'employment' | 'residence' | 'other'
+
 export interface RecurringItem {
   id: string
   name: string
@@ -43,6 +45,10 @@ export interface RecurringItem {
   termMonths?: number
   /** Годовая процентная ставка, %. */
   annualRate?: number
+  /** Где осуществляется расход: страна заработка, проживания или другое. */
+  expenseCountryScope?: ExpenseCountryScope
+  /** @deprecated используйте expenseCountryScope */
+  expenseCountryCode?: string
 }
 export interface OneTimeExpense {
   id: string
@@ -51,6 +57,9 @@ export interface OneTimeExpense {
   currency: string
   date: string
   category?: string
+  expenseCountryScope?: ExpenseCountryScope
+  /** @deprecated используйте expenseCountryScope */
+  expenseCountryCode?: string
 }
 
 export interface ThailandDeductionSettings {

@@ -37,8 +37,8 @@ export function Dashboard() {
   const cashGapDays = useMemo(() => findCashGapDays(dailySnapshots), [dailySnapshots])
 
   const taxSummary = useMemo(
-    () => getTaxSummary(incomes, settings),
-    [incomes, settings, rateDate],
+    () => getTaxSummary(incomes, settings, expenses, oneTimeExpenses),
+    [incomes, expenses, oneTimeExpenses, settings, rateDate],
   )
 
   const hasData =

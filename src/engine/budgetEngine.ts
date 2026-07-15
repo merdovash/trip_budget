@@ -598,13 +598,18 @@ function scheduledTaxTotalForMonth(
   return total
 }
 
-function getEffectiveTaxRate(incomes: RecurringItem[], settings: BudgetSettings): number {
+function getEffectiveTaxRate(
+  incomes: RecurringItem[],
+  expenses: RecurringItem[],
+  oneTimeExpenses: OneTimeExpense[],
+  settings: BudgetSettings,
+): number {
   const residenceIncomes = filterResidenceTaxableIncomes(incomes)
   const grossAnnualIncome = calculateAnnualGrossIncome(residenceIncomes, settings.baseCurrency)
   if (grossAnnualIncome <= 0) return 0
 
   const calculator = getTaxCalculator(settings.taxRegimeId)
-  const burden = computeAnnualTaxBurden(incomes, settings, calculator)
+  const burden = computeAnnualTaxBurden(incomes, settings, calculator, expenses, oneTimeExpenses)
   return (burden.residenceIncomeTax + burden.residenceSocial) / grossAnnualIncome
 }
 
@@ -634,7 +639,7 @@ export function calculateDailyBudgetProjection(
     familySize: settings.familySize,
     dependents: settings.dependents,
   })
-  const taxRate = getEffectiveTaxRate(incomes, settings)
+  const taxRate = getEffectiveTaxRate(incomes, expenses, oneTimeExpenses, settings)
   const scheduledTaxMap = taxResult
     ? buildScheduledTaxByDate(incomes, settings, taxResult, collectYearsFromDayKeys(dayKeys))
     : new Map()
@@ -718,11 +723,17 @@ export function calculateBudgetProjection(
 
   const calculator = getTaxCalculator(settings.taxRegimeId)
 
-  const taxResult = calculator?.calculate({
-    grossAnnualIncome,
-    familySize: settings.familySize,
-    dependents: settings.dependents,
-  })
+  const adjusted =
+    calculator
+      ? adjustResidenceTaxResult(residenceIncomes, settings, calculator, expenses, oneTimeExpenses)
+      : null
+  const taxResult =
+    adjusted?.result ??
+    calculator?.calculate({
+      grossAnnualIncome,
+      familySize: settings.familySize,
+      dependents: settings.dependents,
+    })
 
   const monthlyTax =
     taxResult && calculator?.taxDistribution !== 'scheduled'
@@ -813,7 +824,12 @@ export interface FullTaxSummary {
   foreignTaxCredit: number
 }
 
-export function getTaxSummary(incomes: RecurringItem[], settings: BudgetSettings): FullTaxSummary {
+export function getTaxSummary(
+  incomes: RecurringItem[],
+  settings: BudgetSettings,
+  expenses: RecurringItem[] = [],
+  oneTimeExpenses: OneTimeExpense[] = [],
+): FullTaxSummary {
   const residenceIncomes = filterResidenceTaxableIncomes(incomes)
   const grossAnnualIncome = calculateAnnualGrossIncome(residenceIncomes, settings.baseCurrency)
   const calculator = getTaxCalculator(settings.taxRegimeId)
@@ -830,7 +846,7 @@ export function getTaxSummary(incomes: RecurringItem[], settings: BudgetSettings
 
   const adjusted =
     calculator
-      ? adjustResidenceTaxResult(residenceIncomes, settings, calculator)
+      ? adjustResidenceTaxResult(residenceIncomes, settings, calculator, expenses, oneTimeExpenses)
       : null
 
   const residence =
@@ -841,7 +857,7 @@ export function getTaxSummary(incomes: RecurringItem[], settings: BudgetSettings
         }
       : null
 
-  const taxBurden = computeAnnualTaxBurden(incomes, settings, calculator)
+  const taxBurden = computeAnnualTaxBurden(incomes, settings, calculator, expenses, oneTimeExpenses)
 
   let spainSchedule: FullTaxSummary['spainSchedule']
   if (calculator?.countryCode === 'ES' && calculator.buildTaxSchedule) {

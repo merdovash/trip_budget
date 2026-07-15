@@ -9,13 +9,18 @@ import {
 import { useExchangeRateStore } from '../../store/exchangeRateStore'
 import { expenseFormSchema, type ExpenseFormData } from '../../lib/validation'
 import { useBudgetStore } from '../../store/budgetStore'
-import { FREQUENCY_LABELS, LOAN_EXPENSE_CATEGORY, type RecurringItem } from '../../types/budget'
+import { FREQUENCY_LABELS, LOAN_EXPENSE_CATEGORY, type BudgetSettings, type RecurringItem } from '../../types/budget'
 import {
   FOOD_EXPENSE_CATEGORY,
   getCountryLocalCurrency,
   getTypicalFoodBudget,
 } from '../../config/foodBudget'
 import { COUNTRY_LABELS } from '../../tax/registry'
+import {
+  getExpenseCountryScope,
+  getExpenseCountryScopeLabel,
+  getExpenseCountryScopeOptions,
+} from '../../lib/expenseCountry'
 import { Button, Card, EmptyState, Field, Input, Select, DateInput } from '../ui/FormControls'
 import { CurrencySelect } from '../ui/CurrencySelect'
 import { CurrencyConversionHint } from '../ui/CurrencyConversionHint'
@@ -47,7 +52,8 @@ function loanAnnualRateFromItem(item: RecurringItem): string {
   return formatRateInput(item.annualRate ?? 0)
 }
 
-function expenseToFormData(item: RecurringItem): ExpenseFormData {
+function expenseToFormData(item: RecurringItem, settings: BudgetSettings): ExpenseFormData {
+  const expenseCountryScope = getExpenseCountryScope(item, settings)
   if (isLoanExpense(item)) {
     return {
       kind: 'loan',
@@ -56,6 +62,7 @@ function expenseToFormData(item: RecurringItem): ExpenseFormData {
       currency: item.currency,
       termMonths: item.termMonths ?? 1,
       annualRate: item.annualRate ?? 0,
+      expenseCountryScope,
       startDate: item.startDate,
     }
   }
@@ -66,6 +73,7 @@ function expenseToFormData(item: RecurringItem): ExpenseFormData {
     currency: item.currency,
     frequency: item.frequency,
     category: item.category ?? '',
+    expenseCountryScope,
     startDate: item.startDate,
     endDate: item.endDate ?? '',
   }
@@ -83,9 +91,38 @@ function formDataToExpense(data: ExpenseFormData): Omit<RecurringItem, 'id'> {
     frequency: data.frequency,
     category: data.category || undefined,
     lifecycle: 'destination',
+    expenseCountryScope: data.expenseCountryScope,
     startDate: data.startDate,
     endDate: data.endDate || undefined,
   }
+}
+
+function ExpenseCountryField({
+  value,
+  onChange,
+  error,
+}: {
+  value: ExpenseFormData['expenseCountryScope']
+  onChange: (scope: ExpenseFormData['expenseCountryScope']) => void
+  error?: string
+}) {
+  const settings = useBudgetStore((s) => s.settings)
+  const options = getExpenseCountryScopeOptions(settings)
+
+  return (
+    <Field label="Страна расхода" error={error}>
+      <Select value={value} onChange={(e) => onChange(e.target.value as ExpenseFormData['expenseCountryScope'])}>
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </Select>
+      <p className="mt-1 text-xs text-slate-500">
+        Для remittance в Таиланде учитываются только расходы в стране проживания.
+      </p>
+    </Field>
+  )
 }
 
 function AmountCell({
@@ -125,7 +162,7 @@ function ExpenseForm({ initialItem, onSubmit, onCancel }: ExpenseFormProps) {
   const settings = useBudgetStore((s) => s.settings)
   const [form, setForm] = useState<ExpenseFormData>(() =>
     initialItem
-      ? expenseToFormData(initialItem)
+      ? expenseToFormData(initialItem, settings)
       : {
           kind: 'regular',
           name: '',
@@ -133,6 +170,7 @@ function ExpenseForm({ initialItem, onSubmit, onCancel }: ExpenseFormProps) {
           currency: settings.baseCurrency,
           frequency: 'monthly',
           category: '',
+          expenseCountryScope: 'residence',
           startDate: todayIsoDate(),
           endDate: '',
         },
@@ -223,6 +261,7 @@ function ExpenseForm({ initialItem, onSubmit, onCancel }: ExpenseFormProps) {
         currency: settings.baseCurrency,
         frequency: 'monthly',
         category: '',
+        expenseCountryScope: 'residence',
         startDate: todayIsoDate(),
         endDate: '',
       })
@@ -246,6 +285,8 @@ function ExpenseForm({ initialItem, onSubmit, onCancel }: ExpenseFormProps) {
                 currency: settings.baseCurrency,
                 termMonths: 12,
                 annualRate: 0,
+                expenseCountryScope:
+                  form.kind === 'regular' ? form.expenseCountryScope : 'residence',
                 startDate: todayIsoDate(),
               })
             } else {
@@ -257,6 +298,8 @@ function ExpenseForm({ initialItem, onSubmit, onCancel }: ExpenseFormProps) {
                 currency: settings.baseCurrency,
                 frequency: 'monthly',
                 category: '',
+                expenseCountryScope:
+                  form.kind === 'loan' ? form.expenseCountryScope : 'residence',
                 startDate: todayIsoDate(),
                 endDate: '',
               })
@@ -339,6 +382,11 @@ function ExpenseForm({ initialItem, onSubmit, onCancel }: ExpenseFormProps) {
           <Field label="Дата окончания (опц.)" error={errors.endDate}>
             <DateInput value={form.endDate ?? ''} onChange={(endDate) => setForm({ ...form, endDate })} />
           </Field>
+          <ExpenseCountryField
+            value={form.expenseCountryScope}
+            onChange={(expenseCountryScope) => setForm({ ...form, expenseCountryScope })}
+            error={errors.expenseCountryScope}
+          />
         </>
       ) : (
         <>
@@ -417,6 +465,11 @@ function ExpenseForm({ initialItem, onSubmit, onCancel }: ExpenseFormProps) {
               )}
             </div>
           )}
+          <ExpenseCountryField
+            value={form.expenseCountryScope}
+            onChange={(expenseCountryScope) => setForm({ ...form, expenseCountryScope })}
+            error={errors.expenseCountryScope}
+          />
         </>
       )}
 
@@ -462,6 +515,7 @@ function ExpenseList({
             <th className="py-2 pr-4">Сумма</th>
             <th className="py-2 pr-4">Периодичность</th>
             <th className="py-2 pr-4">Категория</th>
+            <th className="py-2 pr-4">Страна</th>
             <th className="py-2" />
           </tr>
         </thead>
@@ -480,6 +534,9 @@ function ExpenseList({
               </td>
               <td className="py-2 pr-4 text-slate-500">
                 {isLoanExpense(item) ? LOAN_EXPENSE_CATEGORY : (item.category ?? '—')}
+              </td>
+              <td className="py-2 pr-4 text-slate-500">
+                {getExpenseCountryScopeLabel(getExpenseCountryScope(item, settings), settings)}
               </td>
               <td className="py-2 text-right">
                 <div className="flex justify-end gap-2">

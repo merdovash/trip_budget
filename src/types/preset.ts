@@ -1,9 +1,11 @@
-import type { BudgetSettings, OneTimeExpense, RecurringItem } from './budget'
+import type { BudgetSettings, ExpenseFolder, OneTimeExpense, RecurringItem } from './budget'
 
 export interface BudgetPresetData {
   settings: BudgetSettings
   incomes: RecurringItem[]
   expenses: RecurringItem[]
+  /** Папки для группировки расходов. */
+  folders?: ExpenseFolder[]
   /** @deprecated Кредиты хранятся в expenses с expenseKind === 'loan'. */
   loans?: Array<{
     name: string

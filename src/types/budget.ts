@@ -18,6 +18,12 @@ export type ItemLifecycle = 'destination' | 'origin' | 'any'
 
 export type ExpenseCountryScope = 'employment' | 'residence' | 'other'
 
+export interface ExpenseFolder {
+  id: string
+  name: string
+  sortOrder?: number
+}
+
 export interface RecurringItem {
   id: string
   name: string
@@ -45,6 +51,8 @@ export interface RecurringItem {
   termMonths?: number
   /** Годовая процентная ставка, %. */
   annualRate?: number
+  /** Папка для группировки расходов. */
+  folderId?: string
   /** Где осуществляется расход: страна заработка, проживания или другое. */
   expenseCountryScope?: ExpenseCountryScope
   /** @deprecated используйте expenseCountryScope */

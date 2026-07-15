@@ -69,6 +69,7 @@ function currentScope(form: ExpenseFormData): ExpenseFormData['expenseCountrySco
 
 function expenseToFormData(item: RecurringItem, settings: BudgetSettings): ExpenseFormData {
   const expenseCountryScope = getExpenseCountryScope(item, settings)
+  const folderId = item.folderId ?? ''
   if (isLoanExpense(item)) {
     return {
       kind: 'loan',
@@ -77,6 +78,7 @@ function expenseToFormData(item: RecurringItem, settings: BudgetSettings): Expen
       currency: item.currency,
       termMonths: item.termMonths ?? 1,
       annualRate: item.annualRate ?? 0,
+      folderId,
       expenseCountryScope,
       startDate: item.startDate,
     }
@@ -88,6 +90,7 @@ function expenseToFormData(item: RecurringItem, settings: BudgetSettings): Expen
       amount: item.amount,
       currency: item.currency,
       category: item.category ?? '',
+      folderId,
       expenseCountryScope,
       startDate: item.startDate,
     }
@@ -99,6 +102,7 @@ function expenseToFormData(item: RecurringItem, settings: BudgetSettings): Expen
     currency: item.currency,
     frequency: item.frequency,
     category: item.category ?? '',
+    folderId,
     expenseCountryScope,
     startDate: item.startDate,
     endDate: item.endDate ?? '',
@@ -106,8 +110,9 @@ function expenseToFormData(item: RecurringItem, settings: BudgetSettings): Expen
 }
 
 function formDataToExpense(data: ExpenseFormData): Omit<RecurringItem, 'id'> {
+  const folderId = data.folderId || undefined
   if (data.kind === 'loan') {
-    return buildLoanExpense(data)
+    return buildLoanExpense({ ...data, folderId })
   }
   if (data.kind === 'once') {
     return {
@@ -118,6 +123,7 @@ function formDataToExpense(data: ExpenseFormData): Omit<RecurringItem, 'id'> {
       frequency: 'once',
       category: data.category || undefined,
       lifecycle: 'any',
+      folderId,
       expenseCountryScope: data.expenseCountryScope,
       startDate: data.startDate,
     }
@@ -130,6 +136,7 @@ function formDataToExpense(data: ExpenseFormData): Omit<RecurringItem, 'id'> {
     frequency: data.frequency,
     category: data.category || undefined,
     lifecycle: 'destination',
+    folderId,
     expenseCountryScope: data.expenseCountryScope,
     startDate: data.startDate,
     endDate: data.endDate || undefined,
@@ -144,10 +151,34 @@ function blankRegularForm(baseCurrency: string): Extract<ExpenseFormData, { kind
     currency: baseCurrency,
     frequency: 'monthly',
     category: '',
+    folderId: '',
     expenseCountryScope: 'residence',
     startDate: todayIsoDate(),
     endDate: '',
   }
+}
+
+function FolderField({
+  value,
+  onChange,
+}: {
+  value: string | undefined
+  onChange: (folderId: string) => void
+}) {
+  const folders = useBudgetStore((s) => s.folders)
+
+  return (
+    <Field label="Папка">
+      <Select value={value ?? ''} onChange={(e) => onChange(e.target.value)}>
+        <option value="">Без папки</option>
+        {folders.map((folder) => (
+          <option key={folder.id} value={folder.id}>
+            {folder.name}
+          </option>
+        ))}
+      </Select>
+    </Field>
+  )
 }
 
 function ExpenseCountryField({
@@ -269,6 +300,7 @@ function ExpenseForm({ initialItem, onSubmit, onCancel }: ExpenseFormProps) {
   function switchKind(kind: ExpenseFormData['kind']) {
     const scope = currentScope(form)
     const name = form.name
+    const folderId = form.folderId ?? ''
     setAnnualRateInput('0')
     if (kind === 'loan') {
       setForm({
@@ -278,6 +310,7 @@ function ExpenseForm({ initialItem, onSubmit, onCancel }: ExpenseFormProps) {
         currency: settings.baseCurrency,
         termMonths: 12,
         annualRate: 0,
+        folderId,
         expenseCountryScope: scope,
         startDate: todayIsoDate(),
       })
@@ -288,6 +321,7 @@ function ExpenseForm({ initialItem, onSubmit, onCancel }: ExpenseFormProps) {
         amount: 0,
         currency: settings.baseCurrency,
         category: '',
+        folderId,
         expenseCountryScope: scope,
         startDate: todayIsoDate(),
       })
@@ -295,6 +329,7 @@ function ExpenseForm({ initialItem, onSubmit, onCancel }: ExpenseFormProps) {
       setForm({
         ...blankRegularForm(settings.baseCurrency),
         name,
+        folderId,
         expenseCountryScope: scope,
       })
     }
@@ -413,6 +448,10 @@ function ExpenseForm({ initialItem, onSubmit, onCancel }: ExpenseFormProps) {
               onChange={(endDate) => setForm({ ...form, endDate })}
             />
           </Field>
+          <FolderField
+            value={form.folderId}
+            onChange={(folderId) => setForm({ ...form, folderId })}
+          />
           <ExpenseCountryField
             value={form.expenseCountryScope}
             onChange={(expenseCountryScope) => setForm({ ...form, expenseCountryScope })}
@@ -462,6 +501,10 @@ function ExpenseForm({ initialItem, onSubmit, onCancel }: ExpenseFormProps) {
               ))}
             </Select>
           </Field>
+          <FolderField
+            value={form.folderId}
+            onChange={(folderId) => setForm({ ...form, folderId })}
+          />
           <ExpenseCountryField
             value={form.expenseCountryScope}
             onChange={(expenseCountryScope) => setForm({ ...form, expenseCountryScope })}
@@ -547,6 +590,10 @@ function ExpenseForm({ initialItem, onSubmit, onCancel }: ExpenseFormProps) {
               )}
             </div>
           )}
+          <FolderField
+            value={form.folderId}
+            onChange={(folderId) => setForm({ ...form, folderId })}
+          />
           <ExpenseCountryField
             value={form.expenseCountryScope}
             onChange={(expenseCountryScope) => setForm({ ...form, expenseCountryScope })}
@@ -567,6 +614,108 @@ function ExpenseForm({ initialItem, onSubmit, onCancel }: ExpenseFormProps) {
   )
 }
 
+function FoldersManager() {
+  const folders = useBudgetStore((s) => s.folders)
+  const addFolder = useBudgetStore((s) => s.addFolder)
+  const updateFolder = useBudgetStore((s) => s.updateFolder)
+  const removeFolder = useBudgetStore((s) => s.removeFolder)
+  const [newName, setNewName] = useState('')
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap gap-2">
+        <Input
+          className="min-w-[12rem] flex-1"
+          placeholder="Название папки"
+          value={newName}
+          onChange={(e) => setNewName(e.target.value)}
+        />
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={() => {
+            if (!newName.trim()) return
+            addFolder(newName)
+            setNewName('')
+          }}
+        >
+          Создать папку
+        </Button>
+      </div>
+      {folders.length > 0 && (
+        <ul className="space-y-2">
+          {folders.map((folder) => (
+            <li key={folder.id} className="flex flex-wrap items-center gap-2">
+              <Input
+                className="min-w-[12rem] flex-1"
+                value={folder.name}
+                onChange={(e) => updateFolder(folder.id, { name: e.target.value })}
+              />
+              <Button type="button" variant="danger" onClick={() => removeFolder(folder.id)}>
+                Удалить
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="text-xs text-slate-500">
+        Удаление папки не удаляет расходы — они переходят в «Без папки».
+      </p>
+    </div>
+  )
+}
+
+function ExpenseRows({
+  items,
+  editingId,
+  onEdit,
+  onRemove,
+  baseCurrency,
+  settings,
+}: {
+  items: RecurringItem[]
+  editingId: string | null
+  onEdit: (id: string) => void
+  onRemove: (id: string) => void
+  baseCurrency: string
+  settings: BudgetSettings
+}) {
+  return (
+    <>
+      {items.map((item) => (
+        <tr
+          key={item.id}
+          className={`border-b border-slate-100 ${editingId === item.id ? 'bg-blue-50' : ''}`}
+        >
+          <td className="py-2 pr-4 font-medium">{item.name}</td>
+          <AmountCell item={item} baseCurrency={baseCurrency} />
+          <td className="py-2 pr-4">
+            {isLoanExpense(item)
+              ? `${item.termMonths} мес. (кредит)`
+              : FREQUENCY_LABELS[item.frequency]}
+          </td>
+          <td className="py-2 pr-4 text-slate-500">
+            {isLoanExpense(item) ? LOAN_EXPENSE_CATEGORY : (item.category ?? '—')}
+          </td>
+          <td className="py-2 pr-4 text-slate-500">
+            {getExpenseCountryScopeLabel(getExpenseCountryScope(item, settings), settings)}
+          </td>
+          <td className="py-2 text-right">
+            <div className="flex justify-end gap-2">
+              <Button variant="secondary" type="button" onClick={() => onEdit(item.id)}>
+                Изменить
+              </Button>
+              <Button variant="danger" type="button" onClick={() => onRemove(item.id)}>
+                Удалить
+              </Button>
+            </div>
+          </td>
+        </tr>
+      ))}
+    </>
+  )
+}
+
 function ExpenseList({
   editingId,
   onEdit,
@@ -577,7 +726,23 @@ function ExpenseList({
   onRemove: (id: string) => void
 }) {
   const expenses = useBudgetStore((s) => s.expenses)
+  const folders = useBudgetStore((s) => s.folders)
   const settings = useBudgetStore((s) => s.settings)
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
+
+  const grouped = useMemo(() => {
+    const sortedFolders = [...folders].sort(
+      (a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.name.localeCompare(b.name),
+    )
+    const folderIds = new Set(sortedFolders.map((f) => f.id))
+    const ungrouped = expenses.filter((item) => !item.folderId || !folderIds.has(item.folderId))
+    const groups = sortedFolders.map((folder) => ({
+      id: folder.id,
+      name: folder.name,
+      items: expenses.filter((item) => item.folderId === folder.id),
+    }))
+    return { groups, ungrouped }
+  }, [expenses, folders])
 
   if (expenses.length === 0) {
     return (
@@ -588,52 +753,94 @@ function ExpenseList({
     )
   }
 
+  function toggleGroup(id: string) {
+    setCollapsed((prev) => ({ ...prev, [id]: !prev[id] }))
+  }
+
+  const tableHead = (
+    <tr className="border-b border-slate-200 text-left text-slate-500">
+      <th className="py-2 pr-4">Название</th>
+      <th className="py-2 pr-4">Сумма</th>
+      <th className="py-2 pr-4">Периодичность</th>
+      <th className="py-2 pr-4">Категория</th>
+      <th className="py-2 pr-4">Страна</th>
+      <th className="py-2" />
+    </tr>
+  )
+
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b border-slate-200 text-left text-slate-500">
-            <th className="py-2 pr-4">Название</th>
-            <th className="py-2 pr-4">Сумма</th>
-            <th className="py-2 pr-4">Периодичность</th>
-            <th className="py-2 pr-4">Категория</th>
-            <th className="py-2 pr-4">Страна</th>
-            <th className="py-2" />
-          </tr>
-        </thead>
-        <tbody>
-          {expenses.map((item) => (
-            <tr
-              key={item.id}
-              className={`border-b border-slate-100 ${editingId === item.id ? 'bg-blue-50' : ''}`}
-            >
-              <td className="py-2 pr-4 font-medium">{item.name}</td>
-              <AmountCell item={item} baseCurrency={settings.baseCurrency} />
-              <td className="py-2 pr-4">
-                {isLoanExpense(item)
-                  ? `${item.termMonths} мес. (кредит)`
-                  : FREQUENCY_LABELS[item.frequency]}
-              </td>
-              <td className="py-2 pr-4 text-slate-500">
-                {isLoanExpense(item) ? LOAN_EXPENSE_CATEGORY : (item.category ?? '—')}
-              </td>
-              <td className="py-2 pr-4 text-slate-500">
-                {getExpenseCountryScopeLabel(getExpenseCountryScope(item, settings), settings)}
-              </td>
-              <td className="py-2 text-right">
-                <div className="flex justify-end gap-2">
-                  <Button variant="secondary" type="button" onClick={() => onEdit(item.id)}>
-                    Изменить
-                  </Button>
-                  <Button variant="danger" type="button" onClick={() => onRemove(item.id)}>
-                    Удалить
-                  </Button>
-                </div>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div className="space-y-4">
+      {grouped.groups.map((group) => (
+        <div key={group.id} className="rounded-lg border border-slate-200">
+          <button
+            type="button"
+            className="flex w-full items-center justify-between px-3 py-2 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            onClick={() => toggleGroup(group.id)}
+          >
+            <span>
+              {group.name}{' '}
+              <span className="font-normal text-slate-400">({group.items.length})</span>
+            </span>
+            <span className="text-slate-400">{collapsed[group.id] ? '▸' : '▾'}</span>
+          </button>
+          {!collapsed[group.id] && (
+            <div className="overflow-x-auto border-t border-slate-100 px-3 pb-2">
+              {group.items.length === 0 ? (
+                <p className="py-3 text-sm text-slate-500">В папке пока нет расходов.</p>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead>{tableHead}</thead>
+                  <tbody>
+                    <ExpenseRows
+                      items={group.items}
+                      editingId={editingId}
+                      onEdit={onEdit}
+                      onRemove={onRemove}
+                      baseCurrency={settings.baseCurrency}
+                      settings={settings}
+                    />
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
+        </div>
+      ))}
+
+      <div className="rounded-lg border border-slate-200">
+        <button
+          type="button"
+          className="flex w-full items-center justify-between px-3 py-2 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50"
+          onClick={() => toggleGroup('__none')}
+        >
+          <span>
+            Без папки{' '}
+            <span className="font-normal text-slate-400">({grouped.ungrouped.length})</span>
+          </span>
+          <span className="text-slate-400">{collapsed.__none ? '▸' : '▾'}</span>
+        </button>
+        {!collapsed.__none && (
+          <div className="overflow-x-auto border-t border-slate-100 px-3 pb-2">
+            {grouped.ungrouped.length === 0 ? (
+              <p className="py-3 text-sm text-slate-500">Нет расходов вне папок.</p>
+            ) : (
+              <table className="w-full text-sm">
+                <thead>{tableHead}</thead>
+                <tbody>
+                  <ExpenseRows
+                    items={grouped.ungrouped}
+                    editingId={editingId}
+                    onEdit={onEdit}
+                    onRemove={onRemove}
+                    baseCurrency={settings.baseCurrency}
+                    settings={settings}
+                  />
+                </tbody>
+              </table>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -649,6 +856,10 @@ export function ExpensePanel() {
 
   return (
     <div className="space-y-4">
+      <Card>
+        <h2 className="mb-4 text-lg font-semibold">Папки расходов</h2>
+        <FoldersManager />
+      </Card>
       <Card>
         <h2 className="mb-4 text-lg font-semibold">
           {editingId ? 'Редактировать расход' : 'Добавить расход'}

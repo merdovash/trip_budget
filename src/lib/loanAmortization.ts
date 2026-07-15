@@ -127,6 +127,7 @@ export function buildLoanExpense(
     annualRate: number
     startDate: string
     expenseCountryScope?: ExpenseCountryScope
+    folderId?: string
   },
 ): Omit<RecurringItem, 'id'> {
   const payment = calculateAnnuityPayment(data.principal, data.annualRate, data.termMonths)
@@ -143,6 +144,7 @@ export function buildLoanExpense(
     startDate: data.startDate,
     endDate: getLoanEndDate(data.startDate, data.termMonths),
     expenseCountryScope: data.expenseCountryScope,
+    folderId: data.folderId || undefined,
   }
 }
 

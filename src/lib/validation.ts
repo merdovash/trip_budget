@@ -21,15 +21,19 @@ export const recurringItemSchema = z.object({
   endDate: isoDateOptional,
 })
 
+const expenseCountryScopeSchema = z.enum(['employment', 'residence', 'other'], {
+  errorMap: () => ({ message: 'Укажите страну расхода' }),
+})
+
+const folderIdSchema = z.string().optional()
+
 export const oneTimeExpenseSchema = z.object({
   name: z.string().min(1, 'Укажите название'),
   amount: z.coerce.number().positive('Сумма должна быть больше 0'),
   currency: z.string().min(1),
   date: isoDateRequired,
   category: z.string().optional(),
-  expenseCountryScope: z.enum(['employment', 'residence', 'other'], {
-    errorMap: () => ({ message: 'Укажите страну расхода' }),
-  }),
+  expenseCountryScope: expenseCountryScopeSchema,
 })
 
 const regularExpenseFormSchema = z.object({
@@ -39,9 +43,8 @@ const regularExpenseFormSchema = z.object({
   currency: z.string().min(1),
   frequency: z.enum(['monthly', 'yearly', 'weekly']),
   category: z.string().optional(),
-  expenseCountryScope: z.enum(['employment', 'residence', 'other'], {
-    errorMap: () => ({ message: 'Укажите страну расхода' }),
-  }),
+  folderId: folderIdSchema,
+  expenseCountryScope: expenseCountryScopeSchema,
   startDate: isoDateRequired,
   endDate: isoDateOptional,
 })
@@ -52,9 +55,8 @@ const onceExpenseFormSchema = z.object({
   amount: z.coerce.number().positive('Сумма должна быть больше 0'),
   currency: z.string().min(1),
   category: z.string().optional(),
-  expenseCountryScope: z.enum(['employment', 'residence', 'other'], {
-    errorMap: () => ({ message: 'Укажите страну расхода' }),
-  }),
+  folderId: folderIdSchema,
+  expenseCountryScope: expenseCountryScopeSchema,
   startDate: isoDateRequired,
 })
 
@@ -65,9 +67,8 @@ const loanExpenseFormSchema = z.object({
   currency: z.string().min(1),
   termMonths: z.coerce.number().int('Укажите целое число месяцев').min(1, 'Срок не менее 1 месяца'),
   annualRate: z.coerce.number().min(0, 'Ставка не может быть отрицательной'),
-  expenseCountryScope: z.enum(['employment', 'residence', 'other'], {
-    errorMap: () => ({ message: 'Укажите страну расхода' }),
-  }),
+  folderId: folderIdSchema,
+  expenseCountryScope: expenseCountryScopeSchema,
   startDate: isoDateRequired,
 })
 

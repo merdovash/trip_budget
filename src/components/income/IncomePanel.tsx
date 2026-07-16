@@ -52,10 +52,10 @@ function IncomeFolderField({
 interface IncomeFormProps {
   initialItem?: RecurringItem
   onSubmit: (item: Omit<RecurringItem, 'id'>) => void
-  onCancel?: () => void
+  formId?: string
 }
 
-function IncomeForm({ initialItem, onSubmit, onCancel }: IncomeFormProps) {
+function IncomeForm({ initialItem, onSubmit, formId = 'income-form' }: IncomeFormProps) {
   const settings = useBudgetStore((s) => s.settings)
   const [form, setForm] = useState<IncomeFormState>(() =>
     initialItem ? incomeItemToFormState(initialItem) : createInitialIncomeForm(settings.baseCurrency),
@@ -236,7 +236,7 @@ function IncomeForm({ initialItem, onSubmit, onCancel }: IncomeFormProps) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="min-w-0 space-y-4 [&>*]:min-w-0">
+    <form id={formId} onSubmit={handleSubmit} className="min-w-0 space-y-4 [&>*]:min-w-0">
       <Field label="Категория" error={errors.categoryId}>
         <Select value={form.categoryId} onChange={(e) => handleCategoryChange(e.target.value)}>
           <option value="">— Выберите категорию —</option>
@@ -518,17 +518,6 @@ function IncomeForm({ initialItem, onSubmit, onCancel }: IncomeFormProps) {
           />
         </>
       )}
-
-      <div className="flex flex-wrap gap-2">
-        <Button type="submit" disabled={!categoryDef}>
-          {isEditing ? 'Сохранить' : 'Добавить'}
-        </Button>
-        {onCancel && (
-          <Button type="button" variant="secondary" onClick={onCancel}>
-            Отмена
-          </Button>
-        )}
-      </div>
     </form>
   )
 }
@@ -1063,9 +1052,15 @@ export function IncomePanel() {
         open={panelMode !== 'closed'}
         title={panelMode === 'edit' ? 'Карточка дохода' : 'Новый доход'}
         onClose={closePanel}
+        headerActions={
+          <Button type="submit" form="income-form">
+            {panelMode === 'edit' ? 'Сохранить' : 'Добавить'}
+          </Button>
+        }
       >
         <IncomeForm
           key={editingId ?? 'new'}
+          formId="income-form"
           initialItem={editingItem}
           onSubmit={(data) => {
             if (panelMode === 'edit' && editingId) {
@@ -1075,7 +1070,6 @@ export function IncomePanel() {
             }
             closePanel()
           }}
-          onCancel={closePanel}
         />
       </StackPanel>
     </div>

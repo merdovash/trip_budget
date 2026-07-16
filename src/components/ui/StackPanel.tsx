@@ -5,10 +5,12 @@ interface StackPanelProps {
   title: string
   onClose: () => void
   children: ReactNode
+  /** Extra controls in the header, shown before «Закрыть» (e.g. Save). */
+  headerActions?: ReactNode
 }
 
 /** Нижняя стековая панель (sheet) поверх контента. */
-export function StackPanel({ open, title, onClose, children }: StackPanelProps) {
+export function StackPanel({ open, title, onClose, children, headerActions }: StackPanelProps) {
   const openedAtRef = useRef(0)
 
   useEffect(() => {
@@ -49,15 +51,18 @@ export function StackPanel({ open, title, onClose, children }: StackPanelProps) 
         className="relative z-10 flex max-h-[92vh] w-full flex-col rounded-t-2xl border border-slate-200 bg-white shadow-2xl"
         style={{ animation: 'stack-panel-up 200ms ease-out' }}
       >
-        <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-4 py-3">
-          <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
-          <button
-            type="button"
-            className="rounded-lg px-2 py-1 text-sm text-slate-500 hover:bg-slate-100 hover:text-slate-800"
-            onClick={onClose}
-          >
-            Закрыть
-          </button>
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
+          <h2 className="min-w-0 flex-1 truncate text-lg font-semibold text-slate-900">{title}</h2>
+          <div className="flex shrink-0 items-center gap-2">
+            {headerActions}
+            <button
+              type="button"
+              className="rounded-lg px-2 py-1 text-sm text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+              onClick={onClose}
+            >
+              Закрыть
+            </button>
+          </div>
         </div>
         <div className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto p-4">{children}</div>
       </div>

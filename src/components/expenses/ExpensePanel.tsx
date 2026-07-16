@@ -372,10 +372,10 @@ function ExpenseRows({
 interface ExpenseFormProps {
   initialItem?: RecurringItem
   onSubmit: (data: ExpenseFormData) => void
-  onCancel?: () => void
+  formId?: string
 }
 
-function ExpenseForm({ initialItem, onSubmit, onCancel }: ExpenseFormProps) {
+function ExpenseForm({ initialItem, onSubmit, formId = 'expense-form' }: ExpenseFormProps) {
   const settings = useBudgetStore((s) => s.settings)
   const [form, setForm] = useState<ExpenseFormData>(() =>
     initialItem ? expenseToFormData(initialItem, settings) : blankRegularForm(settings.baseCurrency),
@@ -498,7 +498,7 @@ function ExpenseForm({ initialItem, onSubmit, onCancel }: ExpenseFormProps) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="grid min-w-0 gap-3 [&>*]:min-w-0 md:grid-cols-2">
+    <form id={formId} onSubmit={handleSubmit} className="grid min-w-0 gap-3 [&>*]:min-w-0 md:grid-cols-2">
       <Field label="Вид расхода" className="md:col-span-2">
         <Select value={form.kind} onChange={(e) => switchKind(e.target.value as ExpenseFormData['kind'])}>
           <option value="regular">Обычный</option>
@@ -719,15 +719,6 @@ function ExpenseForm({ initialItem, onSubmit, onCancel }: ExpenseFormProps) {
           />
         </>
       )}
-
-      <div className="flex flex-wrap gap-2 md:col-span-2">
-        <Button type="submit">{isEditing ? 'Сохранить' : 'Добавить расход'}</Button>
-        {onCancel && (
-          <Button type="button" variant="secondary" onClick={onCancel}>
-            Отмена
-          </Button>
-        )}
-      </div>
     </form>
   )
 }
@@ -961,9 +952,15 @@ export function ExpensePanel() {
         open={panelMode !== 'closed'}
         title={panelMode === 'edit' ? 'Карточка расхода' : 'Новый расход'}
         onClose={closePanel}
+        headerActions={
+          <Button type="submit" form="expense-form">
+            {panelMode === 'edit' ? 'Сохранить' : 'Добавить'}
+          </Button>
+        }
       >
         <ExpenseForm
           key={editingId ?? 'new'}
+          formId="expense-form"
           initialItem={editingItem}
           onSubmit={(data) => {
             const expense = formDataToExpense(data)
@@ -974,7 +971,6 @@ export function ExpensePanel() {
             }
             closePanel()
           }}
-          onCancel={closePanel}
         />
       </StackPanel>
     </div>

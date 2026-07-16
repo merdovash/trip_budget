@@ -2,8 +2,7 @@ import { useBudgetStore } from '../../store/budgetStore'
 import { useExchangeRateStore } from '../../store/exchangeRateStore'
 import { getTaxCalculator } from '../../tax/registry'
 import { CURRENCIES, CURRENCY_LABELS, DEFAULT_SETTINGS } from '../../types/budget'
-import { todayIsoDate } from '../../lib/format'
-import { Button, Card, Field, Input, Select, DateInput } from '../ui/FormControls'
+import { Button, Card, Field, Input, Select } from '../ui/FormControls'
 import { SavedSettingsPanel } from './SavedSettingsPanel'
 import { ResidenceRouteEditor } from './ResidenceRouteEditor'
 import { InitialBalanceEditor } from './InitialBalanceEditor'
@@ -185,16 +184,6 @@ export function BudgetSettingsPanel() {
 
           <Field label="Начальные остатки">
             <InitialBalanceEditor settings={settings} onChange={setSettings} />
-          </Field>
-
-          <Field label="Дата начального остатка">
-            <DateInput
-              value={settings.initialBalanceDate ?? todayIsoDate()}
-              onChange={(initialBalanceDate) => setSettings({ initialBalanceDate })}
-            />
-            <p className="mt-1 text-xs text-slate-500">
-              График и прогноз бюджета начинаются с этого месяца.
-            </p>
           </Field>
 
           <Field label="Горизонт прогноза (мес.)">

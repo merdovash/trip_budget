@@ -45,9 +45,10 @@ interface TaxesOverviewPanelProps {
 }
 
 type DetailTarget =
-  | { kind: 'employment' }
-  | { kind: 'residence'; countryCode: string }
-  | { kind: 'credit'; countryCode: string }
+  | { kind: 'employment'; year?: number }
+  | { kind: 'residence'; countryCode: string; year?: number }
+  | { kind: 'credit'; countryCode: string; year?: number }
+  | { kind: 'year'; year: number }
 
 interface ResidenceAggregate {
   countryCode: string
@@ -515,12 +516,14 @@ export function TaxesOverviewPanel({
 
   const detailTitle =
     detail?.kind === 'employment'
-      ? `Налоги в стране заработка (${employmentLabel})`
+      ? `Налоги в стране заработка (${employmentLabel})${detail.year != null ? ` · ${detail.year}` : ''}`
       : detail?.kind === 'residence'
-        ? `Налоги в стране проживания (${COUNTRY_LABELS[detail.countryCode] ?? detail.countryCode})`
+        ? `Налоги в стране проживания (${COUNTRY_LABELS[detail.countryCode] ?? detail.countryCode})${detail.year != null ? ` · ${detail.year}` : ''}`
         : detail?.kind === 'credit'
-          ? `Налоговый зачёт (${COUNTRY_LABELS[detail.countryCode] ?? detail.countryCode})`
-          : ''
+          ? `Налоговый зачёт (${COUNTRY_LABELS[detail.countryCode] ?? detail.countryCode})${detail.year != null ? ` · ${detail.year}` : ''}`
+          : detail?.kind === 'year'
+            ? `${detail.year} год — расшифровка налогов`
+            : ''
 
   function renderYear(yearSummary: YearTaxSummary, yearLabel?: string) {
     const multiPart = yearSummary.parts.length > 1
@@ -555,6 +558,21 @@ export function TaxesOverviewPanel({
       </div>
     )
   }
+
+  function filterPartsByYear(parts: YearTaxPart[], year?: number): YearTaxPart[] {
+    if (year == null) return parts
+    return parts.filter(
+      (part) => part.startDate.startsWith(String(year)) || part.endDate.startsWith(String(year)),
+    )
+  }
+
+  const detailScopeSummaries =
+    detail?.kind === 'year'
+      ? yearSummaries.filter((y) => y.year === detail.year)
+      : detail && 'year' in detail && detail.year != null
+        ? yearSummaries.filter((y) => y.year === detail.year)
+        : yearSummaries
+  const detailTotals = aggregateTaxTotals(detailScopeSummaries, settings, showSourceTaxes)
 
   return (
     <div className="space-y-0">
@@ -631,93 +649,168 @@ export function TaxesOverviewPanel({
         </p>
       </section>
 
-      {multiYear ? (
-        <>
-          {yearSummaries.map((yearSummary, index) => (
-            <div key={yearSummary.year}>
-              {index > 0 && <SectionDivider />}
-              {renderYear(yearSummary, `${yearSummary.year} год`)}
-            </div>
-          ))}
-        </>
-      ) : (
-        renderYear(yearSummaries[0])
-      )}
+      <div className="space-y-3">
+        <SectionHeading>По годам</SectionHeading>
+        {yearSummaries.map((yearSummary) => {
+          const yearTotals = aggregateTaxTotals([yearSummary], settings, showSourceTaxes)
+          return (
+            <section
+              key={yearSummary.year}
+              className="rounded-xl border border-slate-200 bg-white px-4 py-3"
+            >
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <p className="text-sm font-semibold text-slate-800">{yearSummary.year} год</p>
+                <ClickableAmount onClick={() => setDetail({ kind: 'year', year: yearSummary.year })}>
+                  {formatCurrency(yearTotals.totalInBase, baseCurrency)}
+                </ClickableAmount>
+              </div>
+              <ul className="mt-3 space-y-1.5 text-sm">
+                {showSourceTaxes && yearTotals.employmentInBase > 0 && (
+                  <li className="flex flex-wrap items-center justify-between gap-2 text-slate-600">
+                    <span>+ страна заработка</span>
+                    <ClickableAmount
+                      onClick={() =>
+                        setDetail({ kind: 'employment', year: yearSummary.year })
+                      }
+                    >
+                      {formatCurrency(yearTotals.employmentInBase, baseCurrency)}
+                    </ClickableAmount>
+                  </li>
+                )}
+                {yearTotals.residences.map((row) => {
+                  const label = COUNTRY_LABELS[row.countryCode] ?? row.countryCode
+                  return (
+                    <li key={`${yearSummary.year}-${row.countryCode}`} className="space-y-1">
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-slate-600">
+                        <span>+ проживание ({label})</span>
+                        <ClickableAmount
+                          onClick={() =>
+                            setDetail({
+                              kind: 'residence',
+                              countryCode: row.countryCode,
+                              year: yearSummary.year,
+                            })
+                          }
+                        >
+                          {formatCurrency(row.taxGrossInBase, baseCurrency)}
+                        </ClickableAmount>
+                      </div>
+                      {row.foreignTaxCreditInBase > 0 && (
+                        <div className="flex flex-wrap items-center justify-between gap-2 text-emerald-700">
+                          <span>− зачёт ({label})</span>
+                          <ClickableAmount
+                            onClick={() =>
+                              setDetail({
+                                kind: 'credit',
+                                countryCode: row.countryCode,
+                                year: yearSummary.year,
+                              })
+                            }
+                          >
+                            −{formatCurrency(row.foreignTaxCreditInBase, baseCurrency)}
+                          </ClickableAmount>
+                        </div>
+                      )}
+                    </li>
+                  )
+                })}
+              </ul>
+            </section>
+          )
+        })}
+      </div>
 
       <StackPanel
         open={detail != null}
         title={detailTitle}
         onClose={() => setDetail(null)}
       >
+        {detail?.kind === 'year' &&
+          yearSummaries
+            .filter((y) => y.year === detail.year)
+            .map((yearSummary) => (
+              <div key={yearSummary.year}>{renderYear(yearSummary)}</div>
+            ))}
+
         {detail?.kind === 'employment' &&
-          totals.employmentParts.map((part, index) => (
+          filterPartsByYear(detailTotals.employmentParts, detail.year).map((part, index) => (
             <div key={`emp-${index}`} className={index > 0 ? 'mt-6 border-t border-slate-100 pt-6' : ''}>
               <YearTaxBlock
                 taxSummary={part.summary}
                 settings={settings}
                 hasIncomes={hasIncomes}
                 showGrandTotalFooter={false}
-                yearLabel={multiYear ? `Период: ${part.startDate} – ${part.endDate}` : undefined}
+                yearLabel={
+                  multiYear || detail.year != null
+                    ? `Период: ${part.startDate} – ${part.endDate}`
+                    : undefined
+                }
                 sourceOnly
               />
             </div>
           ))}
 
         {detail?.kind === 'residence' &&
-          (totals.residences.find((r) => r.countryCode === detail.countryCode)?.parts ?? []).map(
-            (part, index) => (
-              <div
-                key={`res-${part.countryCode}-${index}`}
-                className={index > 0 ? 'mt-6 border-t border-slate-100 pt-6' : ''}
-              >
-                <YearTaxBlock
-                  taxSummary={part.summary}
-                  settings={{
-                    ...settings,
-                    countryCode: part.countryCode,
-                    taxRegimeId: part.taxRegimeId,
-                  }}
-                  hasIncomes={hasIncomes}
-                  showGrandTotalFooter={false}
-                  yearLabel={
-                    multiYear || totals.residences.find((r) => r.countryCode === detail.countryCode)!.parts.length > 1
-                      ? `${part.startDate} – ${part.endDate}`
-                      : undefined
-                  }
-                  hideSource
-                />
-              </div>
-            ),
-          )}
+          filterPartsByYear(
+            detailTotals.residences.find((r) => r.countryCode === detail.countryCode)?.parts ?? [],
+            detail.year,
+          ).map((part, index) => (
+            <div
+              key={`res-${part.countryCode}-${index}`}
+              className={index > 0 ? 'mt-6 border-t border-slate-100 pt-6' : ''}
+            >
+              <YearTaxBlock
+                taxSummary={part.summary}
+                settings={{
+                  ...settings,
+                  countryCode: part.countryCode,
+                  taxRegimeId: part.taxRegimeId,
+                }}
+                hasIncomes={hasIncomes}
+                showGrandTotalFooter={false}
+                yearLabel={
+                  multiYear ||
+                  detail.year != null ||
+                  (detailTotals.residences.find((r) => r.countryCode === detail.countryCode)?.parts
+                    .length ?? 0) > 1
+                    ? `${part.startDate} – ${part.endDate}`
+                    : undefined
+                }
+                hideSource
+              />
+            </div>
+          ))}
 
         {detail?.kind === 'credit' &&
-          (totals.residences.find((r) => r.countryCode === detail.countryCode)?.parts ?? []).map(
-            (part, index) => (
-              <div
-                key={`cred-${part.countryCode}-${index}`}
-                className={index > 0 ? 'mt-6 border-t border-slate-100 pt-6' : ''}
-              >
-                <YearTaxBlock
-                  taxSummary={part.summary}
-                  settings={{
-                    ...settings,
-                    countryCode: part.countryCode,
-                    taxRegimeId: part.taxRegimeId,
-                  }}
-                  hasIncomes={hasIncomes}
-                  showGrandTotalFooter={false}
-                  yearLabel={
-                    multiYear ||
-                    (totals.residences.find((r) => r.countryCode === detail.countryCode)?.parts
-                      .length ?? 0) > 1
-                      ? `${part.startDate} – ${part.endDate}`
-                      : undefined
-                  }
-                  creditOnly
-                />
-              </div>
-            ),
-          )}
+          filterPartsByYear(
+            detailTotals.residences.find((r) => r.countryCode === detail.countryCode)?.parts ?? [],
+            detail.year,
+          ).map((part, index) => (
+            <div
+              key={`cred-${part.countryCode}-${index}`}
+              className={index > 0 ? 'mt-6 border-t border-slate-100 pt-6' : ''}
+            >
+              <YearTaxBlock
+                taxSummary={part.summary}
+                settings={{
+                  ...settings,
+                  countryCode: part.countryCode,
+                  taxRegimeId: part.taxRegimeId,
+                }}
+                hasIncomes={hasIncomes}
+                showGrandTotalFooter={false}
+                yearLabel={
+                  multiYear ||
+                  detail.year != null ||
+                  (detailTotals.residences.find((r) => r.countryCode === detail.countryCode)?.parts
+                    .length ?? 0) > 1
+                    ? `${part.startDate} – ${part.endDate}`
+                    : undefined
+                }
+                creditOnly
+              />
+            </div>
+          ))}
       </StackPanel>
     </div>
   )

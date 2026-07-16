@@ -939,7 +939,7 @@ export function IncomePanel() {
 
   return (
     <div className="space-y-4">
-      <div className="sticky top-0 z-10 -mx-4 mb-0 flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/95 px-4 py-3 backdrop-blur-sm md:-mx-6 md:px-6">
+      <div className="sticky -top-4 z-10 -mx-4 -mt-4 flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3 md:-top-6 md:-mx-6 md:-mt-6 md:px-6">
         <h2 className="text-lg font-semibold text-slate-900">Доходы</h2>
         <Button type="button" onClick={openCreate}>
           Добавить доход

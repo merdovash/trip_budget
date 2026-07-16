@@ -25,6 +25,7 @@ import { CurrencySelect } from '../ui/CurrencySelect'
 import { CurrencyConversionHint } from '../ui/CurrencyConversionHint'
 import { StackPanel } from '../ui/StackPanel'
 import { FolderField } from '../ui/FolderField'
+import { SwipeRow } from '../ui/SwipeRow'
 
 function IncomeFolderField({
   value,
@@ -620,10 +621,12 @@ function AmountCell({
   item,
   baseCurrency,
   dependents,
+  compact = false,
 }: {
   item: RecurringItem
   baseCurrency: string
   dependents: number
+  compact?: boolean
 }) {
   useExchangeRateStore((s) => s.rateDate)
 
@@ -640,16 +643,33 @@ function AmountCell({
       : null
   const isRu = item.salaryCountryCode === 'RU'
   const isEs = item.salaryCountryCode === 'ES'
+  const netTotal = salaryDisplay?.totalNet ?? item.amount
+  const showConversion = item.currency !== baseCurrency
+  const converted = convertCurrency(netTotal, item.currency, baseCurrency)
+
+  if (compact) {
+    return (
+      <div className="text-right">
+        <div className="font-medium text-emerald-700">
+          {formatCurrency(netTotal, item.currency)}
+        </div>
+        {showConversion && (
+          <div className="text-[11px] text-slate-400">≈ {formatCurrency(converted, baseCurrency)}</div>
+        )}
+      </div>
+    )
+  }
+
   if (item.payments && item.payments.length > 1) {
     return (
-      <td className="py-2 pr-4">
+      <div>
         {item.payments.map((payment, index) => {
-          const tax = salaryDisplay?.payments.find(
-            (p) => p.dayOfMonth === payment.dayOfMonth && p.gross === payment.amount,
-          ) ?? salaryDisplay?.payments[index]
-          const showConversion = item.currency !== baseCurrency
+          const tax =
+            salaryDisplay?.payments.find(
+              (p) => p.dayOfMonth === payment.dayOfMonth && p.gross === payment.amount,
+            ) ?? salaryDisplay?.payments[index]
           const displayAmount = tax?.net ?? payment.amount
-          const converted = convertCurrency(displayAmount, item.currency, baseCurrency)
+          const paymentConverted = convertCurrency(displayAmount, item.currency, baseCurrency)
 
           return (
             <div key={payment.label} className="text-sm">
@@ -666,9 +686,9 @@ function AmountCell({
               {payment.dayOfMonth && (
                 <span className="text-slate-500"> · {formatDayOfMonth(payment.dayOfMonth)}</span>
               )}
-              {showConversion && (
+              {item.currency !== baseCurrency && (
                 <span className="ml-1 text-xs text-slate-400">
-                  (≈ {formatCurrency(converted, baseCurrency)})
+                  (≈ {formatCurrency(paymentConverted, baseCurrency)})
                 </span>
               )}
             </div>
@@ -676,7 +696,7 @@ function AmountCell({
         })}
         <div className="mt-1 border-t border-slate-100 pt-1">
           <div className="font-medium text-emerald-700">
-            На руки: {formatCurrency(salaryDisplay?.totalNet ?? item.amount, item.currency)}
+            На руки: {formatCurrency(netTotal, item.currency)}
           </div>
           {isRu && salaryDisplay && 'totalNdfl' in salaryDisplay && (
             <div className="text-xs text-slate-500">
@@ -692,22 +712,13 @@ function AmountCell({
             </div>
           )}
         </div>
-      </td>
+      </div>
     )
   }
 
-  const converted = convertCurrency(
-    salaryDisplay?.totalNet ?? item.amount,
-    item.currency,
-    baseCurrency,
-  )
-  const showConversion = item.currency !== baseCurrency
-
   return (
-    <td className="py-2 pr-4">
-      <div className="font-medium text-emerald-700">
-        {formatCurrency(salaryDisplay?.totalNet ?? item.amount, item.currency)}
-      </div>
+    <div>
+      <div className="font-medium text-emerald-700">{formatCurrency(netTotal, item.currency)}</div>
       {isRu && salaryDisplay && 'totalNdfl' in salaryDisplay && (
         <div className="text-xs text-slate-500">
           gross {formatCurrency(item.amount, item.currency)} · НДФЛ −
@@ -725,7 +736,81 @@ function AmountCell({
       {showConversion && (
         <div className="text-xs text-slate-500">≈ {formatCurrency(converted, baseCurrency)}</div>
       )}
-    </td>
+    </div>
+  )
+}
+
+function IncomeNameBadges({ item }: { item: RecurringItem }) {
+  return (
+    <>
+      {item.salaryCountryCode === 'RU' && (
+        <span className="rounded bg-slate-100 px-1.5 py-0.5 text-xs font-normal text-slate-500">
+          РФ
+        </span>
+      )}
+      {item.salaryCountryCode === 'ES' && (
+        <span className="rounded bg-slate-100 px-1.5 py-0.5 text-xs font-normal text-slate-500">
+          ES
+        </span>
+      )}
+      {!isIncludedInResidenceTax(item) && (
+        <span className="rounded bg-amber-50 px-1.5 py-0.5 text-xs font-normal text-amber-700">
+          вне налогов проживания
+        </span>
+      )}
+    </>
+  )
+}
+
+function IncomeMobileRows({
+  items,
+  editingId,
+  onEdit,
+  onRemove,
+  baseCurrency,
+  dependents,
+}: {
+  items: RecurringItem[]
+  editingId: string | null
+  onEdit: (id: string) => void
+  onRemove: (id: string) => void
+  baseCurrency: string
+  dependents: number
+}) {
+  return (
+    <div className="divide-y divide-slate-100">
+      {items.map((item) => {
+        const category = item.category ?? '—'
+        const frequency = FREQUENCY_LABELS[item.frequency]
+        return (
+          <SwipeRow
+            key={item.id}
+            active={editingId === item.id}
+            onOpen={() => onEdit(item.id)}
+            onEdit={() => onEdit(item.id)}
+            onRemove={() => onRemove(item.id)}
+          >
+            <div className="flex items-start gap-3 px-3 py-2.5">
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="truncate font-medium text-slate-900">{item.name}</span>
+                  <IncomeNameBadges item={item} />
+                </div>
+                <div className="mt-0.5 truncate text-xs text-slate-500">
+                  {category} · {frequency}
+                </div>
+              </div>
+              <AmountCell
+                item={item}
+                baseCurrency={baseCurrency}
+                dependents={dependents}
+                compact
+              />
+            </div>
+          </SwipeRow>
+        )
+      })}
+    </div>
   )
 }
 
@@ -753,24 +838,14 @@ function IncomeRows({
           onClick={() => onEdit(item.id)}
         >
           <td className="py-2 pr-4 font-medium">
-            {item.name}
-            {item.salaryCountryCode === 'RU' && (
-              <span className="ml-2 rounded bg-slate-100 px-1.5 py-0.5 text-xs font-normal text-slate-500">
-                РФ
-              </span>
-            )}
-            {item.salaryCountryCode === 'ES' && (
-              <span className="ml-2 rounded bg-slate-100 px-1.5 py-0.5 text-xs font-normal text-slate-500">
-                ES
-              </span>
-            )}
-            {!isIncludedInResidenceTax(item) && (
-              <span className="ml-2 rounded bg-amber-50 px-1.5 py-0.5 text-xs font-normal text-amber-700">
-                вне налогов проживания
-              </span>
-            )}
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span>{item.name}</span>
+              <IncomeNameBadges item={item} />
+            </div>
           </td>
-          <AmountCell item={item} baseCurrency={baseCurrency} dependents={dependents} />
+          <td className="py-2 pr-4">
+            <AmountCell item={item} baseCurrency={baseCurrency} dependents={dependents} />
+          </td>
           <td className="py-2 pr-4">{FREQUENCY_LABELS[item.frequency]}</td>
           <td className="py-2 pr-4 text-slate-500">{item.category ?? '—'}</td>
           <td className="py-2 text-right">
@@ -858,21 +933,33 @@ function IncomeList({
             <span className="text-slate-400">{collapsed[group.id] ? '▸' : '▾'}</span>
           </button>
           {!collapsed[group.id] && (
-            <div className="overflow-x-auto border-t border-slate-100 px-3 pb-2">
-              <table className="w-full text-sm">
-                <thead>{tableHead}</thead>
-                <tbody>
-                  <IncomeRows
-                    items={group.items}
-                    editingId={editingId}
-                    onEdit={onEdit}
-                    onRemove={onRemove}
-                    baseCurrency={settings.baseCurrency}
-                    dependents={settings.dependents}
-                  />
-                </tbody>
-              </table>
-            </div>
+            <>
+              <div className="border-t border-slate-100 md:hidden">
+                <IncomeMobileRows
+                  items={group.items}
+                  editingId={editingId}
+                  onEdit={onEdit}
+                  onRemove={onRemove}
+                  baseCurrency={settings.baseCurrency}
+                  dependents={settings.dependents}
+                />
+              </div>
+              <div className="hidden overflow-x-auto border-t border-slate-100 px-3 pb-2 md:block">
+                <table className="w-full text-sm">
+                  <thead>{tableHead}</thead>
+                  <tbody>
+                    <IncomeRows
+                      items={group.items}
+                      editingId={editingId}
+                      onEdit={onEdit}
+                      onRemove={onRemove}
+                      baseCurrency={settings.baseCurrency}
+                      dependents={settings.dependents}
+                    />
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </div>
       ))}
@@ -890,22 +977,34 @@ function IncomeList({
             </span>
             <span className="text-slate-400">{collapsed.__none ? '▸' : '▾'}</span>
           </button>
-          {!collapsed.__none && (
-            <div className="overflow-x-auto border-t border-slate-100 px-3 pb-2">
-              <table className="w-full text-sm">
-                <thead>{tableHead}</thead>
-                <tbody>
-                  <IncomeRows
-                    items={grouped.ungrouped}
-                    editingId={editingId}
-                    onEdit={onEdit}
-                    onRemove={onRemove}
-                    baseCurrency={settings.baseCurrency}
-                    dependents={settings.dependents}
-                  />
-                </tbody>
-              </table>
-            </div>
+        {!collapsed.__none && (
+            <>
+              <div className="border-t border-slate-100 md:hidden">
+                <IncomeMobileRows
+                  items={grouped.ungrouped}
+                  editingId={editingId}
+                  onEdit={onEdit}
+                  onRemove={onRemove}
+                  baseCurrency={settings.baseCurrency}
+                  dependents={settings.dependents}
+                />
+              </div>
+              <div className="hidden overflow-x-auto border-t border-slate-100 px-3 pb-2 md:block">
+                <table className="w-full text-sm">
+                  <thead>{tableHead}</thead>
+                  <tbody>
+                    <IncomeRows
+                      items={grouped.ungrouped}
+                      editingId={editingId}
+                      onEdit={onEdit}
+                      onRemove={onRemove}
+                      baseCurrency={settings.baseCurrency}
+                      dependents={settings.dependents}
+                    />
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </div>
       )}

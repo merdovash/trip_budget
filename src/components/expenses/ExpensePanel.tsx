@@ -32,6 +32,7 @@ import { CurrencyConversionHint } from '../ui/CurrencyConversionHint'
 import { StackPanel } from '../ui/StackPanel'
 import { FolderField } from '../ui/FolderField'
 import { CategoryField, type CategoryOption } from '../ui/CategoryField'
+import { SwipeRow } from '../ui/SwipeRow'
 import { BUILTIN_EXPENSE_CATEGORIES } from '../../config/expenseCategories'
 
 function ExpenseFolderField({
@@ -231,17 +232,30 @@ function ExpenseCountryField({
 function AmountCell({
   item,
   baseCurrency,
+  compact = false,
 }: {
   item: RecurringItem
   baseCurrency: string
+  compact?: boolean
 }) {
   useExchangeRateStore((s) => s.rateDate)
   const amount = isLoanExpense(item) ? loanMonthlyPayment(item) : item.amount
   const converted = convertCurrency(amount, item.currency, baseCurrency)
   const showConversion = item.currency !== baseCurrency
 
+  if (compact) {
+    return (
+      <div className="text-right">
+        <div className="font-medium text-slate-900">{formatCurrency(amount, item.currency)}</div>
+        {showConversion && (
+          <div className="text-[11px] text-slate-400">≈ {formatCurrency(converted, baseCurrency)}</div>
+        )}
+      </div>
+    )
+  }
+
   return (
-    <td className="py-2 pr-4">
+    <div>
       <div>{formatCurrency(amount, item.currency)}</div>
       {isLoanExpense(item) && (
         <div className="text-xs text-slate-500">
@@ -251,7 +265,103 @@ function AmountCell({
       {showConversion && (
         <div className="text-xs text-slate-500">≈ {formatCurrency(converted, baseCurrency)}</div>
       )}
-    </td>
+    </div>
+  )
+}
+
+function expenseFrequencyLabel(item: RecurringItem) {
+  return isLoanExpense(item)
+    ? `${item.termMonths} мес. (кредит)`
+    : FREQUENCY_LABELS[item.frequency]
+}
+
+function expenseCategoryLabel(item: RecurringItem) {
+  return isLoanExpense(item) ? LOAN_EXPENSE_CATEGORY : (item.category ?? '—')
+}
+
+function ExpenseMobileRows({
+  items,
+  editingId,
+  onEdit,
+  onRemove,
+  baseCurrency,
+}: {
+  items: RecurringItem[]
+  editingId: string | null
+  onEdit: (id: string) => void
+  onRemove: (id: string) => void
+  baseCurrency: string
+}) {
+  return (
+    <div className="divide-y divide-slate-100">
+      {items.map((item) => (
+        <SwipeRow
+          key={item.id}
+          active={editingId === item.id}
+          onOpen={() => onEdit(item.id)}
+          onEdit={() => onEdit(item.id)}
+          onRemove={() => onRemove(item.id)}
+        >
+          <div className="flex items-start gap-3 px-3 py-2.5">
+            <div className="min-w-0 flex-1">
+              <div className="truncate font-medium text-slate-900">{item.name}</div>
+              <div className="mt-0.5 truncate text-xs text-slate-500">
+                {expenseCategoryLabel(item)} · {expenseFrequencyLabel(item)}
+              </div>
+            </div>
+            <AmountCell item={item} baseCurrency={baseCurrency} compact />
+          </div>
+        </SwipeRow>
+      ))}
+    </div>
+  )
+}
+
+function ExpenseRows({
+  items,
+  editingId,
+  onEdit,
+  onRemove,
+  baseCurrency,
+  settings,
+}: {
+  items: RecurringItem[]
+  editingId: string | null
+  onEdit: (id: string) => void
+  onRemove: (id: string) => void
+  baseCurrency: string
+  settings: BudgetSettings
+}) {
+  return (
+    <>
+      {items.map((item) => (
+        <tr
+          key={item.id}
+          className={`cursor-pointer border-b border-slate-100 hover:bg-slate-50 ${editingId === item.id ? 'bg-blue-50' : ''}`}
+          onClick={() => onEdit(item.id)}
+        >
+          <td className="py-2 pr-4 font-medium">{item.name}</td>
+          <td className="py-2 pr-4">
+            <AmountCell item={item} baseCurrency={baseCurrency} />
+          </td>
+          <td className="py-2 pr-4">{expenseFrequencyLabel(item)}</td>
+          <td className="py-2 pr-4 text-slate-500">{expenseCategoryLabel(item)}</td>
+          <td className="py-2 pr-4 text-slate-500">
+            {getExpenseCountryScopeLabel(getExpenseCountryScope(item, settings), settings)}
+          </td>
+          <td className="py-2 text-right">
+            <div className="flex justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+              <Button variant="secondary" type="button" onClick={() => onEdit(item.id)}>
+                Изменить
+              </Button>
+              <Button variant="danger" type="button" onClick={() => onRemove(item.id)}>
+                Удалить
+              </Button>
+            </div>
+          </td>
+        </tr>
+      ))}
+    </>
   )
 }
 
@@ -618,58 +728,6 @@ function ExpenseForm({ initialItem, onSubmit, onCancel }: ExpenseFormProps) {
   )
 }
 
-function ExpenseRows({
-  items,
-  editingId,
-  onEdit,
-  onRemove,
-  baseCurrency,
-  settings,
-}: {
-  items: RecurringItem[]
-  editingId: string | null
-  onEdit: (id: string) => void
-  onRemove: (id: string) => void
-  baseCurrency: string
-  settings: BudgetSettings
-}) {
-  return (
-    <>
-      {items.map((item) => (
-        <tr
-          key={item.id}
-          className={`cursor-pointer border-b border-slate-100 hover:bg-slate-50 ${editingId === item.id ? 'bg-blue-50' : ''}`}
-          onClick={() => onEdit(item.id)}
-        >
-          <td className="py-2 pr-4 font-medium">{item.name}</td>
-          <AmountCell item={item} baseCurrency={baseCurrency} />
-          <td className="py-2 pr-4">
-            {isLoanExpense(item)
-              ? `${item.termMonths} мес. (кредит)`
-              : FREQUENCY_LABELS[item.frequency]}
-          </td>
-          <td className="py-2 pr-4 text-slate-500">
-            {isLoanExpense(item) ? LOAN_EXPENSE_CATEGORY : (item.category ?? '—')}
-          </td>
-          <td className="py-2 pr-4 text-slate-500">
-            {getExpenseCountryScopeLabel(getExpenseCountryScope(item, settings), settings)}
-          </td>
-          <td className="py-2 text-right">
-            <div className="flex justify-end gap-2" onClick={(e) => e.stopPropagation()}>
-              <Button variant="secondary" type="button" onClick={() => onEdit(item.id)}>
-                Изменить
-              </Button>
-              <Button variant="danger" type="button" onClick={() => onRemove(item.id)}>
-                Удалить
-              </Button>
-            </div>
-          </td>
-        </tr>
-      ))}
-    </>
-  )
-}
-
 function ExpenseList({
   editingId,
   onEdit,
@@ -771,21 +829,32 @@ function ExpenseList({
             </button>
           </div>
           {!collapsed[group.id] && (
-            <div className="overflow-x-auto border-t border-slate-100 px-3 pb-2">
-              <table className="w-full text-sm">
-                <thead>{tableHead}</thead>
-                <tbody>
-                  <ExpenseRows
-                    items={group.items}
-                    editingId={editingId}
-                    onEdit={onEdit}
-                    onRemove={onRemove}
-                    baseCurrency={settings.baseCurrency}
-                    settings={settings}
-                  />
-                </tbody>
-              </table>
-            </div>
+            <>
+              <div className="border-t border-slate-100 md:hidden">
+                <ExpenseMobileRows
+                  items={group.items}
+                  editingId={editingId}
+                  onEdit={onEdit}
+                  onRemove={onRemove}
+                  baseCurrency={settings.baseCurrency}
+                />
+              </div>
+              <div className="hidden overflow-x-auto border-t border-slate-100 px-3 pb-2 md:block">
+                <table className="w-full text-sm">
+                  <thead>{tableHead}</thead>
+                  <tbody>
+                    <ExpenseRows
+                      items={group.items}
+                      editingId={editingId}
+                      onEdit={onEdit}
+                      onRemove={onRemove}
+                      baseCurrency={settings.baseCurrency}
+                      settings={settings}
+                    />
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </div>
       ))}
@@ -804,21 +873,32 @@ function ExpenseList({
           <span className="text-slate-400">{collapsed.__none ? '▸' : '▾'}</span>
         </button>
         {!collapsed.__none && (
-          <div className="overflow-x-auto border-t border-slate-100 px-3 pb-2">
-            <table className="w-full text-sm">
-              <thead>{tableHead}</thead>
-              <tbody>
-                <ExpenseRows
-                  items={grouped.ungrouped}
-                  editingId={editingId}
-                  onEdit={onEdit}
-                  onRemove={onRemove}
-                  baseCurrency={settings.baseCurrency}
-                  settings={settings}
-                />
-              </tbody>
-            </table>
-          </div>
+          <>
+            <div className="border-t border-slate-100 md:hidden">
+              <ExpenseMobileRows
+                items={grouped.ungrouped}
+                editingId={editingId}
+                onEdit={onEdit}
+                onRemove={onRemove}
+                baseCurrency={settings.baseCurrency}
+              />
+            </div>
+            <div className="hidden overflow-x-auto border-t border-slate-100 px-3 pb-2 md:block">
+              <table className="w-full text-sm">
+                <thead>{tableHead}</thead>
+                <tbody>
+                  <ExpenseRows
+                    items={grouped.ungrouped}
+                    editingId={editingId}
+                    onEdit={onEdit}
+                    onRemove={onRemove}
+                    baseCurrency={settings.baseCurrency}
+                    settings={settings}
+                  />
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
       )}

@@ -69,6 +69,23 @@ export function formatDateDisplay(value: string): string {
   return value
 }
 
+/** ISO datetime (или дата) → «15.01.2026, 14:30». */
+export function formatDateTimeDisplay(value: string): string {
+  if (!value) return '—'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    if (ISO_DATE_RE.test(value)) return formatIsoToRu(value)
+    return value
+  }
+  return date.toLocaleString('ru-RU', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
 export function formatShortDate(iso: string): string {
   if (!ISO_DATE_RE.test(iso)) return iso
   const [, month, day] = iso.match(ISO_DATE_RE) ?? []

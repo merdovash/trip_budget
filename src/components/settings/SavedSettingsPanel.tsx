@@ -6,7 +6,7 @@ import {
 } from '../../tax/registry'
 import { describeResidenceRoute } from '../../config/residenceRoute'
 import { describeInitialBalances } from '../../lib/initialBalance'
-import { formatDateDisplay } from '../../lib/format'
+import { formatDateDisplay, formatDateTimeDisplay } from '../../lib/format'
 import {
   deleteSettingsSnapshot,
   getSettingsSnapshot,
@@ -148,7 +148,7 @@ export function SavedSettingsPanel() {
                   <div>
                     <p className="font-medium text-slate-900">{snapshot.name}</p>
                     <p className="mt-0.5 text-xs text-slate-500">
-                      {formatDateDisplay(snapshot.savedAt.slice(0, 10))} ·{' '}
+                      {formatDateTimeDisplay(snapshot.savedAt)} ·{' '}
                       {COUNTRY_LABELS[snapshot.countryCode] ?? snapshot.countryCode} ·{' '}
                       {regime?.name ?? snapshot.taxRegimeId} · {snapshot.baseCurrency}
                     </p>

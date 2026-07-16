@@ -31,6 +31,7 @@ interface BudgetState {
   incomes: RecurringItem[]
   expenses: RecurringItem[]
   folders: ExpenseFolder[]
+  incomeFolders: ExpenseFolder[]
   /** @deprecated Разовые траты в expenses с frequency === 'once'. */
   oneTimeExpenses: OneTimeExpense[]
   activePreset: ActivePreset | null
@@ -45,6 +46,9 @@ interface BudgetState {
   addFolder: (name: string) => string
   updateFolder: (id: string, patch: Partial<Pick<ExpenseFolder, 'name'>>) => void
   removeFolder: (id: string) => void
+  addIncomeFolder: (name: string) => string
+  updateIncomeFolder: (id: string, patch: Partial<Pick<ExpenseFolder, 'name'>>) => void
+  removeIncomeFolder: (id: string) => void
   applyRelocationProgramExpenses: () => number
   exportSnapshot: () => BudgetPresetData
   loadFromPreset: (data: BudgetPresetData, activePreset?: ActivePreset | null) => void
@@ -210,6 +214,7 @@ function migratePersistedState(persisted: PersistedBudgetState, current: BudgetS
     incomes: persisted.incomes ?? current.incomes,
     expenses,
     folders: persisted.folders ?? current.folders,
+    incomeFolders: persisted.incomeFolders ?? current.incomeFolders,
     oneTimeExpenses: [],
   }
 }
@@ -221,6 +226,7 @@ export const useBudgetStore = create<BudgetState>()(
       incomes: [],
       expenses: [],
       folders: [],
+      incomeFolders: [],
       oneTimeExpenses: [],
       activePreset: null,
       presetBaseline: null,
@@ -292,6 +298,35 @@ export const useBudgetStore = create<BudgetState>()(
           ),
         })),
 
+      addIncomeFolder: (name) => {
+        const id = createId()
+        const trimmed = name.trim() || 'Новая папка'
+        set((state) => ({
+          incomeFolders: [
+            ...state.incomeFolders,
+            { id, name: trimmed, sortOrder: state.incomeFolders.length },
+          ],
+        }))
+        return id
+      },
+
+      updateIncomeFolder: (id, patch) =>
+        set((state) => ({
+          incomeFolders: state.incomeFolders.map((folder) =>
+            folder.id === id
+              ? { ...folder, ...patch, name: patch.name?.trim() || folder.name }
+              : folder,
+          ),
+        })),
+
+      removeIncomeFolder: (id) =>
+        set((state) => ({
+          incomeFolders: state.incomeFolders.filter((folder) => folder.id !== id),
+          incomes: state.incomes.map((income) =>
+            income.folderId === id ? { ...income, folderId: undefined } : income,
+          ),
+        })),
+
       applyRelocationProgramExpenses: () => {
         const { settings, expenses } = get()
         const program = getRelocationProgram(settings.relocationProgramId)
@@ -314,8 +349,15 @@ export const useBudgetStore = create<BudgetState>()(
       },
 
       exportSnapshot: (): BudgetPresetData => {
-        const { settings, incomes, expenses, folders } = get()
-        return clonePresetData({ settings, incomes, expenses, folders, oneTimeExpenses: [] })
+        const { settings, incomes, expenses, folders, incomeFolders } = get()
+        return clonePresetData({
+          settings,
+          incomes,
+          expenses,
+          folders,
+          incomeFolders,
+          oneTimeExpenses: [],
+        })
       },
 
       loadFromPreset: (data: BudgetPresetData, activePreset = null) => {
@@ -338,12 +380,28 @@ export const useBudgetStore = create<BudgetState>()(
             sortOrder: folder.sortOrder ?? index,
           }
         })
+        const incomeFolderIdMap = new Map<string, string>()
+        const incomeFolders = (data.incomeFolders ?? []).map((folder, index) => {
+          const id = createId()
+          incomeFolderIdMap.set(folder.id, id)
+          return {
+            id,
+            name: folder.name,
+            sortOrder: folder.sortOrder ?? index,
+          }
+        })
         const remapFolderId = (folderId?: string) =>
           folderId ? folderIdMap.get(folderId) : undefined
+        const remapIncomeFolderId = (folderId?: string) =>
+          folderId ? incomeFolderIdMap.get(folderId) : undefined
 
         set({
           settings,
-          incomes: data.incomes.map((item) => ({ ...item, id: createId() })),
+          incomes: data.incomes.map((item) => ({
+            ...item,
+            id: createId(),
+            folderId: remapIncomeFolderId(item.folderId),
+          })),
           expenses: [
             ...data.expenses.map((item) => ({
               ...item,
@@ -354,6 +412,7 @@ export const useBudgetStore = create<BudgetState>()(
             ...migratedOneTime,
           ],
           folders,
+          incomeFolders,
           oneTimeExpenses: [],
           activePreset,
           presetBaseline: null,
@@ -384,6 +443,7 @@ export const useBudgetStore = create<BudgetState>()(
         incomes: state.incomes,
         expenses: state.expenses,
         folders: state.folders,
+        incomeFolders: state.incomeFolders,
         oneTimeExpenses: [],
         activePreset: state.activePreset,
       }),

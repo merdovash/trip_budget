@@ -14,6 +14,7 @@ function normalizeSnapshot(data: BudgetPresetData) {
     incomes: stripId(data.incomes),
     expenses: stripId(data.expenses),
     folders: stripId(data.folders ?? []),
+    incomeFolders: stripId(data.incomeFolders ?? []),
     oneTimeExpenses: stripId(data.oneTimeExpenses),
   }
 }

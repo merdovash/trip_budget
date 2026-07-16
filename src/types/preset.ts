@@ -6,6 +6,8 @@ export interface BudgetPresetData {
   expenses: RecurringItem[]
   /** Папки для группировки расходов. */
   folders?: ExpenseFolder[]
+  /** Папки для группировки доходов. */
+  incomeFolders?: ExpenseFolder[]
   /** @deprecated Кредиты хранятся в expenses с expenseKind === 'loan'. */
   loans?: Array<{
     name: string

@@ -51,7 +51,7 @@ export interface RecurringItem {
   termMonths?: number
   /** Годовая процентная ставка, %. */
   annualRate?: number
-  /** Папка для группировки расходов. */
+  /** Папка для группировки доходов и расходов. */
   folderId?: string
   /** Где осуществляется расход: страна заработка, проживания или другое. */
   expenseCountryScope?: ExpenseCountryScope

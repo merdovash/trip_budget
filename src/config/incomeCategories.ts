@@ -108,6 +108,7 @@ export interface IncomeFormState {
   salaryCountryCode: string
   includeInResidenceTax: boolean
   foreignTaxCredit: boolean
+  folderId: string
 }
 
 export function createInitialIncomeForm(baseCurrency: string): IncomeFormState {
@@ -122,6 +123,7 @@ export function createInitialIncomeForm(baseCurrency: string): IncomeFormState {
     salaryCountryCode: 'ES',
     includeInResidenceTax: true,
     foreignTaxCredit: true,
+    folderId: '',
   }
 }
 
@@ -163,5 +165,6 @@ export function incomeItemToFormState(item: RecurringItem): IncomeFormState {
     salaryCountryCode: item.salaryCountryCode ?? 'ES',
     includeInResidenceTax: isIncludedInResidenceTax(item),
     foreignTaxCredit: item.foreignTaxCredit ?? true,
+    folderId: item.folderId ?? '',
   }
 }

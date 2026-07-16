@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useMemo, useState, type FormEvent } from 'react'
 import { formatCurrency, formatDayOfMonth, isValidIsoDate } from '../../lib/format'
 import { convertCurrency } from '../../lib/currency'
 import { useExchangeRateStore } from '../../store/exchangeRateStore'
@@ -23,6 +23,30 @@ import { FREQUENCY_LABELS, type Frequency, type IncomePayment, type RecurringIte
 import { Button, Card, EmptyState, Field, Input, Select, DateInput } from '../ui/FormControls'
 import { CurrencySelect } from '../ui/CurrencySelect'
 import { CurrencyConversionHint } from '../ui/CurrencyConversionHint'
+import { StackPanel } from '../ui/StackPanel'
+import { FolderField } from '../ui/FolderField'
+
+function IncomeFolderField({
+  value,
+  onChange,
+}: {
+  value: string | undefined
+  onChange: (folderId: string) => void
+}) {
+  const incomeFolders = useBudgetStore((s) => s.incomeFolders)
+  const addIncomeFolder = useBudgetStore((s) => s.addIncomeFolder)
+  const removeIncomeFolder = useBudgetStore((s) => s.removeIncomeFolder)
+  return (
+    <FolderField
+      value={value}
+      onChange={onChange}
+      folders={incomeFolders}
+      onAddFolder={addIncomeFolder}
+      onRemoveFolder={removeIncomeFolder}
+      deleteHint="Удаление папки не удаляет доходы — они переходят в «Без папки»."
+    />
+  )
+}
 
 interface IncomeFormProps {
   initialItem?: RecurringItem
@@ -189,6 +213,7 @@ function IncomeForm({ initialItem, onSubmit, onCancel }: IncomeFormProps) {
         ? { foreignTaxCredit: form.foreignTaxCredit }
         : {}),
       ...(categoryDef.showSalaryCountry ? { salaryCountryCode: form.salaryCountryCode } : {}),
+      folderId: form.folderId || undefined,
     }
   }
 
@@ -481,12 +506,17 @@ function IncomeForm({ initialItem, onSubmit, onCancel }: IncomeFormProps) {
               />
             </Field>
           </div>
+
+          <IncomeFolderField
+            value={form.folderId}
+            onChange={(folderId) => setForm({ ...form, folderId })}
+          />
         </>
       )}
 
       <div className="flex flex-wrap gap-2">
         <Button type="submit" disabled={!categoryDef}>
-          {isEditing ? 'Сохранить' : 'Добавить доход'}
+          {isEditing ? 'Сохранить' : 'Добавить'}
         </Button>
         {onCancel && (
           <Button type="button" variant="secondary" onClick={onCancel}>
@@ -695,6 +725,66 @@ function AmountCell({
   )
 }
 
+function IncomeRows({
+  items,
+  editingId,
+  onEdit,
+  onRemove,
+  baseCurrency,
+  dependents,
+}: {
+  items: RecurringItem[]
+  editingId: string | null
+  onEdit: (id: string) => void
+  onRemove: (id: string) => void
+  baseCurrency: string
+  dependents: number
+}) {
+  return (
+    <>
+      {items.map((item) => (
+        <tr
+          key={item.id}
+          className={`cursor-pointer border-b border-slate-100 hover:bg-slate-50 ${editingId === item.id ? 'bg-blue-50' : ''}`}
+          onClick={() => onEdit(item.id)}
+        >
+          <td className="py-2 pr-4 font-medium">
+            {item.name}
+            {item.salaryCountryCode === 'RU' && (
+              <span className="ml-2 rounded bg-slate-100 px-1.5 py-0.5 text-xs font-normal text-slate-500">
+                РФ
+              </span>
+            )}
+            {item.salaryCountryCode === 'ES' && (
+              <span className="ml-2 rounded bg-slate-100 px-1.5 py-0.5 text-xs font-normal text-slate-500">
+                ES
+              </span>
+            )}
+            {!isIncludedInResidenceTax(item) && (
+              <span className="ml-2 rounded bg-amber-50 px-1.5 py-0.5 text-xs font-normal text-amber-700">
+                вне налогов проживания
+              </span>
+            )}
+          </td>
+          <AmountCell item={item} baseCurrency={baseCurrency} dependents={dependents} />
+          <td className="py-2 pr-4">{FREQUENCY_LABELS[item.frequency]}</td>
+          <td className="py-2 pr-4 text-slate-500">{item.category ?? '—'}</td>
+          <td className="py-2 text-right">
+            <div className="flex justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+              <Button variant="secondary" type="button" onClick={() => onEdit(item.id)}>
+                Изменить
+              </Button>
+              <Button variant="danger" type="button" onClick={() => onRemove(item.id)}>
+                Удалить
+              </Button>
+            </div>
+          </td>
+        </tr>
+      ))}
+    </>
+  )
+}
+
 function IncomeList({
   editingId,
   onEdit,
@@ -705,74 +795,116 @@ function IncomeList({
   onRemove: (id: string) => void
 }) {
   const incomes = useBudgetStore((s) => s.incomes)
+  const incomeFolders = useBudgetStore((s) => s.incomeFolders)
   const settings = useBudgetStore((s) => s.settings)
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
+
+  const grouped = useMemo(() => {
+    const sortedFolders = [...incomeFolders].sort(
+      (a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.name.localeCompare(b.name),
+    )
+    const folderIds = new Set(sortedFolders.map((f) => f.id))
+    const ungrouped = incomes.filter((item) => !item.folderId || !folderIds.has(item.folderId))
+    const groups = sortedFolders
+      .map((folder) => ({
+        id: folder.id,
+        name: folder.name,
+        items: incomes.filter((item) => item.folderId === folder.id),
+      }))
+      .filter((group) => group.items.length > 0)
+    return { groups, ungrouped }
+  }, [incomes, incomeFolders])
 
   if (incomes.length === 0) {
     return (
       <EmptyState
         title="Нет доходов"
-        description="Выберите категорию и добавьте зарплату, фриланс или другие источники дохода."
+        description="Добавьте зарплату, фриланс или другие источники дохода."
       />
     )
   }
 
+  function toggleGroup(id: string) {
+    setCollapsed((prev) => ({ ...prev, [id]: !prev[id] }))
+  }
+
+  const tableHead = (
+    <tr className="border-b border-slate-200 text-left text-slate-500">
+      <th className="py-2 pr-4">Название</th>
+      <th className="py-2 pr-4">Сумма</th>
+      <th className="py-2 pr-4">Периодичность</th>
+      <th className="py-2 pr-4">Категория</th>
+      <th className="py-2" />
+    </tr>
+  )
+
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b border-slate-200 text-left text-slate-500">
-            <th className="py-2 pr-4">Название</th>
-            <th className="py-2 pr-4">Сумма</th>
-            <th className="py-2 pr-4">Периодичность</th>
-            <th className="py-2 pr-4">Категория</th>
-            <th className="py-2" />
-          </tr>
-        </thead>
-        <tbody>
-          {incomes.map((item) => (
-            <tr
-              key={item.id}
-              className={`border-b border-slate-100 ${editingId === item.id ? 'bg-blue-50' : ''}`}
-            >
-              <td className="py-2 pr-4 font-medium">
-                {item.name}
-                {item.salaryCountryCode === 'RU' && (
-                  <span className="ml-2 rounded bg-slate-100 px-1.5 py-0.5 text-xs font-normal text-slate-500">
-                    РФ
-                  </span>
-                )}
-                {item.salaryCountryCode === 'ES' && (
-                  <span className="ml-2 rounded bg-slate-100 px-1.5 py-0.5 text-xs font-normal text-slate-500">
-                    ES
-                  </span>
-                )}
-                {!isIncludedInResidenceTax(item) && (
-                  <span className="ml-2 rounded bg-amber-50 px-1.5 py-0.5 text-xs font-normal text-amber-700">
-                    вне налогов проживания
-                  </span>
-                )}
-              </td>
-              <AmountCell
-                item={item}
-                baseCurrency={settings.baseCurrency}
-                dependents={settings.dependents}
-              />
-              <td className="py-2 pr-4">{FREQUENCY_LABELS[item.frequency]}</td>
-              <td className="py-2 pr-4 text-slate-500">{item.category ?? '—'}</td>
-              <td className="py-2 text-right">
-                <div className="flex justify-end gap-2">
-                  <Button variant="secondary" type="button" onClick={() => onEdit(item.id)}>
-                    Изменить
-                  </Button>
-                  <Button variant="danger" type="button" onClick={() => onRemove(item.id)}>
-                    Удалить
-                  </Button>
-                </div>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div className="space-y-4">
+      {grouped.groups.map((group) => (
+        <div key={group.id} className="rounded-lg border border-slate-200">
+          <button
+            type="button"
+            className="flex w-full items-center justify-between px-3 py-2 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            onClick={() => toggleGroup(group.id)}
+          >
+            <span>
+              {group.name}{' '}
+              <span className="font-normal text-slate-400">({group.items.length})</span>
+            </span>
+            <span className="text-slate-400">{collapsed[group.id] ? '▸' : '▾'}</span>
+          </button>
+          {!collapsed[group.id] && (
+            <div className="overflow-x-auto border-t border-slate-100 px-3 pb-2">
+              <table className="w-full text-sm">
+                <thead>{tableHead}</thead>
+                <tbody>
+                  <IncomeRows
+                    items={group.items}
+                    editingId={editingId}
+                    onEdit={onEdit}
+                    onRemove={onRemove}
+                    baseCurrency={settings.baseCurrency}
+                    dependents={settings.dependents}
+                  />
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      ))}
+
+      {grouped.ungrouped.length > 0 && (
+        <div className="rounded-lg border border-slate-200">
+          <button
+            type="button"
+            className="flex w-full items-center justify-between px-3 py-2 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            onClick={() => toggleGroup('__none')}
+          >
+            <span>
+              Без папки{' '}
+              <span className="font-normal text-slate-400">({grouped.ungrouped.length})</span>
+            </span>
+            <span className="text-slate-400">{collapsed.__none ? '▸' : '▾'}</span>
+          </button>
+          {!collapsed.__none && (
+            <div className="overflow-x-auto border-t border-slate-100 px-3 pb-2">
+              <table className="w-full text-sm">
+                <thead>{tableHead}</thead>
+                <tbody>
+                  <IncomeRows
+                    items={grouped.ungrouped}
+                    editingId={editingId}
+                    onEdit={onEdit}
+                    onRemove={onRemove}
+                    baseCurrency={settings.baseCurrency}
+                    dependents={settings.dependents}
+                  />
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -782,41 +914,67 @@ export function IncomePanel() {
   const addIncome = useBudgetStore((s) => s.addIncome)
   const updateIncome = useBudgetStore((s) => s.updateIncome)
   const removeIncome = useBudgetStore((s) => s.removeIncome)
+  const [panelMode, setPanelMode] = useState<'closed' | 'create' | 'edit'>('closed')
   const [editingId, setEditingId] = useState<string | null>(null)
 
-  const editingItem = editingId ? incomes.find((i) => i.id === editingId) : undefined
+  const editingItem =
+    panelMode === 'edit' && editingId
+      ? incomes.find((i) => i.id === editingId)
+      : undefined
+
+  function openCreate() {
+    setEditingId(null)
+    setPanelMode('create')
+  }
+
+  function openEdit(id: string) {
+    setEditingId(id)
+    setPanelMode('edit')
+  }
+
+  function closePanel() {
+    setPanelMode('closed')
+    setEditingId(null)
+  }
 
   return (
     <div className="space-y-4">
       <Card>
-        <h2 className="mb-4 text-lg font-semibold">
-          {editingId ? 'Редактировать доход' : 'Добавить доход'}
-        </h2>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-lg font-semibold">Доходы</h2>
+          <Button type="button" onClick={openCreate}>
+            Добавить доход
+          </Button>
+        </div>
+        <IncomeList
+          editingId={editingId}
+          onEdit={openEdit}
+          onRemove={(id) => {
+            removeIncome(id)
+            if (editingId === id) closePanel()
+          }}
+        />
+      </Card>
+
+      <StackPanel
+        open={panelMode !== 'closed'}
+        title={panelMode === 'edit' ? 'Карточка дохода' : 'Новый доход'}
+        onClose={closePanel}
+      >
         <IncomeForm
           key={editingId ?? 'new'}
           initialItem={editingItem}
           onSubmit={(data) => {
-            if (editingId) {
+            if (panelMode === 'edit' && editingId) {
               updateIncome(editingId, data)
-              setEditingId(null)
             } else {
               addIncome(data)
             }
+            closePanel()
           }}
-          onCancel={editingId ? () => setEditingId(null) : undefined}
+          onCancel={closePanel}
         />
-      </Card>
-      <Card>
-        <h2 className="mb-4 text-lg font-semibold">Список доходов</h2>
-        <IncomeList
-          editingId={editingId}
-          onEdit={setEditingId}
-          onRemove={(id) => {
-            removeIncome(id)
-            if (editingId === id) setEditingId(null)
-          }}
-        />
-      </Card>
+      </StackPanel>
     </div>
   )
 }

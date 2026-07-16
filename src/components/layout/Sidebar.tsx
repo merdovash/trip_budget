@@ -8,6 +8,7 @@ const NAV_ITEMS: { id: AppSection; label: string; Icon: NavIcon }[] = [
   { id: 'settings', label: 'Настройки', Icon: SettingsIcon },
   { id: 'income', label: 'Доходы', Icon: IncomeIcon },
   { id: 'expenses', label: 'Расходы', Icon: ExpenseIcon },
+  { id: 'report', label: 'Сводный отчёт', Icon: ReportIcon },
   { id: 'presets', label: 'Наборы', Icon: PresetsIcon },
 ]
 
@@ -168,6 +169,24 @@ function PresetsIcon(props: SVGProps<SVGSVGElement>) {
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" {...props}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M4 7h16M4 12h16M4 17h10" />
       <path strokeLinecap="round" strokeLinejoin="round" d="M18 17h2v4h-2z" />
+    </svg>
+  )
+}
+
+function ReportIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" {...props}>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"
+      />
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v0a2 2 0 0 1-2 2h-2a2 2 0 0 1-2-2v0Z"
+      />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6M9 16h4" />
     </svg>
   )
 }

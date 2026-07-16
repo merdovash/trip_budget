@@ -5,6 +5,7 @@ import { Disclaimer, Header } from './components/layout/Header'
 import { Sidebar } from './components/layout/Sidebar'
 import { IncomePanel } from './components/income/IncomePanel'
 import { PresetsPanel } from './components/presets/PresetsPanel'
+import { ExpenseReportPanel } from './components/reports/ExpenseReportPanel'
 import { BudgetSettingsPanel } from './components/settings/BudgetSettings'
 import { useExchangeRateStore } from './store/exchangeRateStore'
 import type { AppSection } from './types/budget'
@@ -21,6 +22,8 @@ function SectionContent({ section }: { section: AppSection }) {
       return <IncomePanel />
     case 'expenses':
       return <ExpensePanel />
+    case 'report':
+      return <ExpenseReportPanel />
     case 'presets':
       return <PresetsPanel />
   }

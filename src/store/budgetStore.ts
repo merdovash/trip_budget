@@ -39,7 +39,7 @@ interface BudgetState {
   updateExpense: (id: string, item: Partial<RecurringItem>) => void
   removeExpense: (id: string) => void
   addFolder: (name: string) => string
-  updateFolder: (id: string, patch: Partial<Pick<ExpenseFolder, 'name'>>) => void
+  updateFolder: (id: string, patch: Partial<Pick<ExpenseFolder, 'name' | 'excluded'>>) => void
   removeFolder: (id: string) => void
   addIncomeFolder: (name: string) => string
   updateIncomeFolder: (id: string, patch: Partial<Pick<ExpenseFolder, 'name'>>) => void
@@ -277,11 +277,14 @@ export const useBudgetStore = create<BudgetState>()(
 
       updateFolder: (id, patch) =>
         set((state) => ({
-          folders: state.folders.map((folder) =>
-            folder.id === id
-              ? { ...folder, ...patch, name: patch.name?.trim() || folder.name }
-              : folder,
-          ),
+          folders: state.folders.map((folder) => {
+            if (folder.id !== id) return folder
+            const next = { ...folder, ...patch }
+            if (patch.name !== undefined) {
+              next.name = patch.name.trim() || folder.name
+            }
+            return next
+          }),
         })),
 
       removeFolder: (id) =>
@@ -351,6 +354,7 @@ export const useBudgetStore = create<BudgetState>()(
             id,
             name: folder.name,
             sortOrder: folder.sortOrder ?? index,
+            excluded: folder.excluded,
           }
         })
         const incomeFolderIdMap = new Map<string, string>()

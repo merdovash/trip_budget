@@ -22,6 +22,8 @@ export interface ExpenseFolder {
   id: string
   name: string
   sortOrder?: number
+  /** Если true — расходы папки не участвуют в прогнозе и налогах. */
+  excluded?: boolean
 }
 
 export interface RecurringItem {

@@ -678,6 +678,7 @@ function ExpenseList({
 }) {
   const expenses = useBudgetStore((s) => s.expenses)
   const folders = useBudgetStore((s) => s.folders)
+  const updateFolder = useBudgetStore((s) => s.updateFolder)
   const settings = useBudgetStore((s) => s.settings)
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
 
@@ -691,6 +692,7 @@ function ExpenseList({
       .map((folder) => ({
         id: folder.id,
         name: folder.name,
+        excluded: Boolean(folder.excluded),
         items: expenses.filter((item) => item.folderId === folder.id),
       }))
       .filter((group) => group.items.length > 0)
@@ -724,18 +726,47 @@ function ExpenseList({
   return (
     <div className="space-y-4">
       {grouped.groups.map((group) => (
-        <div key={group.id} className="rounded-lg border border-slate-200">
-          <button
-            type="button"
-            className="flex w-full items-center justify-between px-3 py-2 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50"
-            onClick={() => toggleGroup(group.id)}
-          >
-            <span>
-              {group.name}{' '}
-              <span className="font-normal text-slate-400">({group.items.length})</span>
-            </span>
-            <span className="text-slate-400">{collapsed[group.id] ? '▸' : '▾'}</span>
-          </button>
+        <div
+          key={group.id}
+          className={`rounded-lg border border-slate-200 ${group.excluded ? 'opacity-60' : ''}`}
+        >
+          <div className="flex w-full items-center gap-2 px-3 py-2">
+            <label
+              className="flex shrink-0 items-center gap-1.5 text-xs text-slate-500"
+              title={
+                group.excluded
+                  ? 'Папка исключена из расчётов — включить'
+                  : 'Учитывать папку в расчётах'
+              }
+              onClick={(e) => e.stopPropagation()}
+            >
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                checked={!group.excluded}
+                onChange={(e) => updateFolder(group.id, { excluded: !e.target.checked })}
+              />
+              <span className="sr-only">Учитывать в расчётах</span>
+            </label>
+            <button
+              type="button"
+              className="flex min-w-0 flex-1 items-center justify-between text-left text-sm font-semibold text-slate-700 hover:text-slate-900"
+              onClick={() => toggleGroup(group.id)}
+            >
+              <span className="min-w-0 truncate">
+                {group.name}{' '}
+                <span className="font-normal text-slate-400">({group.items.length})</span>
+                {group.excluded && (
+                  <span className="ml-2 rounded bg-amber-50 px-1.5 py-0.5 text-[11px] font-normal text-amber-700">
+                    вне расчёта
+                  </span>
+                )}
+              </span>
+              <span className="ml-2 shrink-0 text-slate-400">
+                {collapsed[group.id] ? '▸' : '▾'}
+              </span>
+            </button>
+          </div>
           {!collapsed[group.id] && (
             <div className="overflow-x-auto border-t border-slate-100 px-3 pb-2">
               <table className="w-full text-sm">

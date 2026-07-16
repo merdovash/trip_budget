@@ -14,6 +14,7 @@ import { useBudgetStore } from '../../store/budgetStore'
 import { useExchangeRateStore } from '../../store/exchangeRateStore'
 import { shouldShowSourceCountryTaxes } from '../../config/relocationMode'
 import { compareRegimesForRoute } from '../../tax/regimeComparison'
+import { filterExpensesForCalculation } from '../../lib/expenseFolders'
 import { EmptyState } from '../ui/FormControls'
 import { CashFlowChart } from './CashFlowChart'
 import { CollapsibleSection } from './CollapsibleSection'
@@ -27,30 +28,36 @@ export function Dashboard() {
   const settings = useBudgetStore((s) => s.settings)
   const incomes = useBudgetStore((s) => s.incomes)
   const expenses = useBudgetStore((s) => s.expenses)
+  const folders = useBudgetStore((s) => s.folders)
   const oneTimeExpenses = useBudgetStore((s) => s.oneTimeExpenses)
   const rateDate = useExchangeRateStore((s) => s.rateDate)
   const [selectedDay, setSelectedDay] = useState<string | null>(null)
 
+  const activeExpenses = useMemo(
+    () => filterExpensesForCalculation(expenses, folders),
+    [expenses, folders],
+  )
+
   const snapshots = useMemo(
-    () => calculateBudgetProjection(incomes, expenses, oneTimeExpenses, settings),
-    [incomes, expenses, oneTimeExpenses, settings, rateDate],
+    () => calculateBudgetProjection(incomes, activeExpenses, oneTimeExpenses, settings),
+    [incomes, activeExpenses, oneTimeExpenses, settings, rateDate],
   )
 
   const dailySnapshots = useMemo(
-    () => calculateDailyBudgetProjection(incomes, expenses, oneTimeExpenses, settings),
-    [incomes, expenses, oneTimeExpenses, settings, rateDate],
+    () => calculateDailyBudgetProjection(incomes, activeExpenses, oneTimeExpenses, settings),
+    [incomes, activeExpenses, oneTimeExpenses, settings, rateDate],
   )
 
   const cashGapDays = useMemo(() => findCashGapDays(dailySnapshots), [dailySnapshots])
 
   const yearTaxSummaries = useMemo(
-    () => getTaxSummariesByHorizon(incomes, settings, expenses, oneTimeExpenses),
-    [incomes, expenses, oneTimeExpenses, settings, rateDate],
+    () => getTaxSummariesByHorizon(incomes, settings, activeExpenses, oneTimeExpenses),
+    [incomes, activeExpenses, oneTimeExpenses, settings, rateDate],
   )
 
   const regimeComparisons = useMemo(
-    () => compareRegimesForRoute(settings, incomes, expenses, oneTimeExpenses),
-    [settings, incomes, expenses, oneTimeExpenses, rateDate],
+    () => compareRegimesForRoute(settings, incomes, activeExpenses, oneTimeExpenses),
+    [settings, incomes, activeExpenses, oneTimeExpenses, rateDate],
   )
 
   const dayIndexByDate = useMemo(() => {
@@ -64,10 +71,19 @@ export function Dashboard() {
     const idx = dayIndexByDate.get(selectedDay)
     const savingsInterestInBase =
       idx != null ? (dailySnapshots[idx]?.savingsInterest ?? 0) : 0
-    return getDayLedger(incomes, expenses, oneTimeExpenses, selectedDay, settings, {
+    return getDayLedger(incomes, activeExpenses, oneTimeExpenses, selectedDay, settings, {
       savingsInterestInBase,
     })
-  }, [selectedDay, dailySnapshots, dayIndexByDate, incomes, expenses, oneTimeExpenses, settings, rateDate])
+  }, [
+    selectedDay,
+    dailySnapshots,
+    dayIndexByDate,
+    incomes,
+    activeExpenses,
+    oneTimeExpenses,
+    settings,
+    rateDate,
+  ])
 
   const selectedIndex = selectedDay != null ? (dayIndexByDate.get(selectedDay) ?? -1) : -1
   const canPrev = selectedIndex > 0

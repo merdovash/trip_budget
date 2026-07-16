@@ -91,6 +91,13 @@ export interface CountryDeductionSettings {
   TH?: ThailandDeductionSettings
 }
 
+export interface InitialBalanceEntry {
+  id: string
+  amount: number
+  currency: string
+  comment?: string
+}
+
 export interface ResidenceRoutePoint {
   id: string
   countryCode: string
@@ -125,7 +132,11 @@ export interface BudgetSettings {
    */
   residenceRoute?: ResidenceRoutePoint[]
   horizonMonths: number
+  /** Начальные остатки в разных валютах (валюты могут повторяться). */
+  initialBalances?: InitialBalanceEntry[]
+  /** @deprecated Используйте initialBalances. */
   initialBalance: number
+  /** @deprecated Используйте initialBalances. */
   initialBalanceCurrency: string
   initialBalanceDate: string
   /** Класть положительный остаток в валюте накопительного счёта. */

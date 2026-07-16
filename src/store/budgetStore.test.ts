@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_SETTINGS, type BudgetSettings } from '../types/budget'
 import { migrateCountryDeductions, migrateRegimeParamsToRoute } from './budgetStore'
+import { migrateInitialBalances } from '../lib/initialBalance'
 
 describe('migrateCountryDeductions', () => {
   it('moves legacy Thailand deductions under the country key', () => {
@@ -55,5 +56,15 @@ describe('migrateRegimeParamsToRoute', () => {
 
     expect(migrated.residenceRoute?.[0].regimeParams?.lifeInsurance).toBe(40_000)
     expect(migrated.countryDeductions?.TH).toBeUndefined()
+  })
+})
+
+describe('migrateInitialBalances', () => {
+  it('creates empty list when legacy balance is zero', () => {
+    const migrated = migrateInitialBalances({
+      ...DEFAULT_SETTINGS,
+      initialBalances: undefined,
+    })
+    expect(migrated.initialBalances).toEqual([])
   })
 })

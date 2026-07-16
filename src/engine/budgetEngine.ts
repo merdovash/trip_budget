@@ -65,6 +65,9 @@ import {
   isSavingsAccountEnabled,
   monthlySavingsInterest,
 } from '../lib/savingsAccount'
+import { getInitialBalanceInBase } from '../lib/initialBalance'
+
+export { getInitialBalanceInBase }
 
 
 
@@ -921,20 +924,6 @@ export function shiftIsoDate(dateStr: string, deltaDays: number): string {
   const m = String(date.getUTCMonth() + 1).padStart(2, '0')
   const d = String(date.getUTCDate()).padStart(2, '0')
   return `${y}-${m}-${d}`
-}
-
-
-
-export function getInitialBalanceInBase(settings: BudgetSettings): number {
-
-  const amount = settings.initialBalance ?? 0
-
-  const currency = settings.initialBalanceCurrency ?? settings.baseCurrency
-
-  if (amount === 0) return 0
-
-  return toBaseCurrency(amount, currency, settings.baseCurrency)
-
 }
 
 

@@ -1,4 +1,5 @@
 import type { BudgetSettings } from '../types/budget'
+import { getInitialSavingsBalanceFromEntries } from './initialBalance'
 
 export const DEFAULT_SAVINGS_ANNUAL_RATE = 16
 export const DEFAULT_SAVINGS_ACCOUNT_CURRENCY = 'RUB'
@@ -24,9 +25,7 @@ export function monthlySavingsInterest(balance: number, annualRatePct: number): 
 }
 
 export function getInitialSavingsBalance(settings: BudgetSettings): number {
-  const savingsCurrency = getSavingsAccountCurrency(settings)
-  if ((settings.initialBalanceCurrency ?? settings.baseCurrency) !== savingsCurrency) return 0
-  return settings.initialBalance ?? 0
+  return getInitialSavingsBalanceFromEntries(settings)
 }
 
 export function isLastDayOfMonth(dateStr: string): boolean {

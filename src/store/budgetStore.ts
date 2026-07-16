@@ -17,6 +17,7 @@ import {
   getRelocationDate,
   getRelocationProgram,
 } from '../config/relocationPrograms'
+import { migrateInitialBalances } from '../lib/initialBalance'
 import { ensureExplicitResidenceRoute, syncLegacyFromRoute } from '../config/residenceRoute'
 
 export interface ActivePreset {
@@ -122,11 +123,13 @@ function migrateOneTimeIntoExpenses(
 }
 
 function migratePersistedState(persisted: PersistedBudgetState, current: BudgetState): BudgetState {
-  const mergedSettings = migrateRegimeParamsToRoute(
-    migrateCountryDeductions({
-      ...current.settings,
-      ...persisted.settings,
-    }),
+  const mergedSettings = migrateInitialBalances(
+    migrateRegimeParamsToRoute(
+      migrateCountryDeductions({
+        ...current.settings,
+        ...persisted.settings,
+      }),
+    ),
   )
   if (!mergedSettings.relocationDate) {
     mergedSettings.relocationDate = mergedSettings.initialBalanceDate ?? current.settings.relocationDate

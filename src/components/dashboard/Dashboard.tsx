@@ -4,11 +4,11 @@ import {
   calculateDailyBudgetProjection,
   findCashGapDays,
   getDayLedger,
-  getInitialBalanceInBase,
   getTaxSummariesByHorizon,
   shiftIsoDate,
   yearTaxTotalInBase,
 } from '../../engine/budgetEngine'
+import { getInitialBalanceInBase, hasInitialBalance } from '../../lib/initialBalance'
 import { formatCurrency, formatDateDisplay } from '../../lib/format'
 import { useBudgetStore } from '../../store/budgetStore'
 import { useExchangeRateStore } from '../../store/exchangeRateStore'
@@ -69,7 +69,7 @@ export function Dashboard() {
   const hasData =
     incomes.length > 0 ||
     expenses.length > 0 ||
-    (settings.initialBalance ?? 0) > 0
+    hasInitialBalance(settings)
 
   if (!hasData) {
     return (

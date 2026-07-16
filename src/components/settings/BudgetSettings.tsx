@@ -4,10 +4,9 @@ import { getTaxCalculator } from '../../tax/registry'
 import { CURRENCIES, DEFAULT_SETTINGS } from '../../types/budget'
 import { todayIsoDate } from '../../lib/format'
 import { Button, Card, Field, Input, Select, DateInput } from '../ui/FormControls'
-import { CurrencySelect } from '../ui/CurrencySelect'
-import { CurrencyConversionHint } from '../ui/CurrencyConversionHint'
 import { SavedSettingsPanel } from './SavedSettingsPanel'
 import { ResidenceRouteEditor } from './ResidenceRouteEditor'
+import { InitialBalanceEditor } from './InitialBalanceEditor'
 import {
   getRelocationProgramsForCountry,
   RELOCATION_PROGRAM_NONE,
@@ -265,30 +264,8 @@ export function BudgetSettingsPanel() {
             </Button>
           </Field>
 
-          <Field label="Начальный остаток">
-            <div className="flex gap-2">
-              <CurrencySelect
-                value={settings.initialBalanceCurrency ?? settings.baseCurrency}
-                onChange={(currency) => setSettings({ initialBalanceCurrency: currency })}
-                className="w-24 shrink-0"
-              />
-              <Input
-                type="number"
-                min={0}
-                step={0.01}
-                placeholder="Сумма"
-                className="min-w-0 flex-1"
-                value={(settings.initialBalance ?? 0) || ''}
-                onChange={(e) =>
-                  setSettings({ initialBalance: Number(e.target.value) || 0 })
-                }
-              />
-            </div>
-            <CurrencyConversionHint
-              amount={settings.initialBalance ?? 0}
-              currency={settings.initialBalanceCurrency ?? settings.baseCurrency}
-              baseCurrency={settings.baseCurrency}
-            />
+          <Field label="Начальные остатки">
+            <InitialBalanceEditor settings={settings} onChange={setSettings} />
           </Field>
 
           <Field label="Дата начального остатка">

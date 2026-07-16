@@ -5,6 +5,7 @@ import {
   getTaxCalculator,
 } from '../../tax/registry'
 import { describeResidenceRoute } from '../../config/residenceRoute'
+import { describeInitialBalances } from '../../lib/initialBalance'
 import { formatDateDisplay } from '../../lib/format'
 import {
   deleteSettingsSnapshot,
@@ -27,7 +28,7 @@ function SettingsSnapshotDetails({ id }: { id: string }) {
       value: describeResidenceRoute(snapshot.settings),
     },
     { label: 'Базовая валюта', value: snapshot.settings.baseCurrency },
-    { label: 'Начальный остаток', value: `${snapshot.settings.initialBalance ?? 0} ${snapshot.settings.initialBalanceCurrency ?? snapshot.settings.baseCurrency}` },
+    { label: 'Начальные остатки', value: describeInitialBalances(snapshot.settings) },
     { label: 'Дата начального остатка', value: formatDateDisplay(snapshot.settings.initialBalanceDate) },
     {
       label: 'Способ переезда',

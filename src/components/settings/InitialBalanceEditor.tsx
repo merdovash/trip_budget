@@ -150,6 +150,7 @@ export function InitialBalanceEditor({ settings, onChange }: InitialBalanceEdito
                       amount={entry.amount}
                       currency={entry.currency}
                       baseCurrency={settings.baseCurrency}
+                      side="neutral"
                     />
                   </div>
                 )}

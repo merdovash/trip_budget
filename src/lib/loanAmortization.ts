@@ -100,10 +100,17 @@ export function loanDisbursementForDay(
   expenses: RecurringItem[],
   dateStr: string,
   baseCurrency: string,
+  feePercent = 0,
 ): number {
   return expenses.reduce((sum, item) => {
     if (!isLoanDisbursementDay(item, dateStr)) return sum
-    return sum + convertCurrency(getLoanPrincipal(item), item.currency, baseCurrency)
+    return (
+      sum +
+      convertCurrency(getLoanPrincipal(item), item.currency, baseCurrency, {
+        feePercent,
+        side: 'income',
+      })
+    )
   }, 0)
 }
 
@@ -111,10 +118,17 @@ export function loanDisbursementForMonth(
   expenses: RecurringItem[],
   monthKey: string,
   baseCurrency: string,
+  feePercent = 0,
 ): number {
   return expenses.reduce((sum, item) => {
     if (!isLoanDisbursementInMonth(item, monthKey)) return sum
-    return sum + convertCurrency(getLoanPrincipal(item), item.currency, baseCurrency)
+    return (
+      sum +
+      convertCurrency(getLoanPrincipal(item), item.currency, baseCurrency, {
+        feePercent,
+        side: 'income',
+      })
+    )
   }, 0)
 }
 

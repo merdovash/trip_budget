@@ -1,19 +1,11 @@
 import type {
-
   BudgetSettings,
-
   DailySnapshot,
-
   MonthlySnapshot,
-
   OneTimeExpense,
-
   RecurringItem,
-
   ResidenceRoutePoint,
-
 } from '../types/budget'
-
 import { FOOD_EXPENSE_CATEGORY } from '../config/foodBudget'
 import {
   getEffectiveStartDate,
@@ -26,7 +18,6 @@ import {
   getRouteSegmentsInYear,
   settingsForResidencePoint,
 } from '../config/residenceRoute'
-
 import {
   loanMonthlyPayment,
   isLoanExpense,
@@ -36,7 +27,11 @@ import {
   loanDisbursementForDay,
   loanDisbursementForMonth,
 } from '../lib/loanAmortization'
-import { convertCurrency } from '../lib/currency'
+import {
+  convertCurrency,
+  getConversionFeePercent,
+  type CurrencyConversionSide,
+} from '../lib/currency'
 import {
   buildDoubleTaxationLines,
   isSourceCountryTaxable,
@@ -69,137 +64,71 @@ import {
   monthlySavingsInterest,
 } from '../lib/savingsAccount'
 import { getInitialBalanceInBase } from '../lib/initialBalance'
-
 export { getInitialBalanceInBase }
-
-
-
 const WEEKS_PER_MONTH = 52 / 12
-
 const FOOD_DAILY_DIVISOR = 30
-
-
-
 export function toMonthlyAmount(amount: number, frequency: RecurringItem['frequency']): number {
-
   switch (frequency) {
-
     case 'monthly':
-
       return amount
-
     case 'yearly':
-
       return amount / 12
-
     case 'weekly':
-
       return amount * WEEKS_PER_MONTH
-
     case 'once':
-
       return 0
-
   }
-
+}
+function toBaseCurrency(
+  amount: number,
+  currency: string,
+  baseCurrency: string,
+  feePercent = 0,
+  side: CurrencyConversionSide = 'neutral',
+): number {
+  return convertCurrency(amount, currency, baseCurrency, { feePercent, side })
 }
 
-
-
-function toBaseCurrency(amount: number, currency: string, baseCurrency: string): number {
-
-  return convertCurrency(amount, currency, baseCurrency)
-
+function fxFee(settings: BudgetSettings): number {
+  return getConversionFeePercent(settings)
 }
-
-
-
 function parseIsoDate(iso: string): { year: number; month: number; day: number } {
-
   const [year, month, day] = iso.split('-').map(Number)
-
   return { year, month, day }
-
 }
-
-
-
 export function getDaysInMonth(year: number, month: number): number {
-
   return new Date(year, month, 0).getDate()
-
 }
-
-
-
 export function isFoodExpense(item: RecurringItem): boolean {
-
   return item.category === FOOD_EXPENSE_CATEGORY
-
 }
-
-
-
 /** Месячная сумма «Еды»: сумма/30 × число дней в месяце. */
-
 export function foodMonthlyAmount(monthlyAmount: number, monthKey: string): number {
-
   const { year, month } = parseIsoDate(`${monthKey}-01`)
-
   return (monthlyAmount / FOOD_DAILY_DIVISOR) * getDaysInMonth(year, month)
-
 }
-
-
-
 export function foodDailyAmount(monthlyAmount: number): number {
-
   return monthlyAmount / FOOD_DAILY_DIVISOR
-
 }
-
-
-
 function isActiveInMonth(item: RecurringItem, monthKey: string, settings: BudgetSettings): boolean {
   return isItemActiveInMonth(item, monthKey, settings)
 }
-
 function isActiveOnDay(item: RecurringItem, dateStr: string, settings: BudgetSettings): boolean {
   return isItemActiveOnDay(item, dateStr, settings)
 }
-
-
-
 function daysBetween(startIso: string, endIso: string): number {
-
   const start = parseIsoDate(startIso)
-
   const end = parseIsoDate(endIso)
-
   const startMs = Date.UTC(start.year, start.month - 1, start.day)
-
   const endMs = Date.UTC(end.year, end.month - 1, end.day)
-
   return Math.round((endMs - startMs) / 86_400_000)
-
 }
-
-
-
 function paymentDayMatches(year: number, month: number, day: number, dayOfMonth: number): boolean {
-
   return day === Math.min(dayOfMonth, getDaysInMonth(year, month))
-
 }
-
-
-
 function scheduledDayOfMonth(item: RecurringItem, settings: BudgetSettings): number {
   return parseIsoDate(getEffectiveStartDate(item, settings)).day
 }
-
-
-
 function scheduledDayMatches(
   year: number,
   month: number,
@@ -209,75 +138,36 @@ function scheduledDayMatches(
 ): boolean {
   return paymentDayMatches(year, month, day, scheduledDayOfMonth(item, settings))
 }
-
 function yearlyDayMatches(dateStr: string, item: RecurringItem, settings: BudgetSettings): boolean {
   const current = parseIsoDate(dateStr)
   const start = parseIsoDate(getEffectiveStartDate(item, settings))
-
   const effectiveStartDay = Math.min(start.day, getDaysInMonth(current.year, start.month))
-
   return current.month === start.month && current.day === effectiveStartDay
-
 }
-
-
-
 export function generateMonthKeys(startDate: Date, count: number): string[] {
-
   const keys: string[] = []
-
   const cursor = new Date(startDate.getFullYear(), startDate.getMonth(), 1)
-
   for (let i = 0; i < count; i++) {
-
     const year = cursor.getFullYear()
-
     const month = String(cursor.getMonth() + 1).padStart(2, '0')
-
     keys.push(`${year}-${month}`)
-
     cursor.setMonth(cursor.getMonth() + 1)
-
   }
-
   return keys
-
 }
-
-
-
 export function generateDayKeys(startDate: Date, horizonMonths: number): string[] {
-
   const keys: string[] = []
-
   const cursor = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate())
-
   const end = new Date(cursor.getFullYear(), cursor.getMonth() + horizonMonths, 0)
-
-
-
   while (cursor <= end) {
-
     const year = cursor.getFullYear()
-
     const month = String(cursor.getMonth() + 1).padStart(2, '0')
-
     const day = String(cursor.getDate()).padStart(2, '0')
-
     keys.push(`${year}-${month}-${day}`)
-
     cursor.setDate(cursor.getDate() + 1)
-
   }
-
-
-
   return keys
-
 }
-
-
-
 function recurringAmountForMonth(
   item: RecurringItem,
   monthKey: string,
@@ -291,76 +181,62 @@ function recurringAmountForMonth(
   }
   return toMonthlyAmount(item.amount, item.frequency)
 }
-
 function sumRecurringForMonth(
   items: RecurringItem[],
   monthKey: string,
   baseCurrency: string,
   settings: BudgetSettings,
+  side: CurrencyConversionSide,
 ): number {
+  const fee = fxFee(settings)
   return items.reduce((sum, item) => {
     if (item.frequency === 'once') return sum
     if (!isActiveInMonth(item, monthKey, settings)) return sum
     const amount = recurringAmountForMonth(item, monthKey)
-    return sum + toBaseCurrency(amount, item.currency, baseCurrency)
+    return sum + toBaseCurrency(amount, item.currency, baseCurrency, fee, side)
   }, 0)
 }
-
 function sumOnceExpensesForMonth(
   items: RecurringItem[],
   monthKey: string,
   baseCurrency: string,
   settings: BudgetSettings,
 ): number {
+  const fee = fxFee(settings)
   return items.reduce((sum, item) => {
     if (item.frequency !== 'once') return sum
     if (!isActiveInMonth(item, monthKey, settings)) return sum
-    return sum + toBaseCurrency(item.amount, item.currency, baseCurrency)
+    return sum + toBaseCurrency(item.amount, item.currency, baseCurrency, fee, 'expense')
   }, 0)
 }
-
-
-
 function sumOneTimeForMonth(
-
   items: OneTimeExpense[],
-
   monthKey: string,
-
   baseCurrency: string,
-
+  feePercent = 0,
 ): number {
-
   return items
-
     .filter((item) => item.date.slice(0, 7) === monthKey)
-
-    .reduce((sum, item) => sum + toBaseCurrency(item.amount, item.currency, baseCurrency), 0)
-
+    .reduce(
+      (sum, item) =>
+        sum + toBaseCurrency(item.amount, item.currency, baseCurrency, feePercent, 'expense'),
+      0,
+    )
 }
-
-
-
 function sumOneTimeForDay(
-
   items: OneTimeExpense[],
-
   dateStr: string,
-
   baseCurrency: string,
-
+  feePercent = 0,
 ): number {
-
   return items
-
     .filter((item) => item.date === dateStr)
-
-    .reduce((sum, item) => sum + toBaseCurrency(item.amount, item.currency, baseCurrency), 0)
-
+    .reduce(
+      (sum, item) =>
+        sum + toBaseCurrency(item.amount, item.currency, baseCurrency, feePercent, 'expense'),
+      0,
+    )
 }
-
-
-
 function incomeForDay(
   items: RecurringItem[],
   dateStr: string,
@@ -369,168 +245,93 @@ function incomeForDay(
 ): number {
   const { year, month, day } = parseIsoDate(dateStr)
   const effectiveStart = (item: RecurringItem) => getEffectiveStartDate(item, settings)
-
+  const fee = fxFee(settings)
   return items.reduce((sum, item) => {
     if (!isActiveOnDay(item, dateStr, settings)) return sum
-
-
-
     if (item.payments && item.payments.length > 0) {
-
       const dayAmount = item.payments.reduce((paymentSum, payment) => {
-
         if (!payment.dayOfMonth || !paymentDayMatches(year, month, day, payment.dayOfMonth)) {
-
           return paymentSum
-
         }
-
         return paymentSum + payment.amount
-
       }, 0)
-
-      return sum + toBaseCurrency(dayAmount, item.currency, baseCurrency)
-
+      return sum + toBaseCurrency(dayAmount, item.currency, baseCurrency, fee, 'income')
     }
-
-
-
     let amount = 0
-
     switch (item.frequency) {
-
       case 'monthly':
-
         if (scheduledDayMatches(year, month, day, item, settings)) amount = item.amount
-
         break
-
       case 'weekly':
-
         if (daysBetween(effectiveStart(item), dateStr) % 7 === 0) amount = item.amount
-
         break
-
       case 'yearly':
-
         if (yearlyDayMatches(dateStr, item, settings)) amount = item.amount
-
         break
-
       case 'once':
-
         if (dateStr === effectiveStart(item)) amount = item.amount
-
         break
-
     }
-
-
-
-    return sum + toBaseCurrency(amount, item.currency, baseCurrency)
-
+    return sum + toBaseCurrency(amount, item.currency, baseCurrency, fee, 'income')
   }, 0)
-
 }
-
-
-
 function expenseForDay(
-
   items: RecurringItem[],
-
   dateStr: string,
-
   baseCurrency: string,
-
   settings: BudgetSettings,
-
 ): number {
-
   const { year, month, day } = parseIsoDate(dateStr)
-
   const effectiveStart = (item: RecurringItem) => getEffectiveStartDate(item, settings)
-
-
-
+  const fee = fxFee(settings)
   return items.reduce((sum, item) => {
-
     if (!isActiveOnDay(item, dateStr, settings)) return sum
-
-
-
     if (isLoanExpense(item)) {
-
       if (isLoanPaymentOnDay(item, dateStr)) {
-
-        return sum + toBaseCurrency(loanMonthlyPayment(item), item.currency, baseCurrency)
-
+        return (
+          sum +
+          toBaseCurrency(loanMonthlyPayment(item), item.currency, baseCurrency, fee, 'expense')
+        )
       }
-
       return sum
-
     }
-
-
-
     if (isFoodExpense(item) && item.frequency === 'monthly') {
-
-      return sum + toBaseCurrency(foodDailyAmount(item.amount), item.currency, baseCurrency)
-
+      return (
+        sum +
+        toBaseCurrency(foodDailyAmount(item.amount), item.currency, baseCurrency, fee, 'expense')
+      )
     }
-
-
-
     let amount = 0
-
     switch (item.frequency) {
-
       case 'monthly':
-
         if (scheduledDayMatches(year, month, day, item, settings)) amount = item.amount
-
         break
-
       case 'weekly':
-
         if (daysBetween(effectiveStart(item), dateStr) % 7 === 0) amount = item.amount
-
         break
-
       case 'yearly':
-
         if (yearlyDayMatches(dateStr, item, settings)) amount = item.amount
-
         break
-
       case 'once':
-
         break
-
     }
-
-
-
-    return sum + toBaseCurrency(amount, item.currency, baseCurrency)
-
+    return sum + toBaseCurrency(amount, item.currency, baseCurrency, fee, 'expense')
   }, 0)
-
 }
-
 function onceExpensesForDay(
   items: RecurringItem[],
   dateStr: string,
   baseCurrency: string,
   settings: BudgetSettings,
 ): number {
+  const fee = fxFee(settings)
   return items.reduce((sum, item) => {
     if (item.frequency !== 'once') return sum
     if (!isActiveOnDay(item, dateStr, settings)) return sum
     if (dateStr !== getEffectiveStartDate(item, settings)) return sum
-    return sum + toBaseCurrency(item.amount, item.currency, baseCurrency)
+    return sum + toBaseCurrency(item.amount, item.currency, baseCurrency, fee, 'expense')
   }, 0)
 }
-
 /** Сумма статьи дохода в исходной валюте за день (0 если не в этот день). */
 function incomeAmountNativeForDay(
   item: RecurringItem,
@@ -539,7 +340,6 @@ function incomeAmountNativeForDay(
 ): number {
   if (!isActiveOnDay(item, dateStr, settings)) return 0
   const { year, month, day } = parseIsoDate(dateStr)
-
   if (item.payments && item.payments.length > 0) {
     return item.payments.reduce((paymentSum, payment) => {
       if (!payment.dayOfMonth || !paymentDayMatches(year, month, day, payment.dayOfMonth)) {
@@ -548,7 +348,6 @@ function incomeAmountNativeForDay(
       return paymentSum + payment.amount
     }, 0)
   }
-
   switch (item.frequency) {
     case 'monthly':
       return scheduledDayMatches(year, month, day, item, settings) ? item.amount : 0
@@ -562,7 +361,6 @@ function incomeAmountNativeForDay(
       return 0
   }
 }
-
 function expenseAmountNativeForDay(
   item: RecurringItem,
   dateStr: string,
@@ -591,7 +389,6 @@ function expenseAmountNativeForDay(
       return 0
   }
 }
-
 /** Чистый поток дня в заданной валюте: доходы − расходы + выдача кредита (до НДФЛ). */
 function nativeNetCashflowBeforeSourceTaxForDay(
   incomes: RecurringItem[],
@@ -619,7 +416,6 @@ function nativeNetCashflowBeforeSourceTaxForDay(
   }
   return net
 }
-
 function applyDailySavingsCashflow(
   balances: Map<string, number>,
   incomes: RecurringItem[],
@@ -645,7 +441,6 @@ function applyDailySavingsCashflow(
     balances.set('RUB', (balances.get('RUB') ?? 0) - sourceTaxNativeRub)
   }
 }
-
 function accrueSavingsInterestForDay(
   balances: Map<string, number>,
   dateStr: string,
@@ -660,11 +455,16 @@ function accrueSavingsInterestForDay(
     const interestNative = monthlySavingsInterest(balance, rate)
     if (interestNative === 0) continue
     balances.set(currency, balance + interestNative)
-    interestBase += toBaseCurrency(interestNative, currency, settings.baseCurrency)
+    interestBase += toBaseCurrency(
+      interestNative,
+      currency,
+      settings.baseCurrency,
+      fxFee(settings),
+      'income',
+    )
   }
   return { interestBase }
 }
-
 export type DayLedgerKind =
   | 'income'
   | 'expense'
@@ -673,7 +473,6 @@ export type DayLedgerKind =
   | 'loan_payment'
   | 'loan_disbursement'
   | 'savings_interest'
-
 export interface DayLedgerLine {
   id: string
   name: string
@@ -683,7 +482,6 @@ export interface DayLedgerLine {
   amountOriginal: number
   detail?: string
 }
-
 export interface DayLedger {
   date: string
   incomes: DayLedgerLine[]
@@ -693,12 +491,10 @@ export interface DayLedger {
   expenseTotal: number
   inflowTotal: number
 }
-
 export interface DayLedgerOptions {
   /** Уже посчитанные проценты накопительного счёта за день (из daily snapshot). */
   savingsInterestInBase?: number
 }
-
 /** Разбивка доходов и расходов на конкретный день (статьи для клика по графику). */
 export function getDayLedger(
   incomes: RecurringItem[],
@@ -709,6 +505,7 @@ export function getDayLedger(
   options: DayLedgerOptions = {},
 ): DayLedger {
   const baseCurrency = settings.baseCurrency
+  const fee = fxFee(settings)
   const { year, month, day } = parseIsoDate(dateStr)
   const incomeLines: DayLedgerLine[] = []
   const expenseLines: DayLedgerLine[] = []
@@ -720,7 +517,6 @@ export function getDayLedger(
     settings.dependents,
     'RUB',
   )
-
   function pushNetIncomeAfterSourceTax(params: {
     id: string
     name: string
@@ -750,14 +546,12 @@ export function getDayLedger(
       kind: 'income',
       amountOriginal: netNative,
       currency,
-      amountInBase: toBaseCurrency(netNative, currency, baseCurrency),
+      amountInBase: toBaseCurrency(netNative, currency, baseCurrency, fee, 'income'),
       detail: detailPrefix ? `${detailPrefix} · ${withhold}` : withhold,
     })
   }
-
   for (const item of incomes) {
     if (!isActiveOnDay(item, dateStr, settings)) continue
-
     if (item.payments && item.payments.length > 0) {
       for (const payment of item.payments) {
         if (!payment.dayOfMonth || !paymentDayMatches(year, month, day, payment.dayOfMonth)) {
@@ -779,14 +573,13 @@ export function getDayLedger(
             kind: 'income',
             amountOriginal: payment.amount,
             currency: item.currency,
-            amountInBase: toBaseCurrency(payment.amount, item.currency, baseCurrency),
+            amountInBase: toBaseCurrency(payment.amount, item.currency, baseCurrency, fee, 'income'),
             detail: payment.label,
           })
         }
       }
       continue
     }
-
     let amount = 0
     switch (item.frequency) {
       case 'monthly':
@@ -818,12 +611,11 @@ export function getDayLedger(
           kind: 'income',
           amountOriginal: amount,
           currency: item.currency,
-          amountInBase: toBaseCurrency(amount, item.currency, baseCurrency),
+          amountInBase: toBaseCurrency(amount, item.currency, baseCurrency, fee, 'income'),
         })
       }
     }
   }
-
   for (const item of expenses) {
     if (isLoanExpense(item) && isLoanDisbursementDay(item, dateStr)) {
       const principal = item.principal ?? item.amount
@@ -833,13 +625,11 @@ export function getDayLedger(
         kind: 'loan_disbursement',
         amountOriginal: principal,
         currency: item.currency,
-        amountInBase: toBaseCurrency(principal, item.currency, baseCurrency),
+        amountInBase: toBaseCurrency(principal, item.currency, baseCurrency, fee, 'income'),
         detail: 'Выдача кредита',
       })
     }
-
     if (!isActiveOnDay(item, dateStr, settings)) continue
-
     if (isLoanExpense(item)) {
       if (isLoanPaymentOnDay(item, dateStr)) {
         const payment = loanMonthlyPayment(item)
@@ -849,13 +639,12 @@ export function getDayLedger(
           kind: 'loan_payment',
           amountOriginal: payment,
           currency: item.currency,
-          amountInBase: toBaseCurrency(payment, item.currency, baseCurrency),
+          amountInBase: toBaseCurrency(payment, item.currency, baseCurrency, fee, 'expense'),
           detail: 'Платёж по кредиту',
         })
       }
       continue
     }
-
     if (item.frequency === 'once') {
       if (dateStr === getEffectiveStartDate(item, settings)) {
         expenseLines.push({
@@ -864,13 +653,12 @@ export function getDayLedger(
           kind: 'once',
           amountOriginal: item.amount,
           currency: item.currency,
-          amountInBase: toBaseCurrency(item.amount, item.currency, baseCurrency),
+          amountInBase: toBaseCurrency(item.amount, item.currency, baseCurrency, fee, 'expense'),
           detail: 'Разовый расход',
         })
       }
       continue
     }
-
     if (isFoodExpense(item) && item.frequency === 'monthly') {
       const daily = foodDailyAmount(item.amount)
       expenseLines.push({
@@ -879,12 +667,11 @@ export function getDayLedger(
         kind: 'food',
         amountOriginal: daily,
         currency: item.currency,
-        amountInBase: toBaseCurrency(daily, item.currency, baseCurrency),
+        amountInBase: toBaseCurrency(daily, item.currency, baseCurrency, fee, 'expense'),
         detail: 'Ежедневное начисление (сумма ÷ 30)',
       })
       continue
     }
-
     let amount = 0
     switch (item.frequency) {
       case 'monthly':
@@ -904,11 +691,10 @@ export function getDayLedger(
         kind: 'expense',
         amountOriginal: amount,
         currency: item.currency,
-        amountInBase: toBaseCurrency(amount, item.currency, baseCurrency),
+        amountInBase: toBaseCurrency(amount, item.currency, baseCurrency, fee, 'expense'),
       })
     }
   }
-
   for (const item of oneTimeExpenses) {
     if (item.date !== dateStr) continue
     expenseLines.push({
@@ -917,11 +703,10 @@ export function getDayLedger(
       kind: 'once',
       amountOriginal: item.amount,
       currency: item.currency,
-      amountInBase: toBaseCurrency(item.amount, item.currency, baseCurrency),
+      amountInBase: toBaseCurrency(item.amount, item.currency, baseCurrency, fee, 'expense'),
       detail: 'Разовый расход',
     })
   }
-
   const savingsInterestInBase = options.savingsInterestInBase ?? 0
   if (savingsInterestInBase > 0) {
     const currencies = listSavingsCurrencies(settings)
@@ -938,7 +723,6 @@ export function getDayLedger(
       detail: rateDetail || `${getSavingsAnnualRate(settings)}% годовых`,
     })
   }
-
   return {
     date: dateStr,
     incomes: incomeLines,
@@ -949,7 +733,6 @@ export function getDayLedger(
     inflowTotal: inflowLines.reduce((s, line) => s + line.amountInBase, 0),
   }
 }
-
 export function shiftIsoDate(dateStr: string, deltaDays: number): string {
   const { year, month, day } = parseIsoDate(dateStr)
   const date = new Date(Date.UTC(year, month - 1, day))
@@ -959,47 +742,24 @@ export function shiftIsoDate(dateStr: string, deltaDays: number): string {
   const d = String(date.getUTCDate()).padStart(2, '0')
   return `${y}-${m}-${d}`
 }
-
-
-
 export function getProjectionStartDate(settings: BudgetSettings): Date {
-
   const dateStr = settings.initialBalanceDate ?? new Date().toISOString().slice(0, 10)
-
   const [year, month, day] = dateStr.split('-').map(Number)
-
   return new Date(year, month - 1, day)
-
 }
-
-
-
 export function calculateAnnualGrossIncome(
-
   incomes: RecurringItem[],
-
   baseCurrency: string,
-
+  feePercent = 0,
 ): number {
-
   return incomes.reduce((sum, item) => {
-
     const amount =
-
       item.frequency === 'once'
-
         ? item.amount
-
         : toMonthlyAmount(item.amount, item.frequency) * 12
-
-    return sum + toBaseCurrency(amount, item.currency, baseCurrency)
-
+    return sum + toBaseCurrency(amount, item.currency, baseCurrency, feePercent, 'income')
   }, 0)
-
 }
-
-
-
 export function getQuarterlyGrossFromIncomes(
   incomes: RecurringItem[],
   baseCurrency: string,
@@ -1011,16 +771,14 @@ export function getQuarterlyGrossFromIncomes(
     for (let m = 0; m < 3; m++) {
       const month = q * 3 + m + 1
       const monthKey = `${year}-${String(month).padStart(2, '0')}`
-      quarters[q] += sumRecurringForMonth(incomes, monthKey, baseCurrency, settings)
+      quarters[q] += sumRecurringForMonth(incomes, monthKey, baseCurrency, settings, 'income')
     }
   }
   return quarters
 }
-
 function collectYearsFromDayKeys(dayKeys: string[]): number[] {
   return [...new Set(dayKeys.map((d) => parseIsoDate(d).year))]
 }
-
 function buildScheduledTaxByDate(
   incomes: RecurringItem[],
   settings: BudgetSettings,
@@ -1032,14 +790,12 @@ function buildScheduledTaxByDate(
   if (!calculator?.buildTaxSchedule || calculator.taxDistribution !== 'scheduled') {
     return map
   }
-
   const residenceIncomes = filterResidenceTaxableIncomes(incomes)
   const input = {
-    grossAnnualIncome: calculateAnnualGrossIncome(residenceIncomes, settings.baseCurrency),
+    grossAnnualIncome: calculateAnnualGrossIncome(residenceIncomes, settings.baseCurrency, fxFee(settings)),
     familySize: settings.familySize,
     dependents: settings.dependents,
   }
-
   for (const year of years) {
     const quarterlyGross = getQuarterlyGrossFromIncomes(residenceIncomes, settings.baseCurrency, year, settings)
     const payments = calculator.buildTaxSchedule(input, taxResult, { year, quarterlyGross })
@@ -1053,10 +809,8 @@ function buildScheduledTaxByDate(
       })
     }
   }
-
   return map
 }
-
 function getEffectiveTaxRate(
   incomes: RecurringItem[],
   expenses: RecurringItem[],
@@ -1064,21 +818,18 @@ function getEffectiveTaxRate(
   settings: BudgetSettings,
 ): number {
   const residenceIncomes = filterResidenceTaxableIncomes(incomes)
-  const grossAnnualIncome = calculateAnnualGrossIncome(residenceIncomes, settings.baseCurrency)
+  const grossAnnualIncome = calculateAnnualGrossIncome(residenceIncomes, settings.baseCurrency, fxFee(settings))
   if (grossAnnualIncome <= 0) return 0
-
   const calculator = getTaxCalculator(settings.taxRegimeId)
   const burden = computeAnnualTaxBurden(incomes, settings, calculator, expenses, oneTimeExpenses)
   return (burden.residenceIncomeTax + burden.residenceSocial) / grossAnnualIncome
 }
-
 interface ResidenceTaxPlan {
   taxRegimeId: string
   rate: number
   useScheduled: boolean
   scheduledMap: Map<string, { social: number; incomeTax: number }>
 }
-
 function buildResidenceTaxPlans(
   incomes: RecurringItem[],
   expenses: RecurringItem[],
@@ -1088,7 +839,6 @@ function buildResidenceTaxPlans(
 ): Map<string, ResidenceTaxPlan> {
   const plans = new Map<string, ResidenceTaxPlan>()
   const seen = new Set<string>()
-
   for (const point of getResidenceRoute(settings)) {
     if (seen.has(point.taxRegimeId)) continue
     seen.add(point.taxRegimeId)
@@ -1098,6 +848,7 @@ function buildResidenceTaxPlans(
     const grossAnnualIncome = calculateAnnualGrossIncome(
       residenceIncomes,
       pointSettings.baseCurrency,
+      fxFee(pointSettings),
     )
     const taxResult = calculator?.calculate({
       grossAnnualIncome,
@@ -1119,7 +870,6 @@ function buildResidenceTaxPlans(
   }
   return plans
 }
-
 function residenceTaxForDate(
   date: string,
   settings: BudgetSettings,
@@ -1138,7 +888,6 @@ function residenceTaxForDate(
   const residenceGross = incomeForDay(residenceIncomes, date, baseCurrency, settings)
   return residenceGross * plan.rate
 }
-
 function residenceTaxForMonthKey(
   month: string,
   settings: BudgetSettings,
@@ -1155,48 +904,32 @@ function residenceTaxForMonthKey(
   }
   return total
 }
-
-
-
 export function calculateDailyBudgetProjection(
-
   incomes: RecurringItem[],
-
   expenses: RecurringItem[],
-
   oneTimeExpenses: OneTimeExpense[],
-
   settings: BudgetSettings,
-
 ): DailySnapshot[] {
-
   const { baseCurrency } = settings
-
   const dayKeys = generateDayKeys(getProjectionStartDate(settings), settings.horizonMonths)
-
   const residenceIncomes = filterResidenceTaxableIncomes(incomes)
   const years = collectYearsFromDayKeys(dayKeys)
   const taxPlans = buildResidenceTaxPlans(incomes, expenses, oneTimeExpenses, settings, years)
-
   let sourceTaxTracker = createSourceTaxYtdTracker()
   let trackerYear = -1
-
   let cumulativeBalance = getInitialBalanceInBase(settings)
   let savingsBalances = createSavingsBalances(settings)
-
   return dayKeys.map((date) => {
     const { year } = parseIsoDate(date)
     if (year !== trackerYear) {
       sourceTaxTracker = createSourceTaxYtdTracker()
       trackerYear = year
     }
-
     const grossIncome = incomeForDay(incomes, date, baseCurrency, settings)
     const recurringExpenses = expenseForDay(expenses, date, baseCurrency, settings)
     const oneTimeTotal =
       onceExpensesForDay(expenses, date, baseCurrency, settings) +
-      sumOneTimeForDay(oneTimeExpenses, date, baseCurrency)
-
+      sumOneTimeForDay(oneTimeExpenses, date, baseCurrency, fxFee(settings))
     const sourceTaxNative = sourceTaxNativeForDay(
       incomes,
       date,
@@ -1204,8 +937,7 @@ export function calculateDailyBudgetProjection(
       sourceTaxTracker,
       'RUB',
     )
-    const sourceTax = toBaseCurrency(sourceTaxNative, 'RUB', baseCurrency)
-
+    const sourceTax = toBaseCurrency(sourceTaxNative, 'RUB', baseCurrency, fxFee(settings), 'neutral')
     const residenceTax = residenceTaxForDate(
       date,
       settings,
@@ -1213,11 +945,9 @@ export function calculateDailyBudgetProjection(
       residenceIncomes,
       baseCurrency,
     )
-
     const taxes = sourceTax + residenceTax
     const netIncome = grossIncome - taxes
-    const loanDisbursement = loanDisbursementForDay(expenses, date, baseCurrency)
-
+    const loanDisbursement = loanDisbursementForDay(expenses, date, baseCurrency, fxFee(settings))
     if (isSavingsAccountEnabled(settings)) {
       applyDailySavingsCashflow(
         savingsBalances,
@@ -1229,13 +959,10 @@ export function calculateDailyBudgetProjection(
         sourceTaxNative,
       )
     }
-
     const { interestBase } = accrueSavingsInterestForDay(savingsBalances, date, settings)
-
     const balance =
       netIncome - recurringExpenses - oneTimeTotal + loanDisbursement + interestBase
     cumulativeBalance += balance
-
     return {
       date,
       grossIncome,
@@ -1250,25 +977,14 @@ export function calculateDailyBudgetProjection(
     }
   })
 }
-
-
-
 export function calculateBudgetProjection(
-
   incomes: RecurringItem[],
-
   expenses: RecurringItem[],
-
   oneTimeExpenses: OneTimeExpense[],
-
   settings: BudgetSettings,
-
 ): MonthlySnapshot[] {
-
   const { baseCurrency } = settings
-
   const monthKeys = generateMonthKeys(getProjectionStartDate(settings), settings.horizonMonths)
-
   const residenceIncomes = filterResidenceTaxableIncomes(incomes)
   const projectionYears = [...new Set(monthKeys.map((m) => Number(m.split('-')[0])))]
   const taxPlans = buildResidenceTaxPlans(
@@ -1278,19 +994,16 @@ export function calculateBudgetProjection(
     settings,
     projectionYears,
   )
-
   let cumulativeBalance = getInitialBalanceInBase(settings)
   let savingsBalances = createSavingsBalances(settings)
   let savingsSourceTaxTracker = createSourceTaxYtdTracker()
   let savingsTrackerYear = -1
-
   return monthKeys.map((month) => {
-    const grossIncome = sumRecurringForMonth(incomes, month, baseCurrency, settings)
-    const recurringExpenses = sumRecurringForMonth(expenses, month, baseCurrency, settings)
+    const grossIncome = sumRecurringForMonth(incomes, month, baseCurrency, settings, 'income')
+    const recurringExpenses = sumRecurringForMonth(expenses, month, baseCurrency, settings, 'expense')
     const oneTimeTotal =
       sumOnceExpensesForMonth(expenses, month, baseCurrency, settings) +
-      sumOneTimeForMonth(oneTimeExpenses, month, baseCurrency)
-
+      sumOneTimeForMonth(oneTimeExpenses, month, baseCurrency, fxFee(settings))
     const residenceTax = residenceTaxForMonthKey(
       month,
       settings,
@@ -1307,8 +1020,7 @@ export function calculateBudgetProjection(
     )
     const taxes = residenceTax + sourceTax
     const netIncome = grossIncome - taxes
-    const loanDisbursement = loanDisbursementForMonth(expenses, month, baseCurrency)
-
+    const loanDisbursement = loanDisbursementForMonth(expenses, month, baseCurrency, fxFee(settings))
     let savingsInterest = 0
     if (isSavingsAccountEnabled(settings)) {
       const [year, monthNum] = month.split('-').map(Number)
@@ -1339,12 +1051,9 @@ export function calculateBudgetProjection(
         savingsInterest += accrued.interestBase
       }
     }
-
     const balance =
       netIncome - recurringExpenses - oneTimeTotal + loanDisbursement + savingsInterest
-
     cumulativeBalance += balance
-
     return {
       month,
       grossIncome,
@@ -1359,7 +1068,6 @@ export function calculateBudgetProjection(
     }
   })
 }
-
 /** Средние за горизонт: приток (доход + выдача кредитов) и расходы сходятся с итоговым остатком. */
 export function computeSummaryAverages(snapshots: MonthlySnapshot[]): {
   avgInflow: number
@@ -1380,13 +1088,11 @@ export function computeSummaryAverages(snapshots: MonthlySnapshot[]): {
       avgOneTimeExpenses: 0,
     }
   }
-
   const avgNetIncome = snapshots.reduce((s, m) => s + m.netIncome, 0) / n
   const avgLoanDisbursement = snapshots.reduce((s, m) => s + m.loanDisbursement, 0) / n
   const avgSavingsInterest = snapshots.reduce((s, m) => s + (m.savingsInterest ?? 0), 0) / n
   const avgRecurringExpenses = snapshots.reduce((s, m) => s + m.recurringExpenses, 0) / n
   const avgOneTimeExpenses = snapshots.reduce((s, m) => s + m.oneTimeExpenses, 0) / n
-
   return {
     avgNetIncome,
     avgLoanDisbursement,
@@ -1396,9 +1102,6 @@ export function computeSummaryAverages(snapshots: MonthlySnapshot[]): {
     avgExpenses: avgRecurringExpenses + avgOneTimeExpenses,
   }
 }
-
-
-
 export interface FullTaxSummary {
   residence: {
     calculator: NonNullable<ReturnType<typeof getTaxCalculator>>
@@ -1416,7 +1119,6 @@ export interface FullTaxSummary {
   foreignSalary?: ForeignSalaryBreakdown
   foreignTaxCredit: number
 }
-
 export function getTaxSummary(
   incomes: RecurringItem[],
   settings: BudgetSettings,
@@ -1425,25 +1127,22 @@ export function getTaxSummary(
   taxYear: number = new Date().getFullYear(),
 ): FullTaxSummary {
   const residenceIncomes = filterResidenceTaxableIncomes(incomes)
-  const grossAnnualIncome = calculateAnnualGrossIncome(residenceIncomes, settings.baseCurrency)
+  const grossAnnualIncome = calculateAnnualGrossIncome(residenceIncomes, settings.baseCurrency, fxFee(settings))
   const calculator = getTaxCalculator(settings.taxRegimeId)
   const sourceSalary = summarizeSourceSalaries(
     incomes.filter((item) => isSourceCountryTaxable(item)),
     settings.dependents,
     'RUB',
   )
-
   const input = {
     grossAnnualIncome,
     familySize: settings.familySize,
     dependents: settings.dependents,
   }
-
   const adjusted =
     calculator
       ? adjustResidenceTaxResult(residenceIncomes, settings, calculator, expenses, oneTimeExpenses)
       : null
-
   const residence =
     calculator && adjusted
       ? {
@@ -1451,9 +1150,7 @@ export function getTaxSummary(
           result: adjusted.result,
         }
       : null
-
   const taxBurden = computeAnnualTaxBurden(incomes, settings, calculator, expenses, oneTimeExpenses)
-
   let residenceTaxSchedule: FullTaxSummary['residenceTaxSchedule']
   if (calculator?.countryCode === 'ES' && calculator.buildTaxSchedule) {
     const year = taxYear
@@ -1470,7 +1167,6 @@ export function getTaxSummary(
       }),
     }
   }
-
   return {
     residence,
     sourceSalary,
@@ -1486,7 +1182,6 @@ export function getTaxSummary(
     foreignTaxCredit: taxBurden.foreignTaxCredit,
   }
 }
-
 function countActiveMonthsInYear(
   item: RecurringItem,
   year: number,
@@ -1499,7 +1194,6 @@ function countActiveMonthsInYear(
   }
   return count
 }
-
 /** Доход, приходящийся на календарный год (с учётом start/end и даты переезда). */
 export function scopeIncomeItemToYear(
   item: RecurringItem,
@@ -1512,10 +1206,8 @@ export function scopeIncomeItemToYear(
     if (!isActiveInMonth(item, item.startDate.slice(0, 7), settings)) return null
     return { ...item }
   }
-
   const months = countActiveMonthsInYear(item, year, settings)
   if (months === 0) return null
-
   const fullYearAmount = toMonthlyAmount(item.amount, item.frequency) * 12
   return {
     ...item,
@@ -1526,7 +1218,6 @@ export function scopeIncomeItemToYear(
     endDate: undefined,
   }
 }
-
 export function settingsForTaxYear(settings: BudgetSettings, year: number): BudgetSettings {
   return {
     ...settings,
@@ -1534,12 +1225,10 @@ export function settingsForTaxYear(settings: BudgetSettings, year: number): Budg
     horizonMonths: 12,
   }
 }
-
 export function getHorizonTaxYears(settings: BudgetSettings): number[] {
   const dayKeys = generateDayKeys(getProjectionStartDate(settings), settings.horizonMonths)
   return collectYearsFromDayKeys(dayKeys)
 }
-
 export function getTaxSummaryForYear(
   incomes: RecurringItem[],
   settings: BudgetSettings,
@@ -1559,7 +1248,6 @@ export function getTaxSummaryForYear(
     year,
   )
 }
-
 export interface YearTaxPart {
   countryCode: string
   taxRegimeId: string
@@ -1568,7 +1256,6 @@ export interface YearTaxPart {
   endDate: string
   summary: FullTaxSummary
 }
-
 export interface YearTaxSummary {
   year: number
   /** Блоки по странам маршрута в этом году (обычно 1). */
@@ -1576,7 +1263,6 @@ export interface YearTaxSummary {
   /** Сводка первой части (совместимость / источник НДФЛ показывается один раз). */
   summary: FullTaxSummary
 }
-
 export function taxSummaryTotalInBase(
   summary: FullTaxSummary,
   settings: BudgetSettings,
@@ -1587,7 +1273,6 @@ export function taxSummaryTotalInBase(
     (summary.residence?.result.socialContributions ?? 0)
   return residence + (includeSourceTaxes ? summary.sourceIncomeTaxInBase : 0)
 }
-
 export function yearTaxTotalInBase(
   yearSummary: YearTaxSummary,
   settings: BudgetSettings,
@@ -1605,7 +1290,6 @@ export function yearTaxTotalInBase(
   })
   return total
 }
-
 function scopeIncomeItemToYearSegment(
   item: RecurringItem,
   year: number,
@@ -1620,7 +1304,6 @@ function scopeIncomeItemToYearSegment(
     if (onDate?.id !== segmentId) return null
     return { ...item }
   }
-
   let months = 0
   for (let month = 1; month <= 12; month++) {
     const monthKey = `${year}-${String(month).padStart(2, '0')}`
@@ -1631,7 +1314,6 @@ function scopeIncomeItemToYearSegment(
     months += 1
   }
   if (months === 0) return null
-
   const fullYearAmount = toMonthlyAmount(item.amount, item.frequency) * 12
   return {
     ...item,
@@ -1642,7 +1324,6 @@ function scopeIncomeItemToYearSegment(
     endDate: undefined,
   }
 }
-
 /** Налог за календарный год для одной точки маршрута (как в getTaxSummariesByHorizon). */
 export function computeYearTaxForRoutePoint(
   point: ResidenceRoutePoint,
@@ -1663,7 +1344,6 @@ export function computeYearTaxForRoutePoint(
   })
   return getTaxSummary(scopedIncomes, pointSettings, expenses, scopedOnce, year)
 }
-
 /** Налоговые сводки по каждому календарному году горизонта планирования. */
 export function getTaxSummariesByHorizon(
   incomes: RecurringItem[],
@@ -1703,11 +1383,9 @@ export function getTaxSummariesByHorizon(
         summary,
       }
     })
-
     const fallback =
       parts[0]?.summary ??
       getTaxSummaryForYear(incomes, settings, expenses, oneTimeExpenses, year)
-
     return {
       year,
       parts:
@@ -1727,13 +1405,6 @@ export function getTaxSummariesByHorizon(
     }
   })
 }
-
-
-
 export function findCashGapDays(snapshots: DailySnapshot[]): DailySnapshot[] {
-
   return snapshots.filter((s) => s.cumulativeBalance < 0)
-
 }
-
-

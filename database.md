@@ -110,6 +110,7 @@ Zustand persist (`src/store/budgetStore.ts`). Сохраняется:
 | `parkBalanceOnSavingsAccount?` | `boolean` | Накопительный счёт |
 | `savingsAnnualRate?` | `number` | Ставка %, legacy |
 | `savingsAccountCurrency?` | `string` | Валюта накопительного счёта |
+| `currencyConversionFeePercent?` | `number` | Комиссия за конвертацию, % к курсу ЦБ |
 
 ### `ResidenceRoutePoint`
 

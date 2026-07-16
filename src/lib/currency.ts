@@ -18,22 +18,49 @@ const FALLBACK_RATES_TO_EUR: Record<string, number> = {
   VND: 0.000037,
 }
 
+/** expense — дороже курса ЦБ; income — дешевле; neutral — без комиссии. */
+export type CurrencyConversionSide = 'expense' | 'income' | 'neutral'
+
+export interface ConvertCurrencyOptions {
+  /** Комиссия к курсу ЦБ, %. */
+  feePercent?: number
+  side?: CurrencyConversionSide
+}
+
 function convertViaFallback(amount: number, from: string, to: string): number {
   const fromRate = FALLBACK_RATES_TO_EUR[from] ?? 1
   const toRate = FALLBACK_RATES_TO_EUR[to] ?? 1
   return (amount * fromRate) / toRate
 }
 
-export function convertCurrency(amount: number, from: string, to: string): number {
+function applyConversionFee(
+  midAmount: number,
+  feePercent: number,
+  side: CurrencyConversionSide,
+): number {
+  if (!feePercent || side === 'neutral') return midAmount
+  if (side === 'expense') return midAmount * (1 + feePercent / 100)
+  return midAmount * (1 - feePercent / 100)
+}
+
+export function convertCurrency(
+  amount: number,
+  from: string,
+  to: string,
+  options?: ConvertCurrencyOptions,
+): number {
   if (from === to) return amount
 
   const { pivotPerUnit, status } = useExchangeRateStore.getState()
+  let mid: number
   if (status === 'loaded' && Object.keys(pivotPerUnit).length > 0) {
     const viaCbr = convertViaCbr(amount, from, to, pivotPerUnit)
-    if (viaCbr !== null) return viaCbr
+    mid = viaCbr !== null ? viaCbr : convertViaFallback(amount, from, to)
+  } else {
+    mid = convertViaFallback(amount, from, to)
   }
 
-  return convertViaFallback(amount, from, to)
+  return applyConversionFee(mid, options?.feePercent ?? 0, options?.side ?? 'neutral')
 }
 
 export function isCbrRateUsed(from: string, to: string): boolean {
@@ -46,7 +73,17 @@ export function isCbrRateUsed(from: string, to: string): boolean {
   return Boolean(pivotFrom && pivotTo)
 }
 
-export function getRateLabel(from: string, to: string): string {
-  const rate = convertCurrency(1, from, to)
+export function getRateLabel(from: string, to: string, feePercent = 0): string {
+  const rate = convertCurrency(1, from, to, {
+    feePercent,
+    side: feePercent > 0 ? 'expense' : 'neutral',
+  })
   return `1 ${from} ≈ ${rate.toFixed(4)} ${to}`
+}
+
+export function getConversionFeePercent(settings: {
+  currencyConversionFeePercent?: number
+}): number {
+  const fee = settings.currencyConversionFeePercent ?? 0
+  return Number.isFinite(fee) && fee > 0 ? fee : 0
 }

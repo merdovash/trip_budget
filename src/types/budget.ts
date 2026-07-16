@@ -156,6 +156,11 @@ export interface BudgetSettings {
   savingsAnnualRate?: number
   /** Валюта накопительного счёта (по умолчанию RUB). */
   savingsAccountCurrency?: string
+  /**
+   * Комиссия за конвертацию валют, % к курсу ЦБ.
+   * Одна на все расчёты: расходы дороже mid-курса, доходы — дешевле.
+   */
+  currencyConversionFeePercent?: number
 }
 
 export interface MonthlySnapshot {

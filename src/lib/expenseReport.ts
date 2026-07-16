@@ -6,7 +6,7 @@ import {
   isFoodExpense,
   toMonthlyAmount,
 } from '../engine/budgetEngine'
-import { convertCurrency } from './currency'
+import { convertCurrency, getConversionFeePercent } from './currency'
 import { filterExpensesForCalculation } from './expenseFolders'
 import {
   isLoanExpense,
@@ -52,16 +52,23 @@ export function expenseItemTotalInBase(
   settings: BudgetSettings,
 ): number {
   const monthKeys = generateMonthKeys(getProjectionStartDate(settings), settings.horizonMonths)
+  const feePercent = getConversionFeePercent(settings)
   let total = 0
   for (const monthKey of monthKeys) {
     if (!isItemActiveInMonth(item, monthKey, settings)) continue
     if (item.frequency === 'once') {
-      total += convertCurrency(item.amount, item.currency, settings.baseCurrency)
+      total += convertCurrency(item.amount, item.currency, settings.baseCurrency, {
+        feePercent,
+        side: 'expense',
+      })
       continue
     }
     const native = nativeAmountForMonth(item, monthKey)
     if (native === 0) continue
-    total += convertCurrency(native, item.currency, settings.baseCurrency)
+    total += convertCurrency(native, item.currency, settings.baseCurrency, {
+      feePercent,
+      side: 'expense',
+    })
   }
   return total
 }

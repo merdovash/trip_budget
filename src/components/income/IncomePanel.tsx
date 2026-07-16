@@ -381,6 +381,7 @@ function IncomeForm({ initialItem, onSubmit, onCancel }: IncomeFormProps) {
                       amount={entry.amount}
                       currency={form.currency}
                       baseCurrency={settings.baseCurrency}
+                      side="income"
                     />
                   )}
                 </Field>
@@ -395,6 +396,7 @@ function IncomeForm({ initialItem, onSubmit, onCancel }: IncomeFormProps) {
                   amount={totalAmount}
                   currency={form.currency}
                   baseCurrency={settings.baseCurrency}
+                  side="income"
                 />
               )}
               {isSourceSalaryRu && salaryDisplay ? (
@@ -422,6 +424,7 @@ function IncomeForm({ initialItem, onSubmit, onCancel }: IncomeFormProps) {
                     amount={salaryDisplay.totalNet}
                     currency={form.currency}
                     baseCurrency={settings.baseCurrency}
+                    side="income"
                   />
                 </div>
               ) : isSourceSalaryEs && residenceSalaryDisplay ? (
@@ -457,6 +460,7 @@ function IncomeForm({ initialItem, onSubmit, onCancel }: IncomeFormProps) {
                     amount={residenceSalaryDisplay.totalNet}
                     currency={form.currency}
                     baseCurrency={settings.baseCurrency}
+                    side="income"
                   />
                 </div>
               ) : (

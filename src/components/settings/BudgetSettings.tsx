@@ -131,7 +131,7 @@ export function BudgetSettingsPanel() {
 
         <SettingsSection
           title="Параметры расчёта"
-          description="Валюта отчёта, горизонт прогноза, начальный остаток и накопительный счёт."
+          description="Валюта отчёта, комиссия конвертации, горизонт прогноза, начальный остаток и накопительный счёт."
         >
           <Field label="Базовая валюта">
             <Select
@@ -147,6 +147,25 @@ export function BudgetSettingsPanel() {
             <p className="mt-1 text-xs text-slate-500">
               Дашборд и налоги считаются в базовой валюте. Конвертация — по официальным курсам
               ЦБ РФ (обновляются ежедневно).
+            </p>
+          </Field>
+
+          <Field label="Комиссия за конвертацию, %">
+            <Input
+              type="number"
+              min={0}
+              max={20}
+              step={0.1}
+              value={settings.currencyConversionFeePercent ?? 0}
+              onChange={(e) =>
+                setSettings({
+                  currencyConversionFeePercent: Math.max(0, Number(e.target.value) || 0),
+                })
+              }
+            />
+            <p className="mt-1 text-xs text-slate-500">
+              Одна ставка на все расчёты. К курсу ЦБ: расходы дороже на этот %, доходы — дешевле.
+              При совпадении валют комиссия не применяется.
             </p>
           </Field>
 

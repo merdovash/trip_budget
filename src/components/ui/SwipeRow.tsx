@@ -8,7 +8,7 @@ interface SwipeRowProps {
   children: ReactNode
   onEdit: () => void
   onRemove: () => void
-  /** Tap on closed row content */
+  /** Tap / click on closed row content */
   onOpen?: () => void
   active?: boolean
   className?: string
@@ -31,15 +31,12 @@ export function SwipeRow({
   const startY = useRef(0)
   const startOffset = useRef(0)
   const axis = useRef<'x' | 'y' | null>(null)
-  const onOpenRef = useRef(onOpen)
+  /** Suppress the synthetic click after a horizontal swipe. */
+  const suppressClickRef = useRef(false)
 
   useEffect(() => {
     offsetRef.current = offset
   }, [offset])
-
-  useEffect(() => {
-    onOpenRef.current = onOpen
-  }, [onOpen])
 
   useEffect(() => {
     function onClose(event: Event) {
@@ -74,6 +71,7 @@ export function SwipeRow({
       const touch = e.touches[0]
       if (!touch) return
       axis.current = null
+      suppressClickRef.current = false
       startX.current = touch.clientX
       startY.current = touch.clientY
       startOffset.current = offsetRef.current
@@ -94,18 +92,20 @@ export function SwipeRow({
       if (axis.current === 'y') return
 
       e.preventDefault()
+      suppressClickRef.current = true
       setOffset(clamp(startOffset.current + dx))
     }
 
     function onTouchEnd() {
       setDragging(false)
-      const wasTap = axis.current === null
+      const swiped = axis.current === 'x'
       const next = snap(offsetRef.current)
       setOffset(next)
       axis.current = null
 
-      if (wasTap && next === 0 && startOffset.current === 0) {
-        onOpenRef.current?.()
+      // After a swipe (or while actions are open), ignore the following click.
+      if (swiped || startOffset.current !== 0 || next !== 0) {
+        suppressClickRef.current = true
       }
     }
 
@@ -120,6 +120,18 @@ export function SwipeRow({
       el.removeEventListener('touchcancel', onTouchEnd)
     }
   }, [id])
+
+  function handleSurfaceClick() {
+    if (suppressClickRef.current) {
+      suppressClickRef.current = false
+      return
+    }
+    if (offsetRef.current !== 0) {
+      setOffset(0)
+      return
+    }
+    onOpen?.()
+  }
 
   function handleEdit(e: MouseEvent) {
     e.stopPropagation()
@@ -160,10 +172,19 @@ export function SwipeRow({
 
       <div
         ref={surfaceRef}
+        role="button"
+        tabIndex={0}
         className={`relative touch-pan-y ${active ? 'bg-blue-50' : 'bg-white'} ${
           dragging ? '' : 'transition-transform duration-200 ease-out'
         }`}
         style={{ transform: `translateX(${offset}px)` }}
+        onClick={handleSurfaceClick}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            handleSurfaceClick()
+          }
+        }}
       >
         {children}
       </div>

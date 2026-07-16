@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 
 interface StackPanelProps {
   open: boolean
@@ -9,8 +9,11 @@ interface StackPanelProps {
 
 /** Нижняя стековая панель (sheet) поверх контента. */
 export function StackPanel({ open, title, onClose, children }: StackPanelProps) {
+  const openedAtRef = useRef(0)
+
   useEffect(() => {
     if (!open) return
+    openedAtRef.current = Date.now()
     function onKey(e: KeyboardEvent) {
       if (e.key === 'Escape') onClose()
     }
@@ -25,13 +28,19 @@ export function StackPanel({ open, title, onClose, children }: StackPanelProps) 
 
   if (!open) return null
 
+  function handleBackdropClick() {
+    // Ignore the ghost click that follows a mobile tap which opened this panel.
+    if (Date.now() - openedAtRef.current < 400) return
+    onClose()
+  }
+
   return (
     <div className="fixed inset-0 z-[60] flex flex-col justify-end">
       <button
         type="button"
         className="absolute inset-0 bg-slate-900/40"
         aria-label="Закрыть"
-        onClick={onClose}
+        onClick={handleBackdropClick}
       />
       <div
         role="dialog"

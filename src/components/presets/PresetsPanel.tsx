@@ -12,7 +12,7 @@ import {
   savePreset,
   updateSavedPreset,
 } from '../../lib/presetsApi'
-import { formatDateDisplay } from '../../lib/format'
+import { formatDateTimeDisplay } from '../../lib/format'
 import type { BudgetPresetSummary } from '../../types/preset'
 import { useBudgetStore } from '../../store/budgetStore'
 import { Button, Card, EmptyState, Field, Input, Select } from '../ui/FormControls'
@@ -315,7 +315,7 @@ export function PresetsPanel() {
               <p className="text-xs text-slate-500">
                 Будет заменено: {overwriteTarget.incomeCount} доходов,{' '}
                 {overwriteTarget.expenseCount} расходов · обновлён{' '}
-                {formatDateDisplay(overwriteTarget.updatedAt.slice(0, 10))}
+                {formatDateTimeDisplay(overwriteTarget.updatedAt)}
               </p>
             )}
             <Button
@@ -459,7 +459,7 @@ function PresetCard({
         </div>
         <div>
           <dt className="text-slate-500">Обновлён</dt>
-          <dd>{formatDateDisplay(preset.updatedAt.slice(0, 10))}</dd>
+          <dd>{formatDateTimeDisplay(preset.updatedAt)}</dd>
         </div>
       </dl>
 

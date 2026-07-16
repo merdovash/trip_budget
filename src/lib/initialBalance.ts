@@ -1,5 +1,6 @@
 import type { BudgetSettings, InitialBalanceEntry } from '../types/budget'
 import { convertCurrency } from './currency'
+import { createId } from './id'
 
 const DEFAULT_RATE = 16
 
@@ -132,7 +133,7 @@ export function createInitialBalanceEntry(
   defaultRate: number = DEFAULT_RATE,
 ): InitialBalanceEntry {
   return {
-    id: crypto.randomUUID(),
+    id: createId(),
     amount: partial?.amount ?? 0,
     currency: partial?.currency ?? 'EUR',
     comment: partial?.comment,

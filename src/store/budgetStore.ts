@@ -14,6 +14,7 @@ import { migrateLegacyOneTimeExpense } from '../lib/oneTimeExpense'
 import { clonePresetData } from '../lib/presetsApi'
 import { snapshotsEqual } from '../lib/presetSnapshotCompare'
 import { migrateInitialBalances } from '../lib/initialBalance'
+import { createId } from '../lib/id'
 import { ensureExplicitResidenceRoute, syncLegacyFromRoute } from '../config/residenceRoute'
 import { isBuiltinExpenseCategory } from '../config/expenseCategories'
 
@@ -106,10 +107,6 @@ export function migrateRegimeParamsToRoute(settings: BudgetSettings): BudgetSett
     residenceRoute,
     countryDeductions: Object.keys(restDeductions).length > 0 ? restDeductions : undefined,
   }
-}
-
-function createId(): string {
-  return crypto.randomUUID()
 }
 
 function migrateOneTimeIntoExpenses(

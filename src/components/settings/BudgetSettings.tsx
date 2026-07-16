@@ -141,7 +141,7 @@ export function BudgetSettingsPanel() {
             >
               {CURRENCIES.map((c) => (
                 <option key={c} value={c}>
-                  {CURRENCY_LABELS[c]} ({c})
+                  {c === settings.baseCurrency ? c : `${CURRENCY_LABELS[c]} (${c})`}
                 </option>
               ))}
             </Select>

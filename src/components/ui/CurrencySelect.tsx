@@ -7,6 +7,7 @@ interface CurrencySelectProps {
   className?: string
 }
 
+/** Закрытый select — только код; в раскрытом списке — название и код. */
 export function CurrencySelect({ value, onChange, className }: CurrencySelectProps) {
   return (
     <Select
@@ -16,7 +17,7 @@ export function CurrencySelect({ value, onChange, className }: CurrencySelectPro
     >
       {CURRENCIES.map((c) => (
         <option key={c} value={c}>
-          {CURRENCY_LABELS[c]} ({c})
+          {c === value ? c : `${CURRENCY_LABELS[c]} (${c})`}
         </option>
       ))}
     </Select>

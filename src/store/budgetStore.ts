@@ -80,6 +80,30 @@ export function migrateCountryDeductions(settings: BudgetSettings): BudgetSettin
   return settings
 }
 
+/** Перенос глобальных вычетов TH в точки маршрута с countryCode === 'TH'. */
+export function migrateRegimeParamsToRoute(settings: BudgetSettings): BudgetSettings {
+  const globalTh = settings.countryDeductions?.TH
+  if (!globalTh || !settings.residenceRoute?.length) {
+    return settings
+  }
+
+  let migrated = false
+  const residenceRoute = settings.residenceRoute.map((point) => {
+    if (point.countryCode !== 'TH' || point.regimeParams) return point
+    migrated = true
+    return { ...point, regimeParams: { ...globalTh } }
+  })
+
+  if (!migrated) return settings
+
+  const { TH: _removed, ...restDeductions } = settings.countryDeductions ?? {}
+  return {
+    ...settings,
+    residenceRoute,
+    countryDeductions: Object.keys(restDeductions).length > 0 ? restDeductions : undefined,
+  }
+}
+
 function createId(): string {
   return crypto.randomUUID()
 }
@@ -98,10 +122,12 @@ function migrateOneTimeIntoExpenses(
 }
 
 function migratePersistedState(persisted: PersistedBudgetState, current: BudgetState): BudgetState {
-  const mergedSettings = migrateCountryDeductions({
-    ...current.settings,
-    ...persisted.settings,
-  })
+  const mergedSettings = migrateRegimeParamsToRoute(
+    migrateCountryDeductions({
+      ...current.settings,
+      ...persisted.settings,
+    }),
+  )
   if (!mergedSettings.relocationDate) {
     mergedSettings.relocationDate = mergedSettings.initialBalanceDate ?? current.settings.relocationDate
   }

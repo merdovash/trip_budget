@@ -11,7 +11,10 @@ import {
   getResidenceRoute,
   syncLegacyFromRoute,
 } from '../../config/residenceRoute'
+import { getRegimeParamsSchema } from '../../config/regimeParams'
+import type { ThailandDeductionSettings } from '../../types/budget'
 import { Button, DateInput, Field, Select } from '../ui/FormControls'
+import { RegimeParamsFields } from './RegimeParamsFields'
 
 interface ResidenceRouteEditorProps {
   settings: BudgetSettings
@@ -72,8 +75,26 @@ export function ResidenceRouteEditor({ settings, onChange }: ResidenceRouteEdito
     commit(next)
   }
 
+  function updateRegimeParam(
+    pointId: string,
+    key: keyof ThailandDeductionSettings,
+    value: number,
+  ) {
+    const next = workingRoute().map((point) => {
+      if (point.id !== pointId) return point
+      return {
+        ...point,
+        regimeParams: {
+          ...point.regimeParams,
+          [key]: value,
+        },
+      }
+    })
+    commit(next)
+  }
+
   return (
-    <div className="md:col-span-2 space-y-3 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+    <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <h3 className="text-sm font-semibold text-slate-800">Маршрут проживания</h3>
@@ -91,6 +112,7 @@ export function ResidenceRouteEditor({ settings, onChange }: ResidenceRouteEdito
         {route.map((point, index) => {
           const regimes = getCalculatorsByCountry(point.countryCode)
           const regime = getTaxCalculator(point.taxRegimeId)
+          const paramSchema = getRegimeParamsSchema(point.countryCode, point.taxRegimeId)
           return (
             <div key={point.id} className="space-y-2 rounded-lg border border-slate-200 bg-white p-3">
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
@@ -162,6 +184,21 @@ export function ResidenceRouteEditor({ settings, onChange }: ResidenceRouteEdito
               </div>
               {regime?.description && (
                 <p className="text-xs text-slate-500">{regime.description}</p>
+              )}
+              {paramSchema && (
+                <div className="border-t border-slate-100 pt-3">
+                  <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    {paramSchema.title}
+                  </h4>
+                  {paramSchema.description && (
+                    <p className="mb-2 text-xs text-slate-500">{paramSchema.description}</p>
+                  )}
+                  <RegimeParamsFields
+                    fields={paramSchema.fields}
+                    values={point.regimeParams}
+                    onChange={(key, value) => updateRegimeParam(point.id, key, value)}
+                  />
+                </div>
               )}
             </div>
           )

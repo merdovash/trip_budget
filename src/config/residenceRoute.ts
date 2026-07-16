@@ -80,16 +80,21 @@ export function getRouteSegmentsInYear(
   )
 }
 
-/** Настройки для расчёта налогов сегмента (страна + режим). */
+/** Настройки для расчёта налогов сегмента (страна + режим + параметры точки). */
 export function settingsForResidencePoint(
   settings: BudgetSettings,
   point: ResidenceRoutePoint,
 ): BudgetSettings {
+  const countryDeductions = { ...settings.countryDeductions }
+  if (point.countryCode === 'TH') {
+    countryDeductions.TH = point.regimeParams ?? settings.countryDeductions?.TH
+  }
   return {
     ...settings,
     countryCode: point.countryCode,
     taxRegimeId: point.taxRegimeId,
     relocationDate: point.startDate,
+    countryDeductions,
   }
 }
 

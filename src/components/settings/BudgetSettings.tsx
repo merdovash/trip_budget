@@ -24,7 +24,7 @@ import {
   routeIncludesCountry,
   syncLegacyFromRoute,
 } from '../../config/residenceRoute'
-import type { RelocationMode, ThailandDeductionSettings } from '../../types/budget'
+import type { RelocationMode } from '../../types/budget'
 import { formatCurrency } from '../../lib/format'
 
 export function BudgetSettingsPanel() {
@@ -40,24 +40,8 @@ export function BudgetSettingsPanel() {
   const relocationPrograms = getRelocationProgramsForCountry(primaryCountry, relocationMode)
   const selectedProgram = relocationPrograms.find((p) => p.id === settings.relocationProgramId)
   const route = getResidenceRoute(settings)
-  const showThailandDeductions = routeIncludesCountry(settings, 'TH')
+  const showThailandDependentsHint = routeIncludesCountry(settings, 'TH')
   const primaryRegime = getTaxCalculator(settings.taxRegimeId)
-  const thailandDeductions = settings.countryDeductions?.TH
-
-  function updateThailandDeduction(
-    key: keyof ThailandDeductionSettings,
-    value: number,
-  ) {
-    setSettings({
-      countryDeductions: {
-        ...settings.countryDeductions,
-        TH: {
-          ...thailandDeductions,
-          [key]: value,
-        },
-      },
-    })
-  }
 
   function handleRelocationModeChange(mode: RelocationMode) {
     const routePoints = ensureExplicitResidenceRoute(settings)
@@ -312,93 +296,12 @@ export function BudgetSettingsPanel() {
             value={settings.dependents}
             onChange={(e) => setSettings({ dependents: Number(e.target.value) })}
           />
-          {showThailandDeductions && (
+          {showThailandDependentsHint && (
             <p className="mt-1 text-xs text-slate-500">
               Для PIT Таиланда: вычет ฿30 000 на каждого ребёнка.
             </p>
           )}
         </Field>
-
-        {showThailandDeductions && (
-          <div className="md:col-span-2">
-            <h3 className="mb-3 text-sm font-semibold text-slate-800">
-              Вычеты PIT Таиланда (суммы в THB)
-            </h3>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              <Field label="Родители 60+ (кол-во)">
-                <Input
-                  type="number"
-                  min={0}
-                  max={4}
-                  value={thailandDeductions?.parentAllowances ?? 0}
-                  onChange={(e) =>
-                    updateThailandDeduction('parentAllowances', Number(e.target.value))
-                  }
-                />
-              </Field>
-              <Field label="Страхование жизни">
-                <Input
-                  type="number"
-                  min={0}
-                  value={thailandDeductions?.lifeInsurance ?? 0}
-                  onChange={(e) =>
-                    updateThailandDeduction('lifeInsurance', Number(e.target.value))
-                  }
-                />
-              </Field>
-              <Field label="Медстрахование">
-                <Input
-                  type="number"
-                  min={0}
-                  value={thailandDeductions?.healthInsurance ?? 0}
-                  onChange={(e) =>
-                    updateThailandDeduction('healthInsurance', Number(e.target.value))
-                  }
-                />
-              </Field>
-              <Field label="Проценты по ипотеке">
-                <Input
-                  type="number"
-                  min={0}
-                  value={thailandDeductions?.mortgageInterest ?? 0}
-                  onChange={(e) =>
-                    updateThailandDeduction('mortgageInterest', Number(e.target.value))
-                  }
-                />
-              </Field>
-              <Field label="Provident Fund">
-                <Input
-                  type="number"
-                  min={0}
-                  value={thailandDeductions?.providentFund ?? 0}
-                  onChange={(e) =>
-                    updateThailandDeduction('providentFund', Number(e.target.value))
-                  }
-                />
-              </Field>
-              <Field label="Взносы RMF">
-                <Input
-                  type="number"
-                  min={0}
-                  value={thailandDeductions?.rmfContribution ?? 0}
-                  onChange={(e) =>
-                    updateThailandDeduction('rmfContribution', Number(e.target.value))
-                  }
-                />
-              </Field>
-              <Field label="Уплаченный Social Security">
-                <Input
-                  type="number"
-                  min={0}
-                  value={thailandDeductions?.socialSecurityPaid ?? 0}
-                  onChange={(e) =>
-                    updateThailandDeduction('socialSecurityPaid', Number(e.target.value))
-                  }
-                />
-              </Field>
-            </div>
-          </div>
-        )}
       </div>
 
       {primaryRegime && route.length === 1 && (

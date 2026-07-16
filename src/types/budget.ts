@@ -99,6 +99,8 @@ export interface ResidenceRoutePoint {
   startDate: string
   /** Дата окончания проживания (включительно). */
   endDate: string
+  /** Параметры налогового режима в этой точке (вычеты и пр.). */
+  regimeParams?: ThailandDeductionSettings
 }
 
 export interface BudgetSettings {

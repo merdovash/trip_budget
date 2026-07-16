@@ -44,6 +44,8 @@ function TrashButton({ onClick, disabled }: { onClick: () => void; disabled?: bo
 export function InitialBalanceEditor({ settings, onChange }: InitialBalanceEditorProps) {
   const entries = getInitialBalances(settings)
   const totalInBase = getInitialBalanceInBase(settings)
+  const showRates = Boolean(settings.parkBalanceOnSavingsAccount)
+  const defaultRate = settings.savingsAnnualRate ?? 16
 
   function setEntries(next: InitialBalanceEntry[]) {
     onChange({ initialBalances: next })
@@ -56,7 +58,10 @@ export function InitialBalanceEditor({ settings, onChange }: InitialBalanceEdito
   function addEntry() {
     setEntries([
       ...entries,
-      createInitialBalanceEntry({ currency: settings.baseCurrency }),
+      createInitialBalanceEntry(
+        { currency: settings.baseCurrency },
+        defaultRate,
+      ),
     ])
   }
 
@@ -93,6 +98,20 @@ export function InitialBalanceEditor({ settings, onChange }: InitialBalanceEdito
                 }
               />
             </Field>
+            {showRates && (
+              <Field label="Ставка % год." className="w-28 shrink-0">
+                <Input
+                  type="number"
+                  min={0}
+                  max={100}
+                  step={0.1}
+                  value={entry.annualRate ?? defaultRate}
+                  onChange={(e) =>
+                    updateEntry(entry.id, { annualRate: Number(e.target.value) || 0 })
+                  }
+                />
+              </Field>
+            )}
             <Field label="Комментарий" className="min-w-[10rem] flex-[2]">
               <Input
                 type="text"
@@ -124,6 +143,11 @@ export function InitialBalanceEditor({ settings, onChange }: InitialBalanceEdito
           </p>
         )}
       </div>
+      {showRates && (
+        <p className="text-xs text-slate-500">
+          Ставка задаётся для каждой валюты остатка; проценты начисляются в последний день месяца.
+        </p>
+      )}
     </div>
   )
 }

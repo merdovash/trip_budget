@@ -5,6 +5,7 @@ import {
   getInitialBalanceInBase,
   getInitialBalances,
   getInitialSavingsBalanceFromEntries,
+  getSavingsAnnualRateForCurrency,
   migrateInitialBalances,
 } from './initialBalance'
 
@@ -52,7 +53,19 @@ describe('initialBalance', () => {
       initialBalanceCurrency: 'USD',
     })
     expect(migrated.initialBalances).toEqual([
-      { id: 'migrated', amount: 2500, currency: 'USD' },
+      { id: 'migrated', amount: 2500, currency: 'USD', annualRate: 16 },
     ])
+  })
+
+  it('uses per-currency annual rates for savings', () => {
+    const settings = {
+      ...DEFAULT_SETTINGS,
+      initialBalances: [
+        { id: '1', amount: 100_000, currency: 'RUB', annualRate: 12 },
+        { id: '2', amount: 1000, currency: 'EUR', annualRate: 3 },
+      ],
+    }
+    expect(getSavingsAnnualRateForCurrency(settings, 'RUB')).toBe(12)
+    expect(getSavingsAnnualRateForCurrency(settings, 'EUR')).toBe(3)
   })
 })

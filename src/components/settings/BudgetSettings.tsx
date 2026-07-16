@@ -218,25 +218,10 @@ export function BudgetSettingsPanel() {
               <option value="yes">Да</option>
             </Select>
             <p className="mt-1 text-xs text-slate-500">
-              Положительный остаток в валюте счёта ({settings.savingsAccountCurrency ?? 'RUB'})
-              учитывается на накопительном счёте; проценты начисляются в последний день месяца.
+              Остатки по валютам из блока «Начальные остатки» учитываются на накопительных счетах;
+              ставка задаётся у каждой суммы. Проценты — в последний день месяца.
             </p>
           </Field>
-
-          {settings.parkBalanceOnSavingsAccount && (
-            <Field label="Ставка накопительного счёта (% годовых)">
-              <Input
-                type="number"
-                min={0}
-                max={100}
-                step={0.1}
-                value={settings.savingsAnnualRate ?? 16}
-                onChange={(e) =>
-                  setSettings({ savingsAnnualRate: Number(e.target.value) || 0 })
-                }
-              />
-            </Field>
-          )}
         </SettingsSection>
       </div>
 

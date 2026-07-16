@@ -607,18 +607,18 @@ describe('getDayLedger', () => {
   })
 })
 
-describe('RUB savings account interest', () => {
+describe('multi-currency savings account interest', () => {
   it('accrues monthly interest on last day when enabled', () => {
     const settings = {
       ...DEFAULT_SETTINGS,
       taxRegimeId: 'ae-none',
       baseCurrency: 'EUR',
       horizonMonths: 1,
-      initialBalance: 120_000,
-      initialBalanceCurrency: 'RUB',
+      initialBalances: [
+        { id: 'rub', amount: 120_000, currency: 'RUB', annualRate: 12 },
+      ],
       initialBalanceDate: '2026-01-01',
       parkBalanceOnSavingsAccount: true,
-      savingsAnnualRate: 12,
     }
     const days = calculateDailyBudgetProjection([], [], [], settings)
     const last = days[days.length - 1]
@@ -635,6 +635,27 @@ describe('RUB savings account interest', () => {
       off[off.length - 1].cumulativeBalance + expectedInterestBase,
       5,
     )
+  })
+
+  it('accrues interest for each currency at its own rate', () => {
+    const settings = {
+      ...DEFAULT_SETTINGS,
+      taxRegimeId: 'ae-none',
+      baseCurrency: 'EUR',
+      horizonMonths: 1,
+      initialBalances: [
+        { id: 'rub', amount: 120_000, currency: 'RUB', annualRate: 12 },
+        { id: 'eur', amount: 1_200, currency: 'EUR', annualRate: 3 },
+      ],
+      initialBalanceDate: '2026-01-01',
+      parkBalanceOnSavingsAccount: true,
+    }
+    const days = calculateDailyBudgetProjection([], [], [], settings)
+    const last = days[days.length - 1]
+    const expected =
+      convertCurrency(1200, 'RUB', 'EUR') + // 12%/12 of 120k
+      3 // 3%/12 of 1200 EUR
+    expect(last.savingsInterest).toBeCloseTo(expected, 5)
   })
 })
 

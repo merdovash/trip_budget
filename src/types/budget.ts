@@ -98,6 +98,8 @@ export interface InitialBalanceEntry {
   amount: number
   currency: string
   comment?: string
+  /** Годовая ставка накопительного счёта для этой валюты, %. */
+  annualRate?: number
 }
 
 export interface ResidenceRoutePoint {

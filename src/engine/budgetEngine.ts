@@ -60,11 +60,12 @@ import {
   summarizeSourceSalaries,
 } from '../tax/incomeSourceTax'
 import {
-  getInitialSavingsBalance,
-  getSavingsAccountCurrency,
+  createSavingsBalances,
   getSavingsAnnualRate,
+  getSavingsAnnualRateForCurrency,
   isLastDayOfMonth,
   isSavingsAccountEnabled,
+  listSavingsCurrencies,
   monthlySavingsInterest,
 } from '../lib/savingsAccount'
 import { getInitialBalanceInBase } from '../lib/initialBalance'
@@ -591,49 +592,77 @@ function expenseAmountNativeForDay(
   }
 }
 
-/** Чистый рублёвый поток дня: доходы − расходы + выдача кредита (до НДФЛ). */
+/** Чистый поток дня в заданной валюте: доходы − расходы + выдача кредита (до НДФЛ). */
 function nativeNetCashflowBeforeSourceTaxForDay(
   incomes: RecurringItem[],
   expenses: RecurringItem[],
   oneTimeExpenses: OneTimeExpense[],
   dateStr: string,
   settings: BudgetSettings,
+  currency: string,
 ): number {
-  const savingsCurrency = getSavingsAccountCurrency(settings)
   let net = 0
   for (const item of incomes) {
-    if (item.currency !== savingsCurrency) continue
+    if (item.currency !== currency) continue
     net += incomeAmountNativeForDay(item, dateStr, settings)
   }
   for (const item of expenses) {
-    if (item.currency !== savingsCurrency) continue
+    if (item.currency !== currency) continue
     if (isLoanExpense(item) && isLoanDisbursementDay(item, dateStr)) {
       net += item.principal ?? item.amount
     }
     net -= expenseAmountNativeForDay(item, dateStr, settings)
   }
   for (const item of oneTimeExpenses) {
-    if (item.currency !== savingsCurrency || item.date !== dateStr) continue
+    if (item.currency !== currency || item.date !== dateStr) continue
     net -= item.amount
   }
   return net
 }
 
-function accrueSavingsInterestForDay(
-  savingsBalance: number,
+function applyDailySavingsCashflow(
+  balances: Map<string, number>,
+  incomes: RecurringItem[],
+  expenses: RecurringItem[],
+  oneTimeExpenses: OneTimeExpense[],
   dateStr: string,
   settings: BudgetSettings,
-): { interestNative: number; interestBase: number; nextSavingsBalance: number } {
+  sourceTaxNativeRub: number,
+): void {
+  for (const currency of listSavingsCurrencies(settings)) {
+    const flow = nativeNetCashflowBeforeSourceTaxForDay(
+      incomes,
+      expenses,
+      oneTimeExpenses,
+      dateStr,
+      settings,
+      currency,
+    )
+    const next = (balances.get(currency) ?? 0) + flow
+    balances.set(currency, next)
+  }
+  if (balances.has('RUB') || listSavingsCurrencies(settings).includes('RUB')) {
+    balances.set('RUB', (balances.get('RUB') ?? 0) - sourceTaxNativeRub)
+  }
+}
+
+function accrueSavingsInterestForDay(
+  balances: Map<string, number>,
+  dateStr: string,
+  settings: BudgetSettings,
+): { interestBase: number } {
   if (!isSavingsAccountEnabled(settings) || !isLastDayOfMonth(dateStr)) {
-    return { interestNative: 0, interestBase: 0, nextSavingsBalance: savingsBalance }
+    return { interestBase: 0 }
   }
-  const interestNative = monthlySavingsInterest(savingsBalance, getSavingsAnnualRate(settings))
-  const savingsCurrency = getSavingsAccountCurrency(settings)
-  return {
-    interestNative,
-    interestBase: toBaseCurrency(interestNative, savingsCurrency, settings.baseCurrency),
-    nextSavingsBalance: savingsBalance + interestNative,
+  let interestBase = 0
+  for (const [currency, balance] of balances) {
+    const rate = getSavingsAnnualRateForCurrency(settings, currency)
+    const interestNative = monthlySavingsInterest(balance, rate)
+    if (interestNative === 0) continue
+    balances.set(currency, balance + interestNative)
+    interestBase += toBaseCurrency(interestNative, currency, settings.baseCurrency)
   }
+  return { interestBase }
 }
 
 export type DayLedgerKind =
@@ -895,15 +924,18 @@ export function getDayLedger(
 
   const savingsInterestInBase = options.savingsInterestInBase ?? 0
   if (savingsInterestInBase > 0) {
-    const amountOriginal = convertCurrency(savingsInterestInBase, baseCurrency, 'RUB')
+    const currencies = listSavingsCurrencies(settings)
+    const rateDetail = currencies
+      .map((currency) => `${currency} ${getSavingsAnnualRateForCurrency(settings, currency)}%`)
+      .join(', ')
     inflowLines.push({
       id: 'savings-interest',
       name: 'Проценты накопительного счёта',
       kind: 'savings_interest',
-      amountOriginal,
-      currency: 'RUB',
+      amountOriginal: savingsInterestInBase,
+      currency: settings.baseCurrency,
       amountInBase: savingsInterestInBase,
-      detail: `${getSavingsAnnualRate(settings)}% годовых`,
+      detail: rateDetail || `${getSavingsAnnualRate(settings)}% годовых`,
     })
   }
 
@@ -1150,7 +1182,7 @@ export function calculateDailyBudgetProjection(
   let trackerYear = -1
 
   let cumulativeBalance = getInitialBalanceInBase(settings)
-  let savingsBalance = getInitialSavingsBalance(settings)
+  let savingsBalances = createSavingsBalances(settings)
 
   return dayKeys.map((date) => {
     const { year } = parseIsoDate(date)
@@ -1187,22 +1219,18 @@ export function calculateDailyBudgetProjection(
     const loanDisbursement = loanDisbursementForDay(expenses, date, baseCurrency)
 
     if (isSavingsAccountEnabled(settings)) {
-      savingsBalance += nativeNetCashflowBeforeSourceTaxForDay(
+      applyDailySavingsCashflow(
+        savingsBalances,
         incomes,
         expenses,
         oneTimeExpenses,
         date,
         settings,
+        sourceTaxNative,
       )
-      savingsBalance -= sourceTaxNative
     }
 
-    const { interestBase, nextSavingsBalance } = accrueSavingsInterestForDay(
-      savingsBalance,
-      date,
-      settings,
-    )
-    savingsBalance = nextSavingsBalance
+    const { interestBase } = accrueSavingsInterestForDay(savingsBalances, date, settings)
 
     const balance =
       netIncome - recurringExpenses - oneTimeTotal + loanDisbursement + interestBase
@@ -1252,7 +1280,7 @@ export function calculateBudgetProjection(
   )
 
   let cumulativeBalance = getInitialBalanceInBase(settings)
-  let savingsBalance = getInitialSavingsBalance(settings)
+  let savingsBalances = createSavingsBalances(settings)
   let savingsSourceTaxTracker = createSourceTaxYtdTracker()
   let savingsTrackerYear = -1
 
@@ -1298,16 +1326,16 @@ export function calculateBudgetProjection(
           savingsSourceTaxTracker,
           'RUB',
         )
-        savingsBalance += nativeNetCashflowBeforeSourceTaxForDay(
+        applyDailySavingsCashflow(
+          savingsBalances,
           incomes,
           expenses,
           oneTimeExpenses,
           dateStr,
           settings,
+          sourceTaxNative,
         )
-        savingsBalance -= sourceTaxNative
-        const accrued = accrueSavingsInterestForDay(savingsBalance, dateStr, settings)
-        savingsBalance = accrued.nextSavingsBalance
+        const accrued = accrueSavingsInterestForDay(savingsBalances, dateStr, settings)
         savingsInterest += accrued.interestBase
       }
     }

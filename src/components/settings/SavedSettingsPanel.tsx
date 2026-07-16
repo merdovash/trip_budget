@@ -39,9 +39,9 @@ function SettingsSnapshotDetails({ id }: { id: string }) {
     },
     { label: 'Горизонт прогноза', value: `${snapshot.settings.horizonMonths} мес.` },
     {
-      label: 'Накопительный счёт RUB',
+      label: 'Накопительный счёт',
       value: snapshot.settings.parkBalanceOnSavingsAccount
-        ? `Да, ${snapshot.settings.savingsAnnualRate ?? 16}% годовых`
+        ? `Да · ${describeInitialBalances(snapshot.settings)}`
         : 'Нет',
     },
     { label: 'Размер семьи', value: String(snapshot.settings.familySize) },

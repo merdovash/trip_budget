@@ -10,6 +10,8 @@ import type {
 
   RecurringItem,
 
+  ResidenceRoutePoint,
+
 } from '../types/budget'
 
 import { FOOD_EXPENSE_CATEGORY } from '../config/foodBudget'
@@ -1613,6 +1615,27 @@ function scopeIncomeItemToYearSegment(
   }
 }
 
+/** Налог за календарный год для одной точки маршрута (как в getTaxSummariesByHorizon). */
+export function computeYearTaxForRoutePoint(
+  point: ResidenceRoutePoint,
+  year: number,
+  settings: BudgetSettings,
+  incomes: RecurringItem[],
+  expenses: RecurringItem[] = [],
+  oneTimeExpenses: OneTimeExpense[] = [],
+): FullTaxSummary {
+  const pointSettings = settingsForTaxYear(settingsForResidencePoint(settings, point), year)
+  const scopedIncomes = incomes
+    .map((item) => scopeIncomeItemToYearSegment(item, year, settings, point.id))
+    .filter((item): item is RecurringItem => item != null)
+  const scopedOnce = oneTimeExpenses.filter((item) => {
+    if (!item.date.startsWith(`${year}-`)) return false
+    const onDate = getResidenceOnDate(settings, item.date)
+    return onDate?.id === point.id
+  })
+  return getTaxSummary(scopedIncomes, pointSettings, expenses, scopedOnce, year)
+}
+
 /** Налоговые сводки по каждому календарному году горизонта планирования. */
 export function getTaxSummariesByHorizon(
   incomes: RecurringItem[],
@@ -1625,19 +1648,14 @@ export function getTaxSummariesByHorizon(
     const yearStart = `${year}-01-01`
     const yearEnd = `${year}-12-31`
     const parts: YearTaxPart[] = segments.map((point, index) => {
-      const pointSettings = settingsForTaxYear(
-        settingsForResidencePoint(settings, point),
+      let summary = computeYearTaxForRoutePoint(
+        point,
         year,
+        settings,
+        incomes,
+        expenses,
+        oneTimeExpenses,
       )
-      const scopedIncomes = incomes
-        .map((item) => scopeIncomeItemToYearSegment(item, year, settings, point.id))
-        .filter((item): item is RecurringItem => item != null)
-      const scopedOnce = oneTimeExpenses.filter((item) => {
-        if (!item.date.startsWith(`${year}-`)) return false
-        const onDate = getResidenceOnDate(settings, item.date)
-        return onDate?.id === point.id
-      })
-      let summary = getTaxSummary(scopedIncomes, pointSettings, expenses, scopedOnce, year)
       if (index > 0) {
         summary = {
           ...summary,

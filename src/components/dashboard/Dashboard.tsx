@@ -13,11 +13,13 @@ import { formatCurrency, formatDateDisplay } from '../../lib/format'
 import { useBudgetStore } from '../../store/budgetStore'
 import { useExchangeRateStore } from '../../store/exchangeRateStore'
 import { shouldShowSourceCountryTaxes } from '../../config/relocationMode'
+import { compareRegimesForRoute } from '../../tax/regimeComparison'
 import { EmptyState } from '../ui/FormControls'
 import { CashFlowChart } from './CashFlowChart'
 import { CollapsibleSection } from './CollapsibleSection'
 import { DayDetailPanel } from './DayDetailPanel'
 import { TaxesOverviewPanel } from './TaxesOverviewPanel'
+import { RegimeComparisonPanel } from './RegimeComparisonPanel'
 import { MonthlyTable } from './MonthlyTable'
 import { SummaryCards } from './SummaryCards'
 
@@ -44,6 +46,11 @@ export function Dashboard() {
   const yearTaxSummaries = useMemo(
     () => getTaxSummariesByHorizon(incomes, settings, expenses, oneTimeExpenses),
     [incomes, expenses, oneTimeExpenses, settings, rateDate],
+  )
+
+  const regimeComparisons = useMemo(
+    () => compareRegimesForRoute(settings, incomes, expenses, oneTimeExpenses),
+    [settings, incomes, expenses, oneTimeExpenses, rateDate],
   )
 
   const dayIndexByDate = useMemo(() => {
@@ -142,6 +149,14 @@ export function Dashboard() {
             settings={settings}
             hasIncomes={incomes.length > 0}
             incomes={incomes}
+          />
+        </CollapsibleSection>
+      )}
+      {regimeComparisons.length > 0 && (
+        <CollapsibleSection title="Сравнение налоговых режимов">
+          <RegimeComparisonPanel
+            comparisons={regimeComparisons}
+            baseCurrency={settings.baseCurrency}
           />
         </CollapsibleSection>
       )}

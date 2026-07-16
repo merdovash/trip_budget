@@ -1,5 +1,5 @@
 import { useMemo, useState, type FormEvent } from 'react'
-import { todayIsoDate, formatCurrency } from '../../lib/format'
+import { todayIsoDate, formatCurrency, formatDateDisplay } from '../../lib/format'
 import { convertCurrency } from '../../lib/currency'
 import {
   buildLoanExpense,
@@ -270,9 +270,13 @@ function AmountCell({
 }
 
 function expenseFrequencyLabel(item: RecurringItem) {
-  return isLoanExpense(item)
-    ? `${item.termMonths} мес. (кредит)`
-    : FREQUENCY_LABELS[item.frequency]
+  if (isLoanExpense(item)) return `${item.termMonths} мес. (кредит)`
+  if (item.frequency === 'once') {
+    return item.startDate
+      ? `Разово · ${formatDateDisplay(item.startDate)}`
+      : FREQUENCY_LABELS.once
+  }
+  return FREQUENCY_LABELS[item.frequency]
 }
 
 function expenseCategoryLabel(item: RecurringItem) {

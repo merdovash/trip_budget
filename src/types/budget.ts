@@ -26,6 +26,13 @@ export interface ExpenseFolder {
   excluded?: boolean
 }
 
+/** Пользовательская категория расходов (помимо встроенных). */
+export interface ExpenseCategory {
+  id: string
+  name: string
+  sortOrder?: number
+}
+
 export interface RecurringItem {
   id: string
   name: string

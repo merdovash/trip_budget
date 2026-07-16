@@ -1,4 +1,10 @@
-import type { BudgetSettings, ExpenseFolder, OneTimeExpense, RecurringItem } from './budget'
+import type {
+  BudgetSettings,
+  ExpenseCategory,
+  ExpenseFolder,
+  OneTimeExpense,
+  RecurringItem,
+} from './budget'
 
 export interface BudgetPresetData {
   settings: BudgetSettings
@@ -8,6 +14,8 @@ export interface BudgetPresetData {
   folders?: ExpenseFolder[]
   /** Папки для группировки доходов. */
   incomeFolders?: ExpenseFolder[]
+  /** Пользовательские категории расходов. */
+  expenseCategories?: ExpenseCategory[]
   /** @deprecated Кредиты хранятся в expenses с expenseKind === 'loan'. */
   loans?: Array<{
     name: string

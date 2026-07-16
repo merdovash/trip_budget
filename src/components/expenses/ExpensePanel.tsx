@@ -31,6 +31,8 @@ import { CurrencySelect } from '../ui/CurrencySelect'
 import { CurrencyConversionHint } from '../ui/CurrencyConversionHint'
 import { StackPanel } from '../ui/StackPanel'
 import { FolderField } from '../ui/FolderField'
+import { CategoryField, type CategoryOption } from '../ui/CategoryField'
+import { BUILTIN_EXPENSE_CATEGORIES } from '../../config/expenseCategories'
 
 function ExpenseFolderField({
   value,
@@ -54,23 +56,36 @@ function ExpenseFolderField({
   )
 }
 
-const EXPENSE_CATEGORIES = [
-  'Жильё',
-  'Еда',
-  'Транспорт',
-  'Страховка',
-  'Образование',
-  'Здоровье',
-  'Развлечения',
-  'Связь',
-  'Переезд',
-  'Депозит',
-  'Мебель',
-  'Авто',
-  'Ремонт',
-  'Обучение',
-  'Другое',
-]
+const EXPENSE_CATEGORIES = [...BUILTIN_EXPENSE_CATEGORIES]
+
+function ExpenseCategoryField({
+  value,
+  onChange,
+}: {
+  value: string
+  onChange: (category: string) => void
+}) {
+  const expenseCategories = useBudgetStore((s) => s.expenseCategories)
+  const addExpenseCategory = useBudgetStore((s) => s.addExpenseCategory)
+  const removeExpenseCategory = useBudgetStore((s) => s.removeExpenseCategory)
+
+  const options: CategoryOption[] = [
+    ...EXPENSE_CATEGORIES.map((name) => ({ id: `builtin:${name}`, name, builtin: true })),
+    ...[...expenseCategories]
+      .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.name.localeCompare(b.name))
+      .map((category) => ({ id: category.id, name: category.name })),
+  ]
+
+  return (
+    <CategoryField
+      value={value}
+      onChange={onChange}
+      options={options}
+      onAddCategory={addExpenseCategory}
+      onRemoveCategory={removeExpenseCategory}
+    />
+  )
+}
 
 function formatRateInput(rate: number): string {
   return String(rate)
@@ -427,16 +442,10 @@ function ExpenseForm({ initialItem, onSubmit, onCancel }: ExpenseFormProps) {
                 ))}
             </Select>
           </Field>
-          <Field label="Категория">
-            <Select value={form.category} onChange={(e) => handleCategoryChange(e.target.value)}>
-              <option value="">—</option>
-              {EXPENSE_CATEGORIES.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </Select>
-          </Field>
+          <ExpenseCategoryField
+            value={form.category}
+            onChange={(category) => handleCategoryChange(category)}
+          />
           <Field label="Дата начала" error={errors.startDate}>
             <DateInput
               value={form.startDate}
@@ -492,16 +501,10 @@ function ExpenseForm({ initialItem, onSubmit, onCancel }: ExpenseFormProps) {
               onChange={(startDate) => setForm({ ...form, startDate })}
             />
           </Field>
-          <Field label="Категория">
-            <Select value={form.category} onChange={(e) => handleCategoryChange(e.target.value)}>
-              <option value="">—</option>
-              {EXPENSE_CATEGORIES.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </Select>
-          </Field>
+          <ExpenseCategoryField
+            value={form.category}
+            onChange={(category) => handleCategoryChange(category)}
+          />
           <ExpenseFolderField
             value={form.folderId}
             onChange={(folderId) => setForm({ ...form, folderId })}

@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type {
   BudgetSettings,
+  ExpenseCategory,
   ExpenseFolder,
   OneTimeExpense,
   RecurringItem,
@@ -14,6 +15,7 @@ import { clonePresetData } from '../lib/presetsApi'
 import { snapshotsEqual } from '../lib/presetSnapshotCompare'
 import { migrateInitialBalances } from '../lib/initialBalance'
 import { ensureExplicitResidenceRoute, syncLegacyFromRoute } from '../config/residenceRoute'
+import { isBuiltinExpenseCategory } from '../config/expenseCategories'
 
 export interface ActivePreset {
   id: string
@@ -27,6 +29,7 @@ interface BudgetState {
   expenses: RecurringItem[]
   folders: ExpenseFolder[]
   incomeFolders: ExpenseFolder[]
+  expenseCategories: ExpenseCategory[]
   /** @deprecated Разовые траты в expenses с frequency === 'once'. */
   oneTimeExpenses: OneTimeExpense[]
   activePreset: ActivePreset | null
@@ -44,6 +47,8 @@ interface BudgetState {
   addIncomeFolder: (name: string) => string
   updateIncomeFolder: (id: string, patch: Partial<Pick<ExpenseFolder, 'name'>>) => void
   removeIncomeFolder: (id: string) => void
+  addExpenseCategory: (name: string) => string
+  removeExpenseCategory: (id: string) => void
   exportSnapshot: () => BudgetPresetData
   loadFromPreset: (data: BudgetPresetData, activePreset?: ActivePreset | null) => void
   setActivePreset: (activePreset: ActivePreset | null) => void
@@ -209,6 +214,7 @@ function migratePersistedState(persisted: PersistedBudgetState, current: BudgetS
     expenses,
     folders: persisted.folders ?? current.folders,
     incomeFolders: persisted.incomeFolders ?? current.incomeFolders,
+    expenseCategories: persisted.expenseCategories ?? current.expenseCategories,
     oneTimeExpenses: [],
   }
 }
@@ -221,6 +227,7 @@ export const useBudgetStore = create<BudgetState>()(
       expenses: [],
       folders: [],
       incomeFolders: [],
+      expenseCategories: [],
       oneTimeExpenses: [],
       activePreset: null,
       presetBaseline: null,
@@ -324,14 +331,53 @@ export const useBudgetStore = create<BudgetState>()(
           ),
         })),
 
+      addExpenseCategory: (name) => {
+        const id = createId()
+        const trimmed = name.trim() || 'Новая категория'
+        const lower = trimmed.toLowerCase()
+        set((state) => {
+          if (
+            isBuiltinExpenseCategory(trimmed) ||
+            state.expenseCategories.some(
+              (category) => category.name.toLowerCase() === lower,
+            )
+          ) {
+            return state
+          }
+          return {
+            expenseCategories: [
+              ...state.expenseCategories,
+              { id, name: trimmed, sortOrder: state.expenseCategories.length },
+            ],
+          }
+        })
+        return id
+      },
+
+      removeExpenseCategory: (id) =>
+        set((state) => {
+          const removed = state.expenseCategories.find((category) => category.id === id)
+          return {
+            expenseCategories: state.expenseCategories.filter((category) => category.id !== id),
+            expenses: removed
+              ? state.expenses.map((expense) =>
+                  expense.category === removed.name
+                    ? { ...expense, category: undefined }
+                    : expense,
+                )
+              : state.expenses,
+          }
+        }),
+
       exportSnapshot: (): BudgetPresetData => {
-        const { settings, incomes, expenses, folders, incomeFolders } = get()
+        const { settings, incomes, expenses, folders, incomeFolders, expenseCategories } = get()
         return clonePresetData({
           settings,
           incomes,
           expenses,
           folders,
           incomeFolders,
+          expenseCategories,
           oneTimeExpenses: [],
         })
       },
@@ -367,6 +413,11 @@ export const useBudgetStore = create<BudgetState>()(
             sortOrder: folder.sortOrder ?? index,
           }
         })
+        const expenseCategories = (data.expenseCategories ?? []).map((category, index) => ({
+          id: createId(),
+          name: category.name,
+          sortOrder: category.sortOrder ?? index,
+        }))
         const remapFolderId = (folderId?: string) =>
           folderId ? folderIdMap.get(folderId) : undefined
         const remapIncomeFolderId = (folderId?: string) =>
@@ -390,6 +441,7 @@ export const useBudgetStore = create<BudgetState>()(
           ],
           folders,
           incomeFolders,
+          expenseCategories,
           oneTimeExpenses: [],
           activePreset,
           presetBaseline: null,
@@ -421,6 +473,7 @@ export const useBudgetStore = create<BudgetState>()(
         expenses: state.expenses,
         folders: state.folders,
         incomeFolders: state.incomeFolders,
+        expenseCategories: state.expenseCategories,
         oneTimeExpenses: [],
         activePreset: state.activePreset,
       }),

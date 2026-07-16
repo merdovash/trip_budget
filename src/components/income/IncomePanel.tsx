@@ -16,7 +16,7 @@ import {
   getSalaryMonthlyDisplay,
   hasSourceWithholdingPreview,
 } from '../../tax/salaryDisplay'
-import { getEmploymentCountryCode, getRelocationMode } from '../../config/relocationMode'
+import { getRelocationMode } from '../../config/relocationMode'
 import { isIncludedInResidenceTax } from '../../tax/incomeSourceTax'
 import { useBudgetStore } from '../../store/budgetStore'
 import { FREQUENCY_LABELS, type Frequency, type IncomePayment, type RecurringItem } from '../../types/budget'
@@ -115,7 +115,7 @@ function IncomeForm({ initialItem, onSubmit, onCancel }: IncomeFormProps) {
     const def = getIncomeCategoryDef(categoryId)
     const salaryCountryCode = def?.showSalaryCountry
       ? getRelocationMode(settings) === 'remote_employment'
-        ? getEmploymentCountryCode(settings)
+        ? 'RU'
         : settings.countryCode === 'RU'
           ? 'RU'
           : 'ES'

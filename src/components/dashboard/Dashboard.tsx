@@ -80,7 +80,7 @@ export function Dashboard() {
     )
   }
 
-  const showSourceTaxes = shouldShowSourceCountryTaxes(settings)
+  const showSourceTaxes = shouldShowSourceCountryTaxes(settings, incomes)
   const annualTaxes =
     yearTaxSummaries.length > 0
       ? yearTaxSummaries.reduce(
@@ -141,6 +141,7 @@ export function Dashboard() {
             yearSummaries={yearTaxSummaries}
             settings={settings}
             hasIncomes={incomes.length > 0}
+            incomes={incomes}
           />
         </CollapsibleSection>
       )}

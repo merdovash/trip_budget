@@ -15,7 +15,7 @@ import {
   getRelocationMode,
   shouldShowSourceCountryTaxes,
 } from '../../config/relocationMode'
-import type { BudgetSettings } from '../../types/budget'
+import type { BudgetSettings, RecurringItem } from '../../types/budget'
 import { LocalCurrencyWithBaseHint, residenceTaxDisplayNote } from '../ui/LocalCurrencyWithBaseHint'
 import { StackPanel } from '../ui/StackPanel'
 import { DoubleTaxationPanel } from './DoubleTaxationPanel'
@@ -42,6 +42,7 @@ interface TaxesOverviewPanelProps {
   yearSummaries: YearTaxSummary[]
   settings: BudgetSettings
   hasIncomes: boolean
+  incomes?: RecurringItem[]
 }
 
 type DetailTarget =
@@ -499,11 +500,12 @@ export function TaxesOverviewPanel({
   yearSummaries,
   settings,
   hasIncomes,
+  incomes,
 }: TaxesOverviewPanelProps) {
-  const showSourceTaxes = shouldShowSourceCountryTaxes(settings)
+  const showSourceTaxes = shouldShowSourceCountryTaxes(settings, incomes)
   const multiYear = yearSummaries.length > 1
-  const employmentLabel = getEmploymentCountryLabel(settings)
-  const sourceCurrency = getEmploymentCountryCurrency(settings)
+  const employmentLabel = getEmploymentCountryLabel(settings, incomes)
+  const sourceCurrency = getEmploymentCountryCurrency(settings, incomes)
   const baseCurrency = settings.baseCurrency
   const [detail, setDetail] = useState<DetailTarget | null>(null)
 

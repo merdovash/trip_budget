@@ -124,7 +124,7 @@ export interface BudgetSettings {
   relocationProgramId?: string
   /** Способ переезда: удалённая зарплата или ИП в стране проживания. */
   relocationMode?: RelocationMode
-  /** Страна работодателя / источника зарплаты (при remote_employment). */
+  /** @deprecated Страна зарплаты задаётся в доходах (salaryCountryCode). */
   employmentCountryCode?: string
   /**
    * Маршрут проживания: произвольное число стран с датами.
@@ -207,7 +207,39 @@ export const DEFAULT_SETTINGS: BudgetSettings = {
   ],
 }
 
-export const CURRENCIES = ['EUR', 'USD', 'RUB', 'THB', 'MYR', 'GBP', 'AED', 'GEL', 'MXN', 'IDR', 'VND'] as const
+export const CURRENCIES = [
+  'EUR',
+  'USD',
+  'RUB',
+  'BYN',
+  'AMD',
+  'THB',
+  'MYR',
+  'GBP',
+  'AED',
+  'GEL',
+  'MXN',
+  'IDR',
+  'VND',
+] as const
+
+export type CurrencyCode = (typeof CURRENCIES)[number]
+
+export const CURRENCY_LABELS: Record<CurrencyCode, string> = {
+  EUR: 'Евро',
+  USD: 'Доллар США',
+  RUB: 'Российский рубль',
+  BYN: 'Белорусский рубль',
+  AMD: 'Армянский драм',
+  THB: 'Тайский бат',
+  MYR: 'Малайзийский ринггит',
+  GBP: 'Фунт стерлингов',
+  AED: 'Дирхам ОАЭ',
+  GEL: 'Грузинский лари',
+  MXN: 'Мексиканское песо',
+  IDR: 'Индонезийская рупия',
+  VND: 'Вьетнамский донг',
+}
 
 export const FREQUENCY_LABELS: Record<Frequency, string> = {
   monthly: 'Ежемесячно',

@@ -6,6 +6,8 @@ const FALLBACK_RATES_TO_EUR: Record<string, number> = {
   EUR: 1,
   USD: 0.92,
   RUB: 0.01,
+  BYN: 0.28,
+  AMD: 0.0024,
   GBP: 1.17,
   THB: 0.026,
   MYR: 0.2,

@@ -1,5 +1,5 @@
 import { COUNTRY_LABELS } from '../tax/registry'
-import type { BudgetSettings, RelocationMode } from '../types/budget'
+import type { BudgetSettings, RecurringItem, RelocationMode } from '../types/budget'
 
 export const RELOCATION_MODE_LABELS: Record<RelocationMode, string> = {
   remote_employment: 'Работа в другой стране (зарплата / удалёнка)',
@@ -27,22 +27,43 @@ export function getRelocationMode(settings: BudgetSettings): RelocationMode {
   return settings.relocationMode ?? 'remote_employment'
 }
 
-export function getEmploymentCountryCode(settings: BudgetSettings): EmploymentCountryCode {
-  if (getRelocationMode(settings) === 'sole_proprietorship') {
-    return 'RU'
-  }
-  const code = settings.employmentCountryCode
+function normalizeEmploymentCode(code: string | undefined): EmploymentCountryCode {
   if (code === 'RU' || code === 'ES') return code
   return 'RU'
 }
 
-export function getEmploymentCountryLabel(settings: BudgetSettings): string {
-  const code = getEmploymentCountryCode(settings)
+/** Страна зарплаты: из доходов (salaryCountryCode), иначе legacy settings.employmentCountryCode. */
+export function getEmploymentCountryCode(
+  settings: BudgetSettings,
+  incomes?: RecurringItem[],
+): EmploymentCountryCode {
+  if (getRelocationMode(settings) === 'sole_proprietorship') {
+    return 'RU'
+  }
+  if (incomes?.length) {
+    const salary = incomes.find(
+      (item) => item.categoryId === 'salary' || Boolean(item.salaryCountryCode),
+    )
+    if (salary?.salaryCountryCode) {
+      return normalizeEmploymentCode(salary.salaryCountryCode)
+    }
+  }
+  return normalizeEmploymentCode(settings.employmentCountryCode)
+}
+
+export function getEmploymentCountryLabel(
+  settings: BudgetSettings,
+  incomes?: RecurringItem[],
+): string {
+  const code = getEmploymentCountryCode(settings, incomes)
   return EMPLOYMENT_COUNTRIES.find((c) => c.code === code)?.label ?? COUNTRY_LABELS[code] ?? code
 }
 
-export function getEmploymentCountryCurrency(settings: BudgetSettings): string {
-  const code = getEmploymentCountryCode(settings)
+export function getEmploymentCountryCurrency(
+  settings: BudgetSettings,
+  incomes?: RecurringItem[],
+): string {
+  const code = getEmploymentCountryCode(settings, incomes)
   return EMPLOYMENT_COUNTRIES.find((c) => c.code === code)?.currency ?? 'EUR'
 }
 
@@ -55,9 +76,13 @@ export function suggestTaxRegimeForMode(
   return SOLE_PROPRIETOR_REGIME_BY_COUNTRY[countryCode]
 }
 
-export function shouldShowSourceCountryTaxes(settings: BudgetSettings): boolean {
-  return (
-    getRelocationMode(settings) === 'remote_employment' &&
-    getEmploymentCountryCode(settings) === 'RU'
-  )
+export function shouldShowSourceCountryTaxes(
+  settings: BudgetSettings,
+  incomes?: RecurringItem[],
+): boolean {
+  if (getRelocationMode(settings) !== 'remote_employment') return false
+  if (incomes?.length) {
+    return incomes.some((item) => item.salaryCountryCode === 'RU')
+  }
+  return getEmploymentCountryCode(settings) === 'RU'
 }

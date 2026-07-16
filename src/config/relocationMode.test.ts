@@ -40,4 +40,26 @@ describe('relocationMode', () => {
       shouldShowSourceCountryTaxes({ ...baseSettings, relocationMode: 'sole_proprietorship' }),
     ).toBe(false)
   })
+
+  it('derives employment country from salary incomes', () => {
+    const incomes = [
+      {
+        id: '1',
+        name: 'Зарплата',
+        amount: 1000,
+        currency: 'EUR',
+        frequency: 'monthly' as const,
+        categoryId: 'salary',
+        salaryCountryCode: 'ES',
+        startDate: '2026-01-01',
+      },
+    ]
+    expect(getEmploymentCountryCode(baseSettings, incomes)).toBe('ES')
+    expect(shouldShowSourceCountryTaxes(baseSettings, incomes)).toBe(false)
+    expect(
+      shouldShowSourceCountryTaxes(baseSettings, [
+        { ...incomes[0], salaryCountryCode: 'RU', currency: 'RUB' },
+      ]),
+    ).toBe(true)
+  })
 })

@@ -1,7 +1,7 @@
 import { useBudgetStore } from '../../store/budgetStore'
 import { useExchangeRateStore } from '../../store/exchangeRateStore'
 import { getTaxCalculator } from '../../tax/registry'
-import { CURRENCIES, DEFAULT_SETTINGS } from '../../types/budget'
+import { CURRENCIES, CURRENCY_LABELS, DEFAULT_SETTINGS } from '../../types/budget'
 import { todayIsoDate } from '../../lib/format'
 import { Button, Card, Field, Input, Select, DateInput } from '../ui/FormControls'
 import { SavedSettingsPanel } from './SavedSettingsPanel'
@@ -11,7 +11,6 @@ import {
   getRelocationMode,
   RELOCATION_MODE_LABELS,
   suggestTaxRegimeForMode,
-  EMPLOYMENT_COUNTRIES,
 } from '../../config/relocationMode'
 import {
   ensureExplicitResidenceRoute,
@@ -64,8 +63,6 @@ export function BudgetSettingsPanel() {
     setSettings({
       ...syncLegacyFromRoute(nextRoute),
       relocationMode: mode,
-      employmentCountryCode:
-        mode === 'remote_employment' ? settings.employmentCountryCode ?? 'RU' : undefined,
     })
   }
 
@@ -128,24 +125,9 @@ export function BudgetSettingsPanel() {
               <p className="mt-1 text-xs text-slate-500">
                 {relocationMode === 'sole_proprietorship'
                   ? 'Доход как ИП облагается в стране проживания. Подбирается режим для первой точки маршрута.'
-                  : 'Зарплата от работодателя в выбранной стране; налоги у источника и по маршруту проживания.'}
+                  : 'Зарплата и страна выплаты указываются в разделе «Доходы»; налоги считаются у источника и по маршруту проживания.'}
               </p>
             </Field>
-
-            {relocationMode === 'remote_employment' && (
-              <Field label="Страна работы (источник зарплаты)">
-                <Select
-                  value={settings.employmentCountryCode ?? 'RU'}
-                  onChange={(e) => setSettings({ employmentCountryCode: e.target.value })}
-                >
-                  {EMPLOYMENT_COUNTRIES.map((country) => (
-                    <option key={country.code} value={country.code}>
-                      {country.label}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-            )}
           </div>
         </section>
 
@@ -160,7 +142,7 @@ export function BudgetSettingsPanel() {
             >
               {CURRENCIES.map((c) => (
                 <option key={c} value={c}>
-                  {c}
+                  {CURRENCY_LABELS[c]} ({c})
                 </option>
               ))}
             </Select>

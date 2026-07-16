@@ -37,14 +37,6 @@ function SettingsSnapshotDetails({ id }: { id: string }) {
           ? 'ИП в стране проживания'
           : 'Работа в другой стране',
     },
-    ...(snapshot.settings.relocationMode !== 'sole_proprietorship'
-      ? [
-          {
-            label: 'Страна работы',
-            value: snapshot.settings.employmentCountryCode === 'ES' ? 'Испания' : 'Россия',
-          },
-        ]
-      : []),
     { label: 'Горизонт прогноза', value: `${snapshot.settings.horizonMonths} мес.` },
     {
       label: 'Накопительный счёт RUB',

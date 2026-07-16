@@ -1,4 +1,4 @@
-import { CURRENCIES } from '../../types/budget'
+import { CURRENCIES, CURRENCY_LABELS } from '../../types/budget'
 import { Select } from './FormControls'
 
 interface CurrencySelectProps {
@@ -16,7 +16,7 @@ export function CurrencySelect({ value, onChange, className }: CurrencySelectPro
     >
       {CURRENCIES.map((c) => (
         <option key={c} value={c}>
-          {c}
+          {CURRENCY_LABELS[c]} ({c})
         </option>
       ))}
     </Select>

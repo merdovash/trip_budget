@@ -939,13 +939,13 @@ export function IncomePanel() {
 
   return (
     <div className="space-y-4">
+      <div className="sticky top-0 z-10 -mx-4 mb-0 flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/95 px-4 py-3 backdrop-blur-sm md:-mx-6 md:px-6">
+        <h2 className="text-lg font-semibold text-slate-900">Доходы</h2>
+        <Button type="button" onClick={openCreate}>
+          Добавить доход
+        </Button>
+      </div>
       <Card>
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold">Доходы</h2>
-          <Button type="button" onClick={openCreate}>
-            Добавить доход
-          </Button>
-        </div>
         <IncomeList
           editingId={editingId}
           onEdit={openEdit}

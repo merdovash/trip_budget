@@ -3,7 +3,6 @@ import { useExchangeRateStore } from '../../store/exchangeRateStore'
 import { getTaxCalculator } from '../../tax/registry'
 import { CURRENCIES, CURRENCY_LABELS, DEFAULT_SETTINGS } from '../../types/budget'
 import { Button, Card, Field, Input, Select } from '../ui/FormControls'
-import { SavedSettingsPanel } from './SavedSettingsPanel'
 import { ResidenceRouteEditor } from './ResidenceRouteEditor'
 import { InitialBalanceEditor } from './InitialBalanceEditor'
 import {
@@ -230,8 +229,6 @@ export function BudgetSettingsPanel() {
           Сбросить настройки
         </Button>
       </div>
-
-      <SavedSettingsPanel />
     </Card>
   )
 }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   formatDateDisplay,
+  formatDateTimeDisplay,
   formatIsoToRu,
   isValidIsoDate,
   maskRuDateInput,
@@ -28,5 +29,12 @@ describe('date format', () => {
   it('formats stored ISO for display', () => {
     expect(formatDateDisplay('2026-01-15')).toBe('15.01.2026')
     expect(formatDateDisplay('')).toBe('—')
+  })
+
+  it('formats datetime with time', () => {
+    const formatted = formatDateTimeDisplay('2026-01-15T14:30:00.000Z')
+    expect(formatted).toMatch(/15\.01\.2026/)
+    expect(formatted).toMatch(/\d{2}:\d{2}/)
+    expect(formatDateTimeDisplay('')).toBe('—')
   })
 })

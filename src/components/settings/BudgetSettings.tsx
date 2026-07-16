@@ -8,14 +8,10 @@ import { SavedSettingsPanel } from './SavedSettingsPanel'
 import { ResidenceRouteEditor } from './ResidenceRouteEditor'
 import { InitialBalanceEditor } from './InitialBalanceEditor'
 import {
-  getRelocationProgramsForCountry,
-  RELOCATION_PROGRAM_NONE,
-} from '../../config/relocationPrograms'
-import {
-  EMPLOYMENT_COUNTRIES,
   getRelocationMode,
   RELOCATION_MODE_LABELS,
   suggestTaxRegimeForMode,
+  EMPLOYMENT_COUNTRIES,
 } from '../../config/relocationMode'
 import {
   ensureExplicitResidenceRoute,
@@ -24,7 +20,6 @@ import {
   syncLegacyFromRoute,
 } from '../../config/residenceRoute'
 import type { RelocationMode } from '../../types/budget'
-import { formatCurrency } from '../../lib/format'
 import type { ReactNode } from 'react'
 
 function SettingsSection({
@@ -48,15 +43,11 @@ function SettingsSection({
 export function BudgetSettingsPanel() {
   const settings = useBudgetStore((s) => s.settings)
   const setSettings = useBudgetStore((s) => s.setSettings)
-  const applyRelocationProgramExpenses = useBudgetStore((s) => s.applyRelocationProgramExpenses)
   const rateDate = useExchangeRateStore((s) => s.rateDate)
   const rateStatus = useExchangeRateStore((s) => s.status)
   const rateError = useExchangeRateStore((s) => s.error)
   const fetchRates = useExchangeRateStore((s) => s.fetchRates)
   const relocationMode = getRelocationMode(settings)
-  const primaryCountry = settings.countryCode
-  const relocationPrograms = getRelocationProgramsForCountry(primaryCountry, relocationMode)
-  const selectedProgram = relocationPrograms.find((p) => p.id === settings.relocationProgramId)
   const route = getResidenceRoute(settings)
   const primaryRegime = getTaxCalculator(settings.taxRegimeId)
   const showThailandDependentsHint = routeIncludesCountry(settings, 'TH')
@@ -65,8 +56,6 @@ export function BudgetSettingsPanel() {
     const routePoints = ensureExplicitResidenceRoute(settings)
     const first = [...routePoints].sort((a, b) => a.startDate.localeCompare(b.startDate))[0]
     const suggestedRegime = suggestTaxRegimeForMode(first.countryCode, mode, first.taxRegimeId)
-    const programs = getRelocationProgramsForCountry(first.countryCode, mode)
-    const programStillValid = programs.some((p) => p.id === settings.relocationProgramId)
     const nextRoute = suggestedRegime
       ? routePoints.map((point) =>
           point.id === first.id ? { ...point, taxRegimeId: suggestedRegime } : point,
@@ -77,7 +66,6 @@ export function BudgetSettingsPanel() {
       relocationMode: mode,
       employmentCountryCode:
         mode === 'remote_employment' ? settings.employmentCountryCode ?? 'RU' : undefined,
-      ...(!programStillValid ? { relocationProgramId: RELOCATION_PROGRAM_NONE } : {}),
     })
   }
 
@@ -158,58 +146,7 @@ export function BudgetSettingsPanel() {
                 </Select>
               </Field>
             )}
-
-            <Field label="Программа переезда">
-              <Select
-                value={settings.relocationProgramId ?? RELOCATION_PROGRAM_NONE}
-                onChange={(e) => setSettings({ relocationProgramId: e.target.value })}
-              >
-                <option value={RELOCATION_PROGRAM_NONE}>Без шаблона расходов</option>
-                {relocationPrograms.map((program) => (
-                  <option key={program.id} value={program.id}>
-                    {program.name}
-                  </option>
-                ))}
-              </Select>
-              <p className="mt-1 text-xs text-slate-500">
-                Шаблоны для первой страны маршрута (
-                {route[0] ? route[0].countryCode : primaryCountry}).
-              </p>
-            </Field>
           </div>
-
-          {selectedProgram && (
-            <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
-              <p className="text-sm text-slate-700">{selectedProgram.description}</p>
-              <ul className="mt-3 space-y-1 text-sm text-slate-600">
-                {selectedProgram.expenses.map((expense) => (
-                  <li key={expense.name} className="flex justify-between gap-4">
-                    <span>{expense.name}</span>
-                    <span className="shrink-0 font-medium">
-                      {formatCurrency(expense.amount, expense.currency)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-              <Button
-                type="button"
-                variant="secondary"
-                className="mt-3"
-                onClick={() => {
-                  const added = applyRelocationProgramExpenses()
-                  if (added === 0) {
-                    alert('Расходы программы уже добавлены или список пуст.')
-                  }
-                }}
-              >
-                Добавить разовые расходы программы
-              </Button>
-              <p className="mt-2 text-xs text-slate-500">
-                Статьи появятся в разделе «Расходы» (вид «Разовый») с датами относительно начала
-                маршрута.
-              </p>
-            </div>
-          )}
         </section>
 
         <SettingsSection

@@ -12,11 +12,6 @@ import { migrateLegacyLoan } from '../lib/loanAmortization'
 import { migrateLegacyOneTimeExpense } from '../lib/oneTimeExpense'
 import { clonePresetData } from '../lib/presetsApi'
 import { snapshotsEqual } from '../lib/presetSnapshotCompare'
-import {
-  buildProgramOneTimeExpenses,
-  getRelocationDate,
-  getRelocationProgram,
-} from '../config/relocationPrograms'
 import { migrateInitialBalances } from '../lib/initialBalance'
 import { ensureExplicitResidenceRoute, syncLegacyFromRoute } from '../config/residenceRoute'
 
@@ -49,7 +44,6 @@ interface BudgetState {
   addIncomeFolder: (name: string) => string
   updateIncomeFolder: (id: string, patch: Partial<Pick<ExpenseFolder, 'name'>>) => void
   removeIncomeFolder: (id: string) => void
-  applyRelocationProgramExpenses: () => number
   exportSnapshot: () => BudgetPresetData
   loadFromPreset: (data: BudgetPresetData, activePreset?: ActivePreset | null) => void
   setActivePreset: (activePreset: ActivePreset | null) => void
@@ -326,27 +320,6 @@ export const useBudgetStore = create<BudgetState>()(
             income.folderId === id ? { ...income, folderId: undefined } : income,
           ),
         })),
-
-      applyRelocationProgramExpenses: () => {
-        const { settings, expenses } = get()
-        const program = getRelocationProgram(settings.relocationProgramId)
-        if (!program) return 0
-        const templates = buildProgramOneTimeExpenses(program, getRelocationDate(settings))
-        const existing = new Set(
-          expenses
-            .filter((item) => item.frequency === 'once')
-            .map((item) => `${item.name}|${item.startDate}|${item.amount}`),
-        )
-        const toAdd = templates
-          .filter((item) => !existing.has(`${item.name}|${item.startDate}|${item.amount}`))
-          .map((item) => ({ ...item, id: createId() }))
-        if (toAdd.length > 0) {
-          set((state) => ({
-            expenses: [...state.expenses, ...toAdd],
-          }))
-        }
-        return toAdd.length
-      },
 
       exportSnapshot: (): BudgetPresetData => {
         const { settings, incomes, expenses, folders, incomeFolders } = get()

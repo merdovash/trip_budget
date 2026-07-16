@@ -55,7 +55,7 @@ export default function App() {
   return (
     <div className="flex h-screen flex-col overflow-hidden">
       <Header />
-      <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <Sidebar
           active={section}
           onChange={setSection}
@@ -63,7 +63,7 @@ export default function App() {
           onCollapsedChange={setSidebarCollapsed}
         />
         <main
-          className={`min-h-0 flex-1 overflow-y-auto p-4 transition-[margin] duration-200 md:p-6 ${
+          className={`min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-3 transition-[margin] duration-200 sm:p-4 md:p-6 ${
             sidebarCollapsed ? 'md:ml-14' : 'md:ml-56'
           }`}
         >

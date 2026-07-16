@@ -258,7 +258,7 @@ export function PresetsPanel() {
         </div>
 
         {saveMode === 'new' ? (
-          <form onSubmit={handleSaveNew} className="grid gap-3 md:grid-cols-2">
+          <form onSubmit={handleSaveNew} className="grid min-w-0 gap-3 [&>*]:min-w-0 md:grid-cols-2">
             <Field label="Название">
               <Input
                 value={name}

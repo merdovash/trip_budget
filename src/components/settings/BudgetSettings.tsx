@@ -29,10 +29,10 @@ function SettingsSection({
   children: ReactNode
 }) {
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-4">
+    <section className="min-w-0 rounded-xl border border-slate-200 bg-white p-3 sm:p-4">
       <h3 className="text-sm font-semibold text-slate-800">{title}</h3>
       {description && <p className="mt-1 text-xs text-slate-500">{description}</p>}
-      <div className="mt-4 grid gap-4 md:grid-cols-2">{children}</div>
+      <div className="mt-4 grid min-w-0 gap-4 [&>*]:min-w-0 md:grid-cols-2">{children}</div>
     </section>
   )
 }
@@ -97,16 +97,16 @@ export function BudgetSettingsPanel() {
           </Field>
         </SettingsSection>
 
-        <section className="rounded-xl border border-slate-200 bg-white p-4">
+        <section className="min-w-0 rounded-xl border border-slate-200 bg-white p-3 sm:p-4">
           <h3 className="text-sm font-semibold text-slate-800">Маршрут проживания</h3>
           <p className="mt-1 text-xs text-slate-500">
             Страны, налоговые режимы, даты и параметры режима (например, вычеты PIT в Таиланде).
           </p>
-          <div className="mt-4">
+          <div className="mt-4 min-w-0">
             <ResidenceRouteEditor settings={settings} onChange={setSettings} />
           </div>
 
-          <div className="mt-4 grid gap-4 md:grid-cols-2">
+          <div className="mt-4 grid min-w-0 gap-4 [&>*]:min-w-0 md:grid-cols-2">
             <Field label="Способ переезда">
               <Select
                 value={relocationMode}
@@ -144,7 +144,7 @@ export function BudgetSettingsPanel() {
                 </option>
               ))}
             </Select>
-            <p className="mt-1 text-xs text-slate-500">
+            <p className="mt-1 break-words text-xs text-slate-500">
               Дашборд и налоги считаются в базовой валюте. Конвертация — по официальным курсам
               ЦБ РФ (обновляются ежедневно).
             </p>
@@ -163,14 +163,14 @@ export function BudgetSettingsPanel() {
                 })
               }
             />
-            <p className="mt-1 text-xs text-slate-500">
+            <p className="mt-1 break-words text-xs text-slate-500">
               Одна ставка на все расчёты. К курсу ЦБ: расходы дороже на этот %, доходы — дешевле.
               При совпадении валют комиссия не применяется.
             </p>
           </Field>
 
           <Field label="Курсы валют ЦБ РФ">
-            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+            <div className="min-w-0 break-words rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
               {rateStatus === 'loading' && 'Загрузка курсов…'}
               {rateStatus === 'loaded' && rateDate && (
                 <>
@@ -200,7 +200,7 @@ export function BudgetSettingsPanel() {
             </Button>
           </Field>
 
-          <Field label="Начальные остатки">
+          <Field label="Начальные остатки" className="md:col-span-2">
             <InitialBalanceEditor settings={settings} onChange={setSettings} />
           </Field>
 

@@ -235,7 +235,7 @@ function IncomeForm({ initialItem, onSubmit, onCancel }: IncomeFormProps) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="min-w-0 space-y-4 [&>*]:min-w-0">
       <Field label="Категория" error={errors.categoryId}>
         <Select value={form.categoryId} onChange={(e) => handleCategoryChange(e.target.value)}>
           <option value="">— Выберите категорию —</option>
@@ -472,7 +472,7 @@ function IncomeForm({ initialItem, onSubmit, onCancel }: IncomeFormProps) {
             </div>
           )}
 
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="grid min-w-0 grid-cols-1 gap-3 [&>*]:min-w-0 sm:grid-cols-2">
             {categoryDef.showFrequency !== false ? (
               <Field label="Периодичность">
                 <Select
@@ -495,7 +495,7 @@ function IncomeForm({ initialItem, onSubmit, onCancel }: IncomeFormProps) {
             )}
           </div>
 
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="grid min-w-0 grid-cols-1 gap-3 [&>*]:min-w-0 sm:grid-cols-2">
             <Field label="Дата начала (период)" error={errors.startDate}>
               <DateInput
                 value={form.startDate}

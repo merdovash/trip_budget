@@ -94,28 +94,28 @@ export function ResidenceRouteEditor({ settings, onChange }: ResidenceRouteEdito
   }
 
   return (
-    <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+    <div className="min-w-0 space-y-3 rounded-xl border border-slate-200 bg-slate-50/60 p-3 sm:p-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
-        <div>
+        <div className="min-w-0 flex-1">
           <h3 className="text-sm font-semibold text-slate-800">Маршрут проживания</h3>
           <p className="mt-1 text-xs text-slate-500">
             Страна, налоговый режим и даты каждого периода. Налоги считаются по активной точке на
             каждую дату.
           </p>
         </div>
-        <Button type="button" onClick={addPoint}>
+        <Button type="button" className="shrink-0" onClick={addPoint}>
           Добавить точку
         </Button>
       </div>
 
-      <div className="space-y-3">
+      <div className="min-w-0 space-y-3">
         {route.map((point, index) => {
           const regimes = getCalculatorsByCountry(point.countryCode)
           const regime = getTaxCalculator(point.taxRegimeId)
           const paramSchema = getRegimeParamsSchema(point.countryCode, point.taxRegimeId)
           return (
-            <div key={point.id} className="space-y-2 rounded-lg border border-slate-200 bg-white p-3">
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            <div key={point.id} className="min-w-0 space-y-2 rounded-lg border border-slate-200 bg-white p-3">
+              <div className="grid min-w-0 gap-3 [&>*]:min-w-0 sm:grid-cols-2 lg:grid-cols-5">
                 <Field label={`Точка ${index + 1}: страна`}>
                   <Select
                     value={point.countryCode}
@@ -183,15 +183,15 @@ export function ResidenceRouteEditor({ settings, onChange }: ResidenceRouteEdito
                 </div>
               </div>
               {regime?.description && (
-                <p className="text-xs text-slate-500">{regime.description}</p>
+                <p className="break-words text-xs text-slate-500">{regime.description}</p>
               )}
               {paramSchema && (
-                <div className="border-t border-slate-100 pt-3">
+                <div className="min-w-0 border-t border-slate-100 pt-3">
                   <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
                     {paramSchema.title}
                   </h4>
                   {paramSchema.description && (
-                    <p className="mb-2 text-xs text-slate-500">{paramSchema.description}</p>
+                    <p className="mb-2 break-words text-xs text-slate-500">{paramSchema.description}</p>
                   )}
                   <RegimeParamsFields
                     fields={paramSchema.fields}

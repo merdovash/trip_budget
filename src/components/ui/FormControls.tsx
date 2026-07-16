@@ -16,7 +16,7 @@ interface FieldProps {
 
 export function Field({ label, children, error, className = '' }: FieldProps) {
   return (
-    <label className={`block space-y-1 ${className}`}>
+    <label className={`block min-w-0 max-w-full space-y-1 ${className}`}>
       <span className="text-sm font-medium text-slate-700">{label}</span>
       {children}
       {error && <span className="text-xs text-red-600">{error}</span>}
@@ -33,7 +33,7 @@ export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
       {...rest}
-      className={`rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 ${widthClass} ${className}`}
+      className={`min-w-0 max-w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 ${widthClass} ${className}`}
     />
   )
 }
@@ -87,7 +87,7 @@ export function DateInput({ value, onChange, className = '', ...rest }: DateInpu
       value={text}
       onChange={handleChange}
       onBlur={handleBlur}
-      className={`rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 ${widthClass} ${className}`}
+      className={`min-w-0 max-w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 ${widthClass} ${className}`}
     />
   )
 }
@@ -101,7 +101,7 @@ export function Select(props: SelectHTMLAttributes<HTMLSelectElement>) {
   return (
     <select
       {...rest}
-      className={`rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 ${widthClass} ${className}`}
+      className={`min-w-0 max-w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 ${widthClass} ${className}`}
     />
   )
 }
@@ -125,7 +125,7 @@ export function Button({
 
 export function Card({ children, className = '' }: { children: ReactNode; className?: string }) {
   return (
-    <div className={`rounded-xl border border-slate-200 bg-white p-5 shadow-sm ${className}`}>
+    <div className={`min-w-0 max-w-full rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5 ${className}`}>
       {children}
     </div>
   )

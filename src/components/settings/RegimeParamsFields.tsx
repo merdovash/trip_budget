@@ -12,7 +12,7 @@ export function RegimeParamsFields({ fields, values, onChange }: RegimeParamsFie
   if (fields.length === 0) return null
 
   return (
-    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+    <div className="grid min-w-0 gap-3 [&>*]:min-w-0 sm:grid-cols-2 lg:grid-cols-3">
       {fields.map((field) => (
         <Field
           key={field.id}
@@ -30,7 +30,7 @@ export function RegimeParamsFields({ fields, values, onChange }: RegimeParamsFie
             value={values?.[field.id] ?? 0}
             onChange={(e) => onChange(field.id, Number(e.target.value) || 0)}
           />
-          {field.hint && <p className="mt-1 text-[11px] text-slate-400">{field.hint}</p>}
+          {field.hint && <p className="mt-1 break-words text-[11px] text-slate-400">{field.hint}</p>}
         </Field>
       ))}
     </div>

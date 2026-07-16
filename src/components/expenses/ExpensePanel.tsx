@@ -384,7 +384,7 @@ function ExpenseForm({ initialItem, onSubmit, onCancel }: ExpenseFormProps) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="grid gap-3 md:grid-cols-2">
+    <form onSubmit={handleSubmit} className="grid min-w-0 gap-3 [&>*]:min-w-0 md:grid-cols-2">
       <Field label="Вид расхода" className="md:col-span-2">
         <Select value={form.kind} onChange={(e) => switchKind(e.target.value as ExpenseFormData['kind'])}>
           <option value="regular">Обычный</option>

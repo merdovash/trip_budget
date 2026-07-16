@@ -40,6 +40,12 @@ function TrashButton({ onClick }: { onClick: () => void }) {
   )
 }
 
+function entryRowClass(showRates: boolean) {
+  return showRates
+    ? 'flex flex-col gap-2 sm:grid sm:grid-cols-[5.5rem_minmax(0,1fr)_4.5rem_minmax(0,1.5fr)_2rem] sm:items-center'
+    : 'flex flex-col gap-2 sm:grid sm:grid-cols-[5.5rem_minmax(0,1fr)_minmax(0,1.5fr)_2rem] sm:items-center'
+}
+
 export function InitialBalanceEditor({ settings, onChange }: InitialBalanceEditorProps) {
   const entries = getInitialBalances(settings)
   const totalInBase = getInitialBalanceInBase(settings)
@@ -66,7 +72,7 @@ export function InitialBalanceEditor({ settings, onChange }: InitialBalanceEdito
   }
 
   return (
-    <div className="md:col-span-2 space-y-3">
+    <div className="min-w-0 space-y-3">
       <Field label="Дата начального остатка">
         <DateInput
           value={settings.initialBalanceDate ?? todayIsoDate()}
@@ -77,14 +83,14 @@ export function InitialBalanceEditor({ settings, onChange }: InitialBalanceEdito
         </p>
       </Field>
 
-      <div>
+      <div className="min-w-0">
         <p className="mb-2 text-sm font-medium text-slate-700">Суммы</p>
-        <div className="overflow-hidden rounded-lg border border-slate-200">
+        <div className="min-w-0 overflow-hidden rounded-lg border border-slate-200">
           <div
-            className={`grid gap-2 border-b border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-500 ${
+            className={`hidden gap-2 border-b border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-500 sm:grid ${
               showRates
-                ? 'grid-cols-[5.5rem_minmax(5rem,1fr)_4.5rem_minmax(6rem,1.5fr)_2rem]'
-                : 'grid-cols-[5.5rem_minmax(5rem,1fr)_minmax(6rem,1.5fr)_2rem]'
+                ? 'sm:grid-cols-[5.5rem_minmax(0,1fr)_4.5rem_minmax(0,1.5fr)_2rem]'
+                : 'sm:grid-cols-[5.5rem_minmax(0,1fr)_minmax(0,1.5fr)_2rem]'
             }`}
           >
             <span>Валюта</span>
@@ -100,52 +106,68 @@ export function InitialBalanceEditor({ settings, onChange }: InitialBalanceEdito
 
           <ul className="divide-y divide-slate-100">
             {entries.map((entry) => (
-              <li key={entry.id} className="px-3 py-2">
-                <div
-                  className={`grid items-center gap-2 ${
-                    showRates
-                      ? 'grid-cols-[5.5rem_minmax(5rem,1fr)_4.5rem_minmax(6rem,1.5fr)_2rem]'
-                      : 'grid-cols-[5.5rem_minmax(5rem,1fr)_minmax(6rem,1.5fr)_2rem]'
-                  }`}
-                >
-                  <CurrencySelect
-                    value={entry.currency}
-                    onChange={(currency) => updateEntry(entry.id, { currency })}
-                    className="w-full"
-                  />
-                  <Input
-                    type="number"
-                    min={0}
-                    step={0.01}
-                    placeholder="0"
-                    value={entry.amount || ''}
-                    onChange={(e) =>
-                      updateEntry(entry.id, { amount: Number(e.target.value) || 0 })
-                    }
-                  />
-                  {showRates && (
+              <li key={entry.id} className="min-w-0 px-3 py-3 sm:py-2">
+                <div className={entryRowClass(showRates)}>
+                  <div className="min-w-0">
+                    <span className="mb-1 block text-xs font-medium text-slate-500 sm:hidden">
+                      Валюта
+                    </span>
+                    <CurrencySelect
+                      value={entry.currency}
+                      onChange={(currency) => updateEntry(entry.id, { currency })}
+                      className="w-full"
+                    />
+                  </div>
+                  <div className="min-w-0">
+                    <span className="mb-1 block text-xs font-medium text-slate-500 sm:hidden">
+                      Сумма
+                    </span>
                     <Input
                       type="number"
                       min={0}
-                      max={100}
-                      step={0.1}
-                      value={entry.annualRate ?? defaultRate}
+                      step={0.01}
+                      placeholder="0"
+                      value={entry.amount || ''}
                       onChange={(e) =>
-                        updateEntry(entry.id, { annualRate: Number(e.target.value) || 0 })
+                        updateEntry(entry.id, { amount: Number(e.target.value) || 0 })
                       }
                     />
+                  </div>
+                  {showRates && (
+                    <div className="min-w-0">
+                      <span className="mb-1 block text-xs font-medium text-slate-500 sm:hidden">
+                        Ставка %
+                      </span>
+                      <Input
+                        type="number"
+                        min={0}
+                        max={100}
+                        step={0.1}
+                        value={entry.annualRate ?? defaultRate}
+                        onChange={(e) =>
+                          updateEntry(entry.id, { annualRate: Number(e.target.value) || 0 })
+                        }
+                      />
+                    </div>
                   )}
-                  <Input
-                    type="text"
-                    placeholder="Краткий комментарий"
-                    maxLength={80}
-                    value={entry.comment ?? ''}
-                    onChange={(e) => updateEntry(entry.id, { comment: e.target.value })}
-                  />
-                  <TrashButton onClick={() => removeEntry(entry.id)} />
+                  <div className="flex min-w-0 items-end gap-2 sm:contents">
+                    <div className="min-w-0 flex-1">
+                      <span className="mb-1 block text-xs font-medium text-slate-500 sm:hidden">
+                        Комментарий
+                      </span>
+                      <Input
+                        type="text"
+                        placeholder="Краткий комментарий"
+                        maxLength={80}
+                        value={entry.comment ?? ''}
+                        onChange={(e) => updateEntry(entry.id, { comment: e.target.value })}
+                      />
+                    </div>
+                    <TrashButton onClick={() => removeEntry(entry.id)} />
+                  </div>
                 </div>
                 {entry.amount > 0 && (
-                  <div className="mt-1">
+                  <div className="mt-1 min-w-0 break-words">
                     <CurrencyConversionHint
                       amount={entry.amount}
                       currency={entry.currency}
@@ -164,7 +186,7 @@ export function InitialBalanceEditor({ settings, onChange }: InitialBalanceEdito
             Добавить остаток
           </Button>
           {totalInBase > 0 && (
-            <p className="text-sm text-slate-600">
+            <p className="min-w-0 break-words text-sm text-slate-600">
               Итого в {settings.baseCurrency}:{' '}
               <span className="font-medium">
                 {formatCurrency(totalInBase, settings.baseCurrency)}

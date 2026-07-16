@@ -6,6 +6,12 @@ import { presetsApiPlugin } from './vite-plugin-presets-api'
 
 export default defineConfig({
   plugins: [react(), tailwindcss(), presetsApiPlugin()],
+  server: {
+    host: true,
+  },
+  preview: {
+    host: true,
+  },
   test: {
     globals: true,
     environment: 'node',

@@ -16,6 +16,7 @@ export type EmploymentCountryCode = (typeof EMPLOYMENT_COUNTRIES)[number]['code'
 
 /** Рекомендуемый налоговый режим при открытии ИП в стране проживания. */
 export const SOLE_PROPRIETOR_REGIME_BY_COUNTRY: Partial<Record<string, string>> = {
+  RU: 'ru-standard',
   GE: 'ge-small-business',
   ES: 'es-standard',
   TH: 'th-standard',

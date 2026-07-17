@@ -10,6 +10,7 @@ import {
   malaysiaStandard,
   mexicoStandard,
   portugalStandard,
+  russiaStandard,
   spainBeckham,
   spainEmployed,
   spainStandard,
@@ -22,6 +23,7 @@ import {
 } from './countries'
 
 export const TAX_CALCULATORS: TaxCalculator[] = [
+  russiaStandard,
   spainEmployed,
   spainStandard,
   spainBeckham,
@@ -44,6 +46,7 @@ export const TAX_CALCULATORS: TaxCalculator[] = [
 ]
 
 export const COUNTRY_LABELS: Record<string, string> = {
+  RU: 'Россия',
   ES: 'Испания',
   TH: 'Таиланд',
   MY: 'Малайзия',

@@ -8,10 +8,12 @@ import {
   thailandProperty3m,
   thailandStandard,
 } from './thailand'
+import { russiaStandard } from './russia'
 
 export { spainBeckham, spainEmployed, spainStandard }
 export { georgiaSmallBusiness, georgiaStandard, georgiaVirtualZone }
 export { thailandEmployed, thailandLtrInvestment, thailandProperty3m, thailandStandard }
+export { russiaStandard }
 
 function progressiveCalculator(
   id: string,

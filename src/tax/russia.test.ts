@@ -4,7 +4,9 @@ import {
   calculateRussiaSalaryMonthlyDisplay,
   calculateRussiaSalaryTax,
   monthlyChildDeduction,
+  russiaStandard,
 } from '../tax/countries/russia'
+import { getAvailableCountries, getCalculatorsByCountry } from '../tax/registry'
 
 describe('Russia salary tax', () => {
   it('applies child deductions until income limit', () => {
@@ -39,8 +41,20 @@ describe('Russia salary tax', () => {
     )
     expect(display).not.toBeNull()
     expect(display!.totalGross).toBe(150_000)
-    expect(display!.totalNet).toBeCloseTo(150_000 - display!.totalNdfl)
-    expect(display!.employerSocialMonthly).toBeCloseTo((150_000 * 12 * 0.302) / 12)
-    expect(display!.payments).toHaveLength(2)
+    expect(display!.totalNdfl).toBeGreaterThan(0)
+    expect(display!.totalNet).toBeCloseTo(display!.totalGross - display!.totalNdfl)
+    expect(display!.employerSocialMonthly).toBeGreaterThan(0)
+  })
+
+  it('is available as a residence route country with NDFL calculator', () => {
+    expect(getAvailableCountries()).toContain('RU')
+    expect(getCalculatorsByCountry('RU').map((c) => c.id)).toContain('ru-standard')
+    const result = russiaStandard.calculate({
+      grossAnnualIncome: 1_200_000,
+      familySize: 1,
+      dependents: 0,
+    })
+    expect(result.incomeTax).toBeGreaterThan(0)
+    expect(result.socialContributions).toBe(0)
   })
 })

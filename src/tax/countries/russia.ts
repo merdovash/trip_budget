@@ -1,5 +1,8 @@
 /** Россия: НДФЛ с зарплаты и страховые взносы работодателя (упрощённая модель 2025). */
 
+import type { TaxCalculator, TaxInput } from '../types'
+import { buildTaxResult } from '../types'
+
 export const RU_NDFL_RATE_STANDARD = 0.13
 export const RU_NDFL_RATE_HIGH = 0.15
 export const RU_NDFL_HIGH_INCOME_THRESHOLD = 5_000_000
@@ -165,4 +168,31 @@ export function calculateRussiaSalaryMonthlyDisplay(
     totalNet: totalGross - totalNdfl,
     employerSocialMonthly,
   }
+}
+
+/** Режим проживания в РФ: НДФЛ резидента (13%/15%) с учётом вычетов на детей. */
+export const russiaStandard: TaxCalculator = {
+  id: 'ru-standard',
+  countryCode: 'RU',
+  name: 'НДФЛ (резидент)',
+  description:
+    'Подоходный налог резидента РФ: 13% до 5 млн ₽ и 15% свыше (упрощённо), с вычетами на детей. Взносы работодателя — справочно, не удерживаются из дохода.',
+  taxDistribution: 'with_income',
+  calculate(input: TaxInput) {
+    const result = calculateRussiaSalaryTax(input.grossAnnualIncome, input.dependents)
+    return buildTaxResult(input.grossAnnualIncome, result.ndfl, 0, [
+      {
+        label: 'Вычеты на детей (стандартные)',
+        amount: result.childDeductionsAnnual,
+        kind: 'deduction',
+      },
+      { label: 'Налоговая база НДФЛ', amount: result.taxableBase, kind: 'base' },
+      { label: 'НДФЛ (13% / 15%)', amount: result.ndfl, kind: 'tax' },
+      {
+        label: 'Страховые взносы работодателя (информ.)',
+        amount: result.employerSocialContributions,
+        kind: 'info',
+      },
+    ])
+  },
 }

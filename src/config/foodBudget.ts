@@ -1,5 +1,6 @@
 /** Типовой месячный бюджет на питание на одного человека (умеренный уровень, дом + кафе). */
 const FOOD_BUDGET_PER_PERSON: Record<string, number> = {
+  RU: 12_000,
   ES: 280,
   PT: 260,
   CY: 300,
@@ -14,6 +15,7 @@ const FOOD_BUDGET_PER_PERSON: Record<string, number> = {
 
 /** Местная валюта страны проживания. */
 export const COUNTRY_LOCAL_CURRENCY: Record<string, string> = {
+  RU: 'RUB',
   ES: 'EUR',
   PT: 'EUR',
   CY: 'EUR',

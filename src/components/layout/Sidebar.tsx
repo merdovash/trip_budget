@@ -1,4 +1,5 @@
-import type { SVGProps } from 'react'
+import type { MouseEvent, SVGProps } from 'react'
+import { sectionToPath } from '../../lib/appRoutes'
 import type { AppSection } from '../../types/budget'
 
 type NavIcon = (props: SVGProps<SVGSVGElement>) => React.ReactElement
@@ -105,12 +106,19 @@ function NavButton({
   collapsed: boolean
   onChange: (section: AppSection) => void
 }) {
+  function handleClick(e: MouseEvent<HTMLAnchorElement>) {
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return
+    e.preventDefault()
+    onChange(id)
+  }
+
   return (
-    <button
-      type="button"
-      onClick={() => onChange(id)}
+    <a
+      href={sectionToPath(id)}
+      onClick={handleClick}
       title={collapsed ? label : undefined}
       aria-label={label}
+      aria-current={isActive ? 'page' : undefined}
       className={`flex items-center rounded-lg text-sm font-medium transition ${
         collapsed ? 'justify-center p-2.5 md:w-full' : 'gap-2.5 whitespace-nowrap px-3 py-2 text-left md:w-full'
       } ${
@@ -119,7 +127,7 @@ function NavButton({
     >
       <Icon className="h-5 w-5 shrink-0" aria-hidden />
       <span className={collapsed ? 'md:hidden' : undefined}>{label}</span>
-    </button>
+    </a>
   )
 }
 

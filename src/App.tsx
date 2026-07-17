@@ -9,6 +9,7 @@ import { ExpenseReportPanel } from './components/reports/ExpenseReportPanel'
 import { BudgetSettingsPanel } from './components/settings/BudgetSettings'
 import { ResidenceRoutePanel } from './components/settings/ResidenceRoutePanel'
 import { InitialBalancesPanel } from './components/settings/InitialBalancesPanel'
+import { useAppSection } from './lib/useAppSection'
 import { useExchangeRateStore } from './store/exchangeRateStore'
 import type { AppSection } from './types/budget'
 
@@ -36,7 +37,7 @@ function SectionContent({ section }: { section: AppSection }) {
 }
 
 export default function App() {
-  const [section, setSection] = useState<AppSection>('dashboard')
+  const [section, setSection] = useAppSection()
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     try {
       return localStorage.getItem(SIDEBAR_STORAGE_KEY) === '1'

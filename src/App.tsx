@@ -7,6 +7,8 @@ import { IncomePanel } from './components/income/IncomePanel'
 import { PresetsPanel } from './components/presets/PresetsPanel'
 import { ExpenseReportPanel } from './components/reports/ExpenseReportPanel'
 import { BudgetSettingsPanel } from './components/settings/BudgetSettings'
+import { ResidenceRoutePanel } from './components/settings/ResidenceRoutePanel'
+import { InitialBalancesPanel } from './components/settings/InitialBalancesPanel'
 import { useExchangeRateStore } from './store/exchangeRateStore'
 import type { AppSection } from './types/budget'
 
@@ -18,6 +20,10 @@ function SectionContent({ section }: { section: AppSection }) {
       return <Dashboard />
     case 'settings':
       return <BudgetSettingsPanel />
+    case 'route':
+      return <ResidenceRoutePanel />
+    case 'balances':
+      return <InitialBalancesPanel />
     case 'income':
       return <IncomePanel />
     case 'expenses':

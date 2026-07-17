@@ -1,22 +1,8 @@
 import { useBudgetStore } from '../../store/budgetStore'
 import { useExchangeRateStore } from '../../store/exchangeRateStore'
-import { getTaxCalculator } from '../../tax/registry'
 import { CURRENCIES, CURRENCY_LABELS, DEFAULT_SETTINGS } from '../../types/budget'
 import { Button, Card, Field, Input, Select } from '../ui/FormControls'
-import { ResidenceRouteEditor } from './ResidenceRouteEditor'
-import { InitialBalanceEditor } from './InitialBalanceEditor'
-import {
-  getRelocationMode,
-  RELOCATION_MODE_LABELS,
-  suggestTaxRegimeForMode,
-} from '../../config/relocationMode'
-import {
-  ensureExplicitResidenceRoute,
-  getResidenceRoute,
-  routeIncludesCountry,
-  syncLegacyFromRoute,
-} from '../../config/residenceRoute'
-import type { RelocationMode } from '../../types/budget'
+import { routeIncludesCountry } from '../../config/residenceRoute'
 import type { ReactNode } from 'react'
 
 function SettingsSection({
@@ -44,25 +30,7 @@ export function BudgetSettingsPanel() {
   const rateStatus = useExchangeRateStore((s) => s.status)
   const rateError = useExchangeRateStore((s) => s.error)
   const fetchRates = useExchangeRateStore((s) => s.fetchRates)
-  const relocationMode = getRelocationMode(settings)
-  const route = getResidenceRoute(settings)
-  const primaryRegime = getTaxCalculator(settings.taxRegimeId)
   const showThailandDependentsHint = routeIncludesCountry(settings, 'TH')
-
-  function handleRelocationModeChange(mode: RelocationMode) {
-    const routePoints = ensureExplicitResidenceRoute(settings)
-    const first = [...routePoints].sort((a, b) => a.startDate.localeCompare(b.startDate))[0]
-    const suggestedRegime = suggestTaxRegimeForMode(first.countryCode, mode, first.taxRegimeId)
-    const nextRoute = suggestedRegime
-      ? routePoints.map((point) =>
-          point.id === first.id ? { ...point, taxRegimeId: suggestedRegime } : point,
-        )
-      : routePoints
-    setSettings({
-      ...syncLegacyFromRoute(nextRoute),
-      relocationMode: mode,
-    })
-  }
 
   return (
     <Card>
@@ -97,41 +65,9 @@ export function BudgetSettingsPanel() {
           </Field>
         </SettingsSection>
 
-        <section className="min-w-0 rounded-xl border border-slate-200 bg-white p-3 sm:p-4">
-          <h3 className="text-sm font-semibold text-slate-800">Маршрут проживания</h3>
-          <p className="mt-1 text-xs text-slate-500">
-            Страны, налоговые режимы, даты и параметры режима (например, вычеты PIT в Таиланде).
-          </p>
-          <div className="mt-4 min-w-0">
-            <ResidenceRouteEditor settings={settings} onChange={setSettings} />
-          </div>
-
-          <div className="mt-4 grid min-w-0 gap-4 [&>*]:min-w-0 md:grid-cols-2">
-            <Field label="Способ переезда">
-              <Select
-                value={relocationMode}
-                onChange={(e) => handleRelocationModeChange(e.target.value as RelocationMode)}
-              >
-                {(Object.entries(RELOCATION_MODE_LABELS) as [RelocationMode, string][]).map(
-                  ([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ),
-                )}
-              </Select>
-              <p className="mt-1 text-xs text-slate-500">
-                {relocationMode === 'sole_proprietorship'
-                  ? 'Доход как ИП облагается в стране проживания. Подбирается режим для первой точки маршрута.'
-                  : 'Зарплата и страна выплаты указываются в разделе «Доходы»; налоги считаются у источника и по маршруту проживания.'}
-              </p>
-            </Field>
-          </div>
-        </section>
-
         <SettingsSection
           title="Параметры расчёта"
-          description="Валюта отчёта, комиссия конвертации, горизонт прогноза, начальный остаток и накопительный счёт."
+          description="Валюта отчёта, комиссия конвертации, курсы и горизонт прогноза."
         >
           <Field label="Базовая валюта">
             <Select
@@ -200,10 +136,6 @@ export function BudgetSettingsPanel() {
             </Button>
           </Field>
 
-          <Field label="Начальные остатки" className="md:col-span-2">
-            <InitialBalanceEditor settings={settings} onChange={setSettings} />
-          </Field>
-
           <Field label="Горизонт прогноза (мес.)">
             <Input
               type="number"
@@ -213,31 +145,8 @@ export function BudgetSettingsPanel() {
               onChange={(e) => setSettings({ horizonMonths: Number(e.target.value) })}
             />
           </Field>
-
-          <Field label="Накопительный счёт">
-            <Select
-              value={settings.parkBalanceOnSavingsAccount ? 'yes' : 'no'}
-              onChange={(e) =>
-                setSettings({ parkBalanceOnSavingsAccount: e.target.value === 'yes' })
-              }
-            >
-              <option value="no">Нет</option>
-              <option value="yes">Да</option>
-            </Select>
-            <p className="mt-1 text-xs text-slate-500">
-              Остатки по валютам из блока «Начальные остатки» учитываются на накопительных счетах;
-              ставка задаётся у каждой суммы. Проценты — в последний день месяца.
-            </p>
-          </Field>
         </SettingsSection>
       </div>
-
-      {primaryRegime && route.length === 1 && (
-        <div className="mt-4 rounded-lg bg-slate-50 p-4 text-sm text-slate-600">
-          <p className="font-medium text-slate-800">{primaryRegime.name}</p>
-          <p className="mt-1">{primaryRegime.description}</p>
-        </div>
-      )}
 
       <div className="mt-4">
         <Button

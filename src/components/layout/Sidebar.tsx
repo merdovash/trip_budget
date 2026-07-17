@@ -6,6 +6,8 @@ type NavIcon = (props: SVGProps<SVGSVGElement>) => React.ReactElement
 const NAV_ITEMS: { id: AppSection; label: string; Icon: NavIcon }[] = [
   { id: 'dashboard', label: 'Дашборд', Icon: ChartIcon },
   { id: 'settings', label: 'Настройки', Icon: SettingsIcon },
+  { id: 'route', label: 'Маршрут', Icon: RouteIcon },
+  { id: 'balances', label: 'Остатки', Icon: BalancesIcon },
   { id: 'income', label: 'Доходы', Icon: IncomeIcon },
   { id: 'expenses', label: 'Расходы', Icon: ExpenseIcon },
   { id: 'report', label: 'Сводный отчёт', Icon: ReportIcon },
@@ -142,6 +144,32 @@ function SettingsIcon(props: SVGProps<SVGSVGElement>) {
         strokeLinejoin="round"
         d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c.26.604.852.997 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"
       />
+    </svg>
+  )
+}
+
+function RouteIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" {...props}>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M12 21s7-4.5 7-10a7 7 0 1 0-14 0c0 5.5 7 10 7 10Z"
+      />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 11.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z" />
+    </svg>
+  )
+}
+
+function BalancesIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" {...props}>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M3 10h18M5 6h14a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1Z"
+      />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 14h.01" />
     </svg>
   )
 }

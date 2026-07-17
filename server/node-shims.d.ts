@@ -5,6 +5,7 @@ declare module 'node:fs' {
   export function mkdirSync(path: string, options?: { recursive?: boolean }): void
   export function copyFileSync(src: string, dest: string): void
   export function unlinkSync(path: string): void
+  export function appendFileSync(path: string, data: string, encoding?: 'utf-8'): void
   export function readdirSync(path: string): string[]
 }
 

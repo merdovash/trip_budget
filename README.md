@@ -35,6 +35,8 @@ npm run db:seed
 
 Без Docker укажите свой `DATABASE_URL` на доступный PostgreSQL и выполните migrate/seed.
 
+Ошибки API пишутся в `logs/server-error.log` (папка создаётся автоматически).
+
 3. Приложение:
 
 ```bash

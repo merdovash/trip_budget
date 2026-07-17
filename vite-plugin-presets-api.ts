@@ -1,6 +1,7 @@
 import type { Plugin } from 'vite'
 import { handleAuthApi } from './server/auth/api'
 import { loadEnvFile } from './server/db/pool'
+import { logServerError, publicErrorMessage } from './server/logger'
 import { handlePresetsApi } from './server/presetsApi'
 
 function apiMiddleware() {
@@ -13,6 +14,7 @@ function apiMiddleware() {
 
     const url = new URL(req.url, 'http://localhost')
     const pathname = url.pathname
+    const method = req.method ?? 'GET'
 
     loadEnvFile()
 
@@ -35,10 +37,11 @@ function apiMiddleware() {
         }
       })
       .catch((err: unknown) => {
-        console.error('[api]', err)
-        res.statusCode = 500
+        logServerError(`${method} ${pathname}`, err)
+        const { status, error } = publicErrorMessage(err)
+        res.statusCode = status
         res.setHeader('Content-Type', 'application/json; charset=utf-8')
-        res.end(JSON.stringify({ error: 'Внутренняя ошибка сервера' }))
+        res.end(JSON.stringify({ error }))
       })
   }
 }

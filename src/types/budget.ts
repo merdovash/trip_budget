@@ -64,6 +64,8 @@ export interface RecurringItem {
   folderId?: string
   /** Где осуществляется расход: страна заработка, проживания или другое. */
   expenseCountryScope?: ExpenseCountryScope
+  /** Периодический расход привязан к пункту маршрута — даты берутся с точки. */
+  routePointId?: string
   /** @deprecated используйте expenseCountryScope */
   expenseCountryCode?: string
 }

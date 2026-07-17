@@ -15,7 +15,8 @@ import { clonePresetData } from '../lib/presetsApi'
 import { snapshotsEqual } from '../lib/presetSnapshotCompare'
 import { migrateInitialBalances } from '../lib/initialBalance'
 import { createId } from '../lib/id'
-import { ensureExplicitResidenceRoute, syncLegacyFromRoute } from '../config/residenceRoute'
+import { syncExpensesToRoute, withRouteDates } from '../lib/expenseRouteBinding'
+import { ensureExplicitResidenceRoute, getResidenceRoute, syncLegacyFromRoute } from '../config/residenceRoute'
 import { isBuiltinExpenseCategory } from '../config/expenseCategories'
 
 export interface ActivePreset {
@@ -233,7 +234,11 @@ export const useBudgetStore = create<BudgetState>()(
         set((state) => {
           const merged = { ...state.settings, ...partial }
           if (partial.residenceRoute) {
-            return { settings: { ...merged, ...syncLegacyFromRoute(partial.residenceRoute) } }
+            const settings = { ...merged, ...syncLegacyFromRoute(partial.residenceRoute) }
+            return {
+              settings,
+              expenses: syncExpensesToRoute(state.expenses, settings.residenceRoute ?? []),
+            }
           }
           if (!merged.residenceRoute?.length) {
             return { settings: { ...merged, ...syncLegacyFromRoute(ensureExplicitResidenceRoute(merged)) } }
@@ -255,14 +260,25 @@ export const useBudgetStore = create<BudgetState>()(
         set((state) => ({ incomes: state.incomes.filter((i) => i.id !== id) })),
 
       addExpense: (item) =>
-        set((state) => ({
-          expenses: [...state.expenses, { ...item, id: createId() }],
-        })),
+        set((state) => {
+          const route = getResidenceRoute(state.settings)
+          const synced = withRouteDates(item, route)
+          return {
+            expenses: [...state.expenses, { ...synced, id: createId() }],
+          }
+        }),
 
       updateExpense: (id, item) =>
-        set((state) => ({
-          expenses: state.expenses.map((e) => (e.id === id ? { ...e, ...item } : e)),
-        })),
+        set((state) => {
+          const route = getResidenceRoute(state.settings)
+          return {
+            expenses: state.expenses.map((e) => {
+              if (e.id !== id) return e
+              const merged = { ...e, ...item }
+              return withRouteDates(merged, route)
+            }),
+          }
+        }),
 
       removeExpense: (id) =>
         set((state) => ({ expenses: state.expenses.filter((e) => e.id !== id) })),
@@ -427,15 +443,18 @@ export const useBudgetStore = create<BudgetState>()(
             id: createId(),
             folderId: remapIncomeFolderId(item.folderId),
           })),
-          expenses: [
-            ...data.expenses.map((item) => ({
-              ...item,
-              id: createId(),
-              folderId: remapFolderId(item.folderId),
-            })),
-            ...migratedLoans,
-            ...migratedOneTime,
-          ],
+          expenses: syncExpensesToRoute(
+            [
+              ...data.expenses.map((item) => ({
+                ...item,
+                id: createId(),
+                folderId: remapFolderId(item.folderId),
+              })),
+              ...migratedLoans,
+              ...migratedOneTime,
+            ],
+            getResidenceRoute(settings),
+          ),
           folders,
           incomeFolders,
           expenseCategories,

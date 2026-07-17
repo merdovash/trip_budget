@@ -45,6 +45,7 @@ const regularExpenseFormSchema = z.object({
   category: z.string().optional(),
   folderId: folderIdSchema,
   expenseCountryScope: expenseCountryScopeSchema,
+  routePointId: z.string().optional(),
   startDate: isoDateRequired,
   endDate: isoDateOptional,
 })

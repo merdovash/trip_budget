@@ -6,6 +6,7 @@ import {
   isLoanExpense,
   loanMonthlyPayment,
 } from '../../lib/loanAmortization'
+import { datesFromRoutePoint } from '../../lib/expenseRouteBinding'
 import { useExchangeRateStore } from '../../store/exchangeRateStore'
 import { expenseFormSchema, type ExpenseFormData } from '../../lib/validation'
 import { useBudgetStore } from '../../store/budgetStore'
@@ -14,6 +15,7 @@ import {
   LOAN_EXPENSE_CATEGORY,
   type BudgetSettings,
   type RecurringItem,
+  type ResidenceRoutePoint,
 } from '../../types/budget'
 import {
   FOOD_EXPENSE_CATEGORY,
@@ -26,6 +28,7 @@ import {
   getExpenseCountryScopeLabel,
   getExpenseCountryScopeOptions,
 } from '../../lib/expenseCountry'
+import { getResidenceRoute } from '../../config/residenceRoute'
 import { Button, Card, EmptyState, Field, Input, Select, DateInput } from '../ui/FormControls'
 import { CurrencySelect } from '../ui/CurrencySelect'
 import { CurrencyConversionHint } from '../ui/CurrencyConversionHint'
@@ -107,6 +110,13 @@ function currentScope(form: ExpenseFormData): ExpenseFormData['expenseCountrySco
   return form.expenseCountryScope
 }
 
+function formatRoutePointOption(point: ResidenceRoutePoint): string {
+  const country = COUNTRY_LABELS[point.countryCode] ?? point.countryCode
+  const start = formatDateDisplay(point.startDate)
+  const end = point.endDate === '9999-12-31' ? '…' : formatDateDisplay(point.endDate)
+  return `${country} · ${start}–${end}`
+}
+
 function expenseToFormData(item: RecurringItem, settings: BudgetSettings): ExpenseFormData {
   const expenseCountryScope = getExpenseCountryScope(item, settings)
   const folderId = item.folderId ?? ''
@@ -144,6 +154,7 @@ function expenseToFormData(item: RecurringItem, settings: BudgetSettings): Expen
     category: item.category ?? '',
     folderId,
     expenseCountryScope,
+    routePointId: item.routePointId ?? '',
     startDate: item.startDate,
     endDate: item.endDate ?? '',
   }
@@ -168,6 +179,7 @@ function formDataToExpense(data: ExpenseFormData): Omit<RecurringItem, 'id'> {
       startDate: data.startDate,
     }
   }
+  const routePointId = data.routePointId?.trim() || undefined
   return {
     expenseKind: 'regular',
     name: data.name,
@@ -178,6 +190,7 @@ function formDataToExpense(data: ExpenseFormData): Omit<RecurringItem, 'id'> {
     lifecycle: 'destination',
     folderId,
     expenseCountryScope: data.expenseCountryScope,
+    routePointId,
     startDate: data.startDate,
     endDate: data.endDate || undefined,
   }
@@ -193,6 +206,7 @@ function blankRegularForm(baseCurrency: string): Extract<ExpenseFormData, { kind
     category: '',
     folderId: '',
     expenseCountryScope: 'residence',
+    routePointId: '',
     startDate: todayIsoDate(),
     endDate: '',
   }
@@ -276,7 +290,8 @@ function expenseFrequencyLabel(item: RecurringItem) {
       ? `Разово · ${formatDateDisplay(item.startDate)}`
       : FREQUENCY_LABELS.once
   }
-  return FREQUENCY_LABELS[item.frequency]
+  const base = FREQUENCY_LABELS[item.frequency]
+  return item.routePointId ? `${base} · маршрут` : base
 }
 
 function expenseCategoryLabel(item: RecurringItem) {
@@ -427,6 +442,29 @@ function ExpenseForm({ initialItem, onSubmit, formId = 'expense-form' }: Expense
       ? `Типовой бюджет на ${settings.familySize} чел. в ${COUNTRY_LABELS[settings.countryCode] ?? settings.countryCode}`
       : null
 
+  const route = getResidenceRoute(settings)
+  const boundPoint =
+    form.kind === 'regular' && form.routePointId
+      ? route.find((point) => point.id === form.routePointId)
+      : undefined
+
+  function bindRoutePoint(routePointId: string) {
+    if (form.kind !== 'regular') return
+    if (!routePointId) {
+      setForm({ ...form, routePointId: '' })
+      return
+    }
+    const point = route.find((p) => p.id === routePointId)
+    if (!point) return
+    const dates = datesFromRoutePoint(point)
+    setForm({
+      ...form,
+      routePointId,
+      startDate: dates.startDate,
+      endDate: dates.endDate ?? '',
+    })
+  }
+
   function switchKind(kind: ExpenseFormData['kind']) {
     const scope = currentScope(form)
     const name = form.name
@@ -557,21 +595,52 @@ function ExpenseForm({ initialItem, onSubmit, formId = 'expense-form' }: Expense
             </Select>
           </Field>
           <ExpenseCategoryField
-            value={form.category}
+            value={form.category ?? ''}
             onChange={(category) => handleCategoryChange(category)}
           />
-          <Field label="Дата начала" error={errors.startDate}>
-            <DateInput
-              value={form.startDate}
-              onChange={(startDate) => setForm({ ...form, startDate })}
-            />
+          <Field label="Привязка к маршруту" className="md:col-span-2">
+            <Select
+              value={form.routePointId ?? ''}
+              onChange={(e) => bindRoutePoint(e.target.value)}
+            >
+              <option value="">Нет — даты вручную</option>
+              {route.map((point) => (
+                <option key={point.id} value={point.id}>
+                  {formatRoutePointOption(point)}
+                </option>
+              ))}
+            </Select>
+            <p className="mt-1 text-xs text-slate-500">
+              При привязке даты берутся с пункта маршрута и обновляются при его изменении.
+            </p>
           </Field>
-          <Field label="Дата окончания (опц.)" error={errors.endDate}>
-            <DateInput
-              value={form.endDate ?? ''}
-              onChange={(endDate) => setForm({ ...form, endDate })}
-            />
-          </Field>
+          {boundPoint ? (
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600 md:col-span-2">
+              <p className="font-medium text-slate-800">Даты из маршрута</p>
+              <p className="mt-1">
+                {formatDateDisplay(boundPoint.startDate)}
+                {' — '}
+                {boundPoint.endDate === '9999-12-31'
+                  ? 'без ограничения'
+                  : formatDateDisplay(boundPoint.endDate)}
+              </p>
+            </div>
+          ) : (
+            <>
+              <Field label="Дата начала" error={errors.startDate}>
+                <DateInput
+                  value={form.startDate}
+                  onChange={(startDate) => setForm({ ...form, startDate })}
+                />
+              </Field>
+              <Field label="Дата окончания (опц.)" error={errors.endDate}>
+                <DateInput
+                  value={form.endDate ?? ''}
+                  onChange={(endDate) => setForm({ ...form, endDate })}
+                />
+              </Field>
+            </>
+          )}
           <ExpenseFolderField
             value={form.folderId}
             onChange={(folderId) => setForm({ ...form, folderId })}
@@ -616,7 +685,7 @@ function ExpenseForm({ initialItem, onSubmit, formId = 'expense-form' }: Expense
             />
           </Field>
           <ExpenseCategoryField
-            value={form.category}
+            value={form.category ?? ''}
             onChange={(category) => handleCategoryChange(category)}
           />
           <ExpenseFolderField

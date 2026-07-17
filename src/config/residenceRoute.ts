@@ -1,14 +1,74 @@
 import type { BudgetSettings, ResidenceRoutePoint } from '../types/budget'
 import { getAvailableCountries, getCalculatorsByCountry } from '../tax/registry'
 
+const OPEN_END = '9999-12-31'
+
 function legacyRelocationDate(settings: BudgetSettings): string {
   return settings.relocationDate ?? settings.initialBalanceDate
 }
 
-/** Эффективный маршрут: явный residenceRoute или одна точка из legacy-настроек. */
+/** Сдвиг ISO-даты (YYYY-MM-DD) на N календарных дней. */
+export function shiftIsoDate(iso: string, days: number): string {
+  const date = new Date(`${iso}T12:00:00.000Z`)
+  date.setUTCDate(date.getUTCDate() + days)
+  return date.toISOString().slice(0, 10)
+}
+
+/** Порядок точек: по дате начала, затем по окончанию. */
+export function sortResidenceRoute(route: ResidenceRoutePoint[]): ResidenceRoutePoint[] {
+  return [...route].sort((a, b) => {
+    const byStart = a.startDate.localeCompare(b.startDate)
+    if (byStart !== 0) return byStart
+    return a.endDate.localeCompare(b.endDate)
+  })
+}
+
+function rangesOverlap(
+  a: Pick<ResidenceRoutePoint, 'startDate' | 'endDate'>,
+  b: Pick<ResidenceRoutePoint, 'startDate' | 'endDate'>,
+): boolean {
+  return a.startDate <= b.endDate && b.startDate <= a.endDate
+}
+
+/** Проверка одной точки относительно остальных (даты включительно, пересечения запрещены). */
+export function validateResidenceRoutePoint(
+  point: Pick<ResidenceRoutePoint, 'id' | 'startDate' | 'endDate'>,
+  route: ResidenceRoutePoint[],
+): string | null {
+  if (!point.startDate) return 'Укажите дату начала'
+  if (point.endDate < point.startDate) {
+    return 'Дата окончания не может быть раньше даты начала'
+  }
+  for (const other of route) {
+    if (other.id === point.id) continue
+    if (rangesOverlap(point, other)) {
+      return 'Период пересекается с другой точкой маршрута'
+    }
+  }
+  return null
+}
+
+export function validateResidenceRoute(route: ResidenceRoutePoint[]): string | null {
+  for (const point of route) {
+    if (point.endDate < point.startDate) {
+      return 'Дата окончания не может быть раньше даты начала'
+    }
+  }
+  const sorted = sortResidenceRoute(route)
+  for (let i = 1; i < sorted.length; i++) {
+    const prev = sorted[i - 1]!
+    const curr = sorted[i]!
+    if (rangesOverlap(prev, curr)) {
+      return 'Периоды точек маршрута пересекаются'
+    }
+  }
+  return null
+}
+
+/** Эффективный маршрут: явный residenceRoute или одна точка из legacy-настроек (по датам). */
 export function getResidenceRoute(settings: BudgetSettings): ResidenceRoutePoint[] {
   if (settings.residenceRoute && settings.residenceRoute.length > 0) {
-    return settings.residenceRoute
+    return sortResidenceRoute(settings.residenceRoute)
   }
   return [
     {
@@ -16,7 +76,7 @@ export function getResidenceRoute(settings: BudgetSettings): ResidenceRoutePoint
       countryCode: settings.countryCode,
       taxRegimeId: settings.taxRegimeId,
       startDate: legacyRelocationDate(settings),
-      endDate: '9999-12-31',
+      endDate: OPEN_END,
     },
   ]
 }
@@ -28,14 +88,14 @@ export function hasExplicitResidenceRoute(settings: BudgetSettings): boolean {
 /** Гарантирует явный маршрут (миграция с legacy countryCode + taxRegimeId). */
 export function ensureExplicitResidenceRoute(settings: BudgetSettings): ResidenceRoutePoint[] {
   if (hasExplicitResidenceRoute(settings)) {
-    return settings.residenceRoute!
+    return sortResidenceRoute(settings.residenceRoute!)
   }
   return [
     createResidenceRoutePoint({
       countryCode: settings.countryCode,
       taxRegimeId: settings.taxRegimeId,
       startDate: legacyRelocationDate(settings),
-      endDate: '9999-12-31',
+      endDate: OPEN_END,
     }),
   ]
 }
@@ -51,10 +111,7 @@ export function getPrimaryResidenceCountry(settings: BudgetSettings): string {
 /** Дата начала жизни за рубежом = старт первой точки маршрута. */
 export function getRouteStartDate(settings: BudgetSettings): string {
   const route = getResidenceRoute(settings)
-  return route.reduce(
-    (earliest, point) => (point.startDate < earliest ? point.startDate : earliest),
-    route[0].startDate,
-  )
+  return route[0]?.startDate ?? legacyRelocationDate(settings)
 }
 
 export function getResidenceOnDate(
@@ -101,12 +158,13 @@ export function settingsForResidencePoint(
 export function syncLegacyFromRoute(
   route: ResidenceRoutePoint[],
 ): Pick<BudgetSettings, 'countryCode' | 'taxRegimeId' | 'relocationDate' | 'residenceRoute'> {
-  const first = [...route].sort((a, b) => a.startDate.localeCompare(b.startDate))[0]
+  const sorted = sortResidenceRoute(route)
+  const first = sorted[0]
   return {
-    residenceRoute: route,
-    countryCode: first.countryCode,
-    taxRegimeId: first.taxRegimeId,
-    relocationDate: first.startDate,
+    residenceRoute: sorted,
+    countryCode: first?.countryCode ?? 'ES',
+    taxRegimeId: first?.taxRegimeId ?? 'es-employed',
+    relocationDate: first?.startDate ?? new Date().toISOString().slice(0, 10),
   }
 }
 
@@ -130,7 +188,7 @@ export function describeResidenceRoute(settings: BudgetSettings): string {
   const route = getResidenceRoute(settings)
   return route
     .map((p) => {
-      const end = p.endDate === '9999-12-31' ? '…' : p.endDate
+      const end = p.endDate === OPEN_END ? '…' : p.endDate
       return `${p.countryCode}: ${p.startDate}–${end}`
     })
     .join(' → ')

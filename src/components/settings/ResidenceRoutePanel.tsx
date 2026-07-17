@@ -11,7 +11,9 @@ import {
   createResidenceRoutePoint,
   ensureExplicitResidenceRoute,
   getResidenceRoute,
+  shiftIsoDate,
   syncLegacyFromRoute,
+  validateResidenceRoutePoint,
 } from '../../config/residenceRoute'
 import { getRegimeParamsSchema } from '../../config/regimeParams'
 import {
@@ -73,13 +75,18 @@ function blankPointForm(settings: {
 function RoutePointForm({
   formId,
   initial,
+  route,
+  editingId,
   onSubmit,
 }: {
   formId: string
   initial: PointFormState
+  route: ResidenceRoutePoint[]
+  editingId: string | null
   onSubmit: (form: PointFormState) => void
 }) {
   const [form, setForm] = useState(initial)
+  const [error, setError] = useState<string | null>(null)
   const countries = getAvailableCountries()
   const regimes = getCalculatorsByCountry(form.countryCode)
   const regime = getTaxCalculator(form.taxRegimeId)
@@ -97,7 +104,33 @@ function RoutePointForm({
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault()
-    if (!form.startDate) return
+    if (!form.startDate) {
+      setError('Укажите дату начала')
+      return
+    }
+    const candidate = formToPoint(form, editingId ?? '__new__')
+    // При создании открытый конец предыдущей точки закроется днём до старта — учитываем это в проверке.
+    let routeForCheck = route
+    if (!editingId) {
+      const openPoint = [...route]
+        .sort((a, b) => a.endDate.localeCompare(b.endDate))
+        .filter((p) => p.endDate === '9999-12-31')
+        .at(-1)
+      if (openPoint) {
+        const closedEnd = shiftIsoDate(form.startDate, -1)
+        if (closedEnd >= openPoint.startDate) {
+          routeForCheck = route.map((p) =>
+            p.id === openPoint.id ? { ...p, endDate: closedEnd } : p,
+          )
+        }
+      }
+    }
+    const overlapError = validateResidenceRoutePoint(candidate, routeForCheck)
+    if (overlapError) {
+      setError(overlapError)
+      return
+    }
+    setError(null)
     onSubmit(form)
   }
 
@@ -127,16 +160,27 @@ function RoutePointForm({
       <Field label="Дата начала">
         <DateInput
           value={form.startDate}
-          onChange={(startDate) => setForm({ ...form, startDate })}
+          onChange={(startDate) => {
+            setError(null)
+            setForm({ ...form, startDate })
+          }}
         />
       </Field>
       <Field label="Дата окончания">
         <DateInput
           value={form.endDate}
-          onChange={(endDate) => setForm({ ...form, endDate })}
+          onChange={(endDate) => {
+            setError(null)
+            setForm({ ...form, endDate })
+          }}
         />
         <p className="mt-1 text-[11px] text-slate-400">Пусто = без ограничения срока</p>
       </Field>
+      {error && (
+        <p className="text-xs text-red-600 md:col-span-2" role="alert">
+          {error}
+        </p>
+      )}
       {regime?.description && (
         <p className="break-words text-xs text-slate-500 md:col-span-2">{regime.description}</p>
       )}
@@ -212,13 +256,19 @@ export function ResidenceRoutePanel() {
     if (panelMode === 'edit' && editingId) {
       commit(base.map((point) => (point.id === editingId ? formToPoint(form, editingId) : point)))
     } else {
-      const last = [...base].sort((a, b) => a.endDate.localeCompare(b.endDate)).at(-1)
       const nextPoint = formToPoint(form)
-      const closed = base.map((point) =>
-        point.id === last?.id && point.endDate === '9999-12-31'
-          ? { ...point, endDate: form.startDate || point.endDate }
-          : point,
-      )
+      const openPoint = [...base]
+        .sort((a, b) => a.endDate.localeCompare(b.endDate))
+        .filter((p) => p.endDate === '9999-12-31')
+        .at(-1)
+      const closedEnd = shiftIsoDate(form.startDate, -1)
+      const closed = openPoint
+        ? base.map((point) =>
+            point.id === openPoint.id && closedEnd >= openPoint.startDate
+              ? { ...point, endDate: closedEnd }
+              : point,
+          )
+        : base
       commit([...closed, nextPoint])
     }
     closePanel()
@@ -226,9 +276,11 @@ export function ResidenceRoutePanel() {
 
   function handleRelocationModeChange(mode: RelocationMode) {
     const routePoints = ensureExplicitResidenceRoute(settings)
-    const first = [...routePoints].sort((a, b) => a.startDate.localeCompare(b.startDate))[0]
-    const suggestedRegime = suggestTaxRegimeForMode(first.countryCode, mode, first.taxRegimeId)
-    const nextRoute = suggestedRegime
+    const first = routePoints[0]
+    const suggestedRegime = first
+      ? suggestTaxRegimeForMode(first.countryCode, mode, first.taxRegimeId)
+      : undefined
+    const nextRoute = suggestedRegime && first
       ? routePoints.map((point) =>
           point.id === first.id ? { ...point, taxRegimeId: suggestedRegime } : point,
         )
@@ -241,12 +293,17 @@ export function ResidenceRoutePanel() {
 
   const createDefaults = (() => {
     const base = workingRoute()
-    const last = [...base].sort((a, b) => a.endDate.localeCompare(b.endDate)).at(-1)
-    const startDate = last
-      ? last.endDate === '9999-12-31'
-        ? last.startDate
-        : last.endDate
-      : settings.relocationDate ?? settings.initialBalanceDate
+    const last = base.at(-1)
+    let startDate = settings.relocationDate ?? settings.initialBalanceDate
+    if (last) {
+      if (last.endDate === '9999-12-31') {
+        const today = new Date().toISOString().slice(0, 10)
+        startDate =
+          today > last.startDate ? today : shiftIsoDate(last.startDate, 1)
+      } else {
+        startDate = shiftIsoDate(last.endDate, 1)
+      }
+    }
     return blankPointForm({
       countryCode: last?.countryCode ?? settings.countryCode,
       taxRegimeId: last?.taxRegimeId ?? settings.taxRegimeId,
@@ -393,6 +450,8 @@ export function ResidenceRoutePanel() {
           key={editingId ?? 'new'}
           formId={FORM_ID}
           initial={formInitial}
+          route={route}
+          editingId={editingId}
           onSubmit={handleSave}
         />
       </StackPanel>

@@ -122,6 +122,7 @@ export function createResidenceRoutePoint(
     taxRegimeId: partial?.taxRegimeId ?? regime?.id ?? 'es-employed',
     startDate: partial?.startDate ?? today,
     endDate: partial?.endDate ?? today,
+    ...(partial?.regimeParams ? { regimeParams: partial.regimeParams } : {}),
   }
 }
 

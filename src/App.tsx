@@ -10,6 +10,7 @@ import { BudgetSettingsPanel } from './components/settings/BudgetSettings'
 import { ResidenceRoutePanel } from './components/settings/ResidenceRoutePanel'
 import { InitialBalancesPanel } from './components/settings/InitialBalancesPanel'
 import { useAppSection } from './lib/useAppSection'
+import { useAuthStore } from './store/authStore'
 import { useExchangeRateStore } from './store/exchangeRateStore'
 import type { AppSection } from './types/budget'
 
@@ -46,10 +47,15 @@ export default function App() {
     }
   })
   const fetchRates = useExchangeRateStore((s) => s.fetchRates)
+  const initAuth = useAuthStore((s) => s.init)
 
   useEffect(() => {
     fetchRates()
   }, [fetchRates])
+
+  useEffect(() => {
+    void initAuth()
+  }, [initAuth])
 
   useEffect(() => {
     try {

@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { CreatePresetInput } from '../src/types/preset'
+import { getUserFromRequest } from './auth/session'
 import {
   createPreset,
   deletePreset,
@@ -18,48 +19,54 @@ function sendJson(res: ServerResponse, status: number, body: unknown): void {
 async function readJsonBody<T>(req: IncomingMessage): Promise<T> {
   let raw = ''
   for await (const chunk of req) {
-    raw += typeof chunk === 'string' ? chunk : Buffer.from(String(chunk)).toString('utf-8')
+    raw += typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf-8')
   }
-  return JSON.parse(raw) as T
+  return JSON.parse(raw || '{}') as T
 }
 
 export async function handlePresetsApi(
   req: IncomingMessage,
   res: ServerResponse,
   pathname: string,
-  searchParams: URLSearchParams,
 ): Promise<boolean> {
   const method = req.method ?? 'GET'
+  const user = await getUserFromRequest(req)
 
   if (pathname === '/api/presets' && method === 'GET') {
-    sendJson(res, 200, listPublicPresets())
+    sendJson(res, 200, await listPublicPresets())
     return true
   }
 
-  if (pathname === '/api/presets/mine' && method === 'POST') {
-    const body = await readJsonBody<{ refs?: Array<{ id: string; ownerToken: string }> }>(req)
-    sendJson(res, 200, listOwnedPresets(body.refs ?? []))
+  if (pathname === '/api/presets/mine' && method === 'GET') {
+    if (!user) {
+      sendJson(res, 401, { error: 'Требуется вход' })
+      return true
+    }
+    sendJson(res, 200, await listOwnedPresets(user.id))
     return true
   }
 
   if (pathname === '/api/presets' && method === 'POST') {
+    if (!user) {
+      sendJson(res, 401, { error: 'Требуется вход' })
+      return true
+    }
     const body = await readJsonBody<CreatePresetInput>(req)
     if (!body.name?.trim() || !body.data) {
       sendJson(res, 400, { error: 'Укажите название и данные набора' })
       return true
     }
-    const preset = createPreset(body)
+    const preset = await createPreset(user.id, body)
     sendJson(res, 201, preset)
     return true
   }
 
   const match = pathname.match(/^\/api\/presets\/([^/]+)$/)
   if (match) {
-    const id = decodeURIComponent(match[1])
-    const ownerToken = searchParams.get('ownerToken') ?? undefined
+    const id = decodeURIComponent(match[1]!)
 
     if (method === 'GET') {
-      const preset = getPresetById(id, ownerToken)
+      const preset = await getPresetById(id, user?.id)
       if (!preset) {
         sendJson(res, 404, { error: 'Набор не найден или доступ запрещён' })
         return true
@@ -69,18 +76,17 @@ export async function handlePresetsApi(
     }
 
     if (method === 'PUT') {
+      if (!user) {
+        sendJson(res, 401, { error: 'Требуется вход' })
+        return true
+      }
       const body = await readJsonBody<{
-        ownerToken: string
         name?: string
         description?: string
         isPrivate?: boolean
         data?: CreatePresetInput['data']
       }>(req)
-      if (!body.ownerToken) {
-        sendJson(res, 400, { error: 'Требуется ownerToken' })
-        return true
-      }
-      const updated = updatePreset(id, body.ownerToken, body)
+      const updated = await updatePreset(id, user.id, body)
       if (!updated) {
         sendJson(res, 404, { error: 'Набор не найден или доступ запрещён' })
         return true
@@ -90,12 +96,11 @@ export async function handlePresetsApi(
     }
 
     if (method === 'DELETE') {
-      const body = await readJsonBody<{ ownerToken: string }>(req)
-      if (!body.ownerToken) {
-        sendJson(res, 400, { error: 'Требуется ownerToken' })
+      if (!user) {
+        sendJson(res, 401, { error: 'Требуется вход' })
         return true
       }
-      const deleted = deletePreset(id, body.ownerToken)
+      const deleted = await deletePreset(id, user.id)
       if (!deleted) {
         sendJson(res, 404, { error: 'Набор не найден или доступ запрещён' })
         return true

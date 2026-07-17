@@ -8,7 +8,10 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "db:up": "docker compose up -d",
+    "db:migrate": "node ./node_modules/vite-node/vite-node.mjs server/db/migrate.ts",
+    "db:seed": "node ./node_modules/vite-node/vite-node.mjs server/db/seed.ts"
   },
   "dependencies": {
     "react": "^19.1.0",

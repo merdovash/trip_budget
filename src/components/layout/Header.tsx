@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { AuthControls } from './AuthControls'
 
 export function Header() {
   return (
@@ -10,7 +11,10 @@ export function Header() {
             Планирование доходов, расходов и налогов при переезде
           </p>
         </div>
-        <Disclaimer />
+        <div className="flex shrink-0 flex-wrap items-start justify-end gap-2">
+          <AuthControls />
+          <Disclaimer />
+        </div>
       </div>
     </header>
   )

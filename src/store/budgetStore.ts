@@ -22,7 +22,7 @@ import { isBuiltinExpenseCategory } from '../config/expenseCategories'
 export interface ActivePreset {
   id: string
   name: string
-  ownerToken?: string
+  ownerId?: string
 }
 
 interface BudgetState {
@@ -479,7 +479,7 @@ export const useBudgetStore = create<BudgetState>()(
         return !snapshotsEqual(get().exportSnapshot(), presetBaseline)
       },
 
-      canUpdateActivePreset: () => Boolean(get().activePreset?.ownerToken),
+      canUpdateActivePreset: () => Boolean(get().activePreset?.ownerId),
     }),
     {
       name: 'family-budget-storage',

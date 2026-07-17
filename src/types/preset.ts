@@ -34,7 +34,8 @@ export interface BudgetPreset {
   name: string
   description: string
   isPrivate: boolean
-  ownerToken: string
+  /** Владелец набора (пользователь БД). */
+  ownerId: string
   createdAt: string
   updatedAt: string
   data: BudgetPresetData
@@ -62,8 +63,7 @@ export interface CreatePresetInput {
   data: BudgetPresetData
 }
 
-export interface PresetOwnerRef {
+export interface AuthUser {
   id: string
-  ownerToken: string
-  name: string
+  email: string
 }

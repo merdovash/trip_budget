@@ -3,10 +3,7 @@ import type {
   BudgetPresetData,
   BudgetPresetSummary,
   CreatePresetInput,
-  PresetOwnerRef,
 } from '../types/preset'
-
-const OWNER_REFS_KEY = 'family-budget-preset-refs'
 
 async function parseError(response: Response): Promise<string> {
   try {
@@ -17,29 +14,25 @@ async function parseError(response: Response): Promise<string> {
   }
 }
 
+const jsonHeaders = { 'Content-Type': 'application/json' }
+
 export async function fetchPublicPresets(): Promise<BudgetPresetSummary[]> {
-  const response = await fetch('/api/presets')
+  const response = await fetch('/api/presets', { credentials: 'include' })
   if (!response.ok) throw new Error(await parseError(response))
   return response.json()
 }
 
-export async function fetchOwnedPresets(refs: PresetOwnerRef[]): Promise<BudgetPresetSummary[]> {
-  const response = await fetch('/api/presets/mine', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      refs: refs.map(({ id, ownerToken }) => ({ id, ownerToken })),
-    }),
+export async function fetchOwnedPresets(): Promise<BudgetPresetSummary[]> {
+  const response = await fetch('/api/presets/mine', { credentials: 'include' })
+  if (response.status === 401) return []
+  if (!response.ok) throw new Error(await parseError(response))
+  return response.json()
+}
+
+export async function fetchPreset(id: string): Promise<BudgetPreset> {
+  const response = await fetch(`/api/presets/${encodeURIComponent(id)}`, {
+    credentials: 'include',
   })
-  if (!response.ok) throw new Error(await parseError(response))
-  return response.json()
-}
-
-export async function fetchPreset(id: string, ownerToken?: string): Promise<BudgetPreset> {
-  const url = ownerToken
-    ? `/api/presets/${encodeURIComponent(id)}?ownerToken=${encodeURIComponent(ownerToken)}`
-    : `/api/presets/${encodeURIComponent(id)}`
-  const response = await fetch(url)
   if (!response.ok) throw new Error(await parseError(response))
   return response.json()
 }
@@ -47,7 +40,8 @@ export async function fetchPreset(id: string, ownerToken?: string): Promise<Budg
 export async function savePreset(input: CreatePresetInput): Promise<BudgetPreset> {
   const response = await fetch('/api/presets', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    headers: jsonHeaders,
     body: JSON.stringify(input),
   })
   if (!response.ok) throw new Error(await parseError(response))
@@ -56,57 +50,26 @@ export async function savePreset(input: CreatePresetInput): Promise<BudgetPreset
 
 export async function updateSavedPreset(
   id: string,
-  ownerToken: string,
   patch: Partial<CreatePresetInput>,
 ): Promise<BudgetPreset> {
   const response = await fetch(`/api/presets/${encodeURIComponent(id)}`, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ownerToken, ...patch }),
+    credentials: 'include',
+    headers: jsonHeaders,
+    body: JSON.stringify(patch),
   })
   if (!response.ok) throw new Error(await parseError(response))
   return response.json()
 }
 
-export async function deleteSavedPreset(id: string, ownerToken: string): Promise<void> {
+export async function deleteSavedPreset(id: string): Promise<void> {
   const response = await fetch(`/api/presets/${encodeURIComponent(id)}`, {
     method: 'DELETE',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ownerToken }),
+    credentials: 'include',
   })
   if (!response.ok && response.status !== 204) {
     throw new Error(await parseError(response))
   }
-}
-
-export function readOwnerRefs(): PresetOwnerRef[] {
-  try {
-    const raw = localStorage.getItem(OWNER_REFS_KEY)
-    if (!raw) return []
-    return JSON.parse(raw) as PresetOwnerRef[]
-  } catch {
-    return []
-  }
-}
-
-export function addOwnerRef(ref: PresetOwnerRef): void {
-  const refs = readOwnerRefs().filter((item) => item.id !== ref.id)
-  refs.unshift(ref)
-  localStorage.setItem(OWNER_REFS_KEY, JSON.stringify(refs))
-}
-
-export function updateOwnerRefName(id: string, name: string): void {
-  const refs = readOwnerRefs().map((item) => (item.id === id ? { ...item, name } : item))
-  localStorage.setItem(OWNER_REFS_KEY, JSON.stringify(refs))
-}
-
-export function removeOwnerRef(id: string): void {
-  const refs = readOwnerRefs().filter((item) => item.id !== id)
-  localStorage.setItem(OWNER_REFS_KEY, JSON.stringify(refs))
-}
-
-export function findOwnerToken(id: string): string | undefined {
-  return readOwnerRefs().find((item) => item.id === id)?.ownerToken
 }
 
 export function clonePresetData(data: BudgetPresetData): BudgetPresetData {

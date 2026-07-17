@@ -1,68 +1,84 @@
 # Схема хранения данных
 
-Приложение не использует SQL-СУБД. Данные лежат в JSON-файлах на сервере и в `localStorage` браузера. Типы — в `src/types/`.
+Рабочий бюджет живёт в `localStorage` браузера. **Пресеты и пользователи** — в **PostgreSQL**. Типы — в `src/types/`.
 
 ## Обзор хранилищ
 
 | Хранилище | Где | Ключ / путь | Содержимое |
 |-----------|-----|-------------|------------|
-| Пресеты (сервер) | файл | `data/presets.json` | массив `BudgetPreset[]` |
-| Сид пресетов | файл | `data/presets.seed.json` | копия для первичной инициализации |
+| Пресеты, пользователи, сессии | PostgreSQL | `DATABASE_URL` | таблицы `users`, `sessions`, `presets` |
+| Сид пресетов (файл) | `data/presets.seed.json` | импорт через `npm run db:seed` | публичные наборы |
 | Рабочий бюджет | `localStorage` | `family-budget-storage` | Zustand persist: настройки, доходы, расходы, папки, категории |
-| Ссылки на свои пресеты | `localStorage` | `family-budget-preset-refs` | `PresetOwnerRef[]` |
 | UI сайдбара | `localStorage` | ключ сворачивания меню | `'0'` / `'1'` |
 
 Курсы валют в памяти не персистятся (`exchangeRateStore`).
 
 ```mermaid
 flowchart TB
-  subgraph server [Сервер]
-    PF["data/presets.json\nBudgetPreset[]"]
+  subgraph db [PostgreSQL]
+    U[users]
+    S[sessions]
+    P[presets JSONB columns]
   end
   subgraph browser [Браузер localStorage]
     BS["family-budget-storage\nрабочий бюджет"]
-    OR["family-budget-preset-refs\nid + ownerToken"]
   end
   UI[UI] --> BS
-  UI -->|API /api/presets| PF
-  OR -->|ownerToken| PF
+  UI -->|API /api/presets + cookie| P
+  UI -->|API /api/auth| U
+  U --> S
+  U --> P
 ```
 
 ---
 
-## 1. Сервер: `data/presets.json`
+## 1. PostgreSQL
 
-Файл — JSON-массив пресетов. Код: `server/presetsStore.ts`. Путь можно переопределить через `PRESETS_FILE`.
+Подключение: переменная `DATABASE_URL` (см. `.env.example`). Локально: `docker compose up -d`, затем `npm run db:migrate` и `npm run db:seed`.
 
-Если файла нет, копируется `presets.seed.json`, иначе создаётся `[]`.
-
-### `BudgetPreset`
+### `users`
 
 | Поле | Тип | Описание |
 |------|-----|----------|
-| `id` | `string` (UUID) | Идентификатор |
-| `name` | `string` | Название |
-| `description` | `string` | Описание |
-| `isPrivate` | `boolean` | Приватный — не в публичном списке |
-| `ownerToken` | `string` (UUID) | Секрет владельца для update/delete |
-| `createdAt` | ISO datetime | Создание |
-| `updatedAt` | ISO datetime | Последнее изменение |
-| `data` | `BudgetPresetData` | Снимок бюджета |
+| `id` | UUID | PK |
+| `email` | TEXT UNIQUE | Email (нижний регистр) |
+| `password_hash` | TEXT | scrypt-хэш пароля |
+| `created_at` | TIMESTAMPTZ | Создание |
 
-### `BudgetPresetData` (поле `data`)
+### `sessions`
 
 | Поле | Тип | Описание |
 |------|-----|----------|
-| `settings` | `BudgetSettings` | Настройки расчёта |
-| `incomes` | `RecurringItem[]` | Доходы |
-| `expenses` | `RecurringItem[]` | Расходы (в т.ч. разовые и кредиты) |
-| `folders?` | `ExpenseFolder[]` | Папки расходов |
-| `incomeFolders?` | `ExpenseFolder[]` | Папки доходов |
-| `expenseCategories?` | `ExpenseCategory[]` | Пользовательские категории расходов |
-| `oneTimeExpenses` | `OneTimeExpense[]` | **deprecated** — пустой массив; разовые в `expenses` с `frequency: "once"` |
-| `loans?` | массив | **deprecated** — кредиты в `expenses` с `expenseKind: "loan"` |
+| `id` | UUID | PK |
+| `user_id` | UUID FK → users | Владелец сессии |
+| `token_hash` | TEXT UNIQUE | SHA-256 токена из cookie `session` |
+| `expires_at` | TIMESTAMPTZ | Срок действия |
 
-Публичный API отдаёт урезанный `BudgetPresetSummary` (метаданные + счётчики, без полного `data`).
+### `presets`
+
+Метаданные + **отдельные JSONB-колонки** (не один blob `data`):
+
+| Поле | Тип | Описание |
+|------|-----|----------|
+| `id` | UUID | PK |
+| `user_id` | UUID FK → users | Владелец |
+| `name` / `description` | TEXT | Название и описание |
+| `is_private` | BOOLEAN | Приватный — не в публичном списке |
+| `settings` | JSONB | `BudgetSettings` **без** `residenceRoute` / `initialBalances` |
+| `residence_route` | JSONB | `ResidenceRoutePoint[]` |
+| `initial_balances` | JSONB | `InitialBalanceEntry[]` |
+| `incomes` | JSONB | `RecurringItem[]` |
+| `expenses` | JSONB | `RecurringItem[]` |
+| `folders` | JSONB | `ExpenseFolder[]` |
+| `income_folders` | JSONB | `ExpenseFolder[]` |
+| `expense_categories` | JSONB | `ExpenseCategory[]` |
+| `created_at` / `updated_at` | TIMESTAMPTZ | Метки времени |
+
+На границе API колонки собираются в клиентский `BudgetPreset.data` (`server/presetPayload.ts`).
+
+Публичный список: `is_private = false`. «Мои»: `user_id` текущей сессии. Приватный чужой пресет — 404.
+
+Авторизация: `POST /api/auth/register|login|logout`, `GET /api/auth/me`. Cookie `session` (HttpOnly).
 
 ---
 
@@ -79,7 +95,7 @@ Zustand persist (`src/store/budgetStore.ts`). Сохраняется:
 | `incomeFolders` | `ExpenseFolder[]` |
 | `expenseCategories` | `ExpenseCategory[]` |
 | `oneTimeExpenses` | всегда `[]` |
-| `activePreset` | `{ id, name, ownerToken? } \| null` |
+| `activePreset` | `{ id, name, ownerId? } \| null` |
 
 `presetBaseline` (для «несохранённых изменений») в persist не входит.
 
@@ -101,9 +117,9 @@ Zustand persist (`src/store/budgetStore.ts`). Сохраняется:
 | `relocationProgramId?` | `string` | Программа переезда |
 | `relocationMode?` | `remote_employment` \| `sole_proprietorship` | Способ переезда |
 | `employmentCountryCode?` | `string` | **deprecated** — страна зарплаты в доходах |
-| `residenceRoute?` | `ResidenceRoutePoint[]` | Маршрут проживания |
+| `residenceRoute?` | `ResidenceRoutePoint[]` | Маршрут проживания (в БД — колонка `residence_route`) |
 | `horizonMonths` | `number` | Горизонт планирования, мес. |
-| `initialBalances?` | `InitialBalanceEntry[]` | Начальные остатки по валютам |
+| `initialBalances?` | `InitialBalanceEntry[]` | Начальные остатки (в БД — `initial_balances`) |
 | `initialBalance` | `number` | **deprecated** |
 | `initialBalanceCurrency` | `string` | **deprecated** |
 | `initialBalanceDate` | ISO date | Дата начального остатка |
@@ -154,78 +170,41 @@ Zustand persist (`src/store/budgetStore.ts`). Сохраняется:
 | `principal?` / `termMonths?` / `annualRate?` | `number` | Параметры кредита |
 | `folderId?` | `string` | Папка |
 | `expenseCountryScope?` | `employment` \| `residence` \| `other` | Страна расхода |
+| `routePointId?` | `string` | Привязка к пункту маршрута |
 | `expenseCountryCode?` | `string` | **deprecated** |
 
 `IncomePayment`: `{ label, amount, dayOfMonth? }`.
 
-### `ExpenseFolder`
+### `ExpenseFolder` / `ExpenseCategory`
 
-| Поле | Тип | Описание |
-|------|-----|----------|
-| `id` | `string` | ID |
-| `name` | `string` | Название |
-| `sortOrder?` | `number` | Порядок |
-| `excluded?` | `boolean` | Исключить из расчётов (папки расходов) |
+Как раньше: id, name, sortOrder; у папок расходов — `excluded?`.
 
-### `ExpenseCategory`
-
-| Поле | Тип | Описание |
-|------|-----|----------|
-| `id` | `string` | ID |
-| `name` | `string` | Название (помимо встроенных) |
-| `sortOrder?` | `number` | Порядок |
-
-Встроенные категории (`Жильё`, `Еда`, …) в JSON не хранятся — заданы в коде (`src/config/expenseCategories.ts`).
-
-### `ThailandDeductionSettings`
-
-Вычеты PIT Таиланда: `parentAllowances`, `lifeInsurance`, `healthInsurance`, `mortgageInterest`, `providentFund`, `rmfContribution`, `socialSecurityPaid` (числа, суммы в THB где применимо).
+Встроенные категории в JSON не хранятся — константы в коде.
 
 ### `OneTimeExpense` (legacy)
 
-`{ id, name, amount, currency, date, category?, expenseCountryScope? }` — при загрузке мигрирует в `expenses` с `frequency: "once"`.
+При загрузке мигрирует в `expenses` с `frequency: "once"`.
 
 ---
 
-## 4. Браузер: ссылки на пресеты (`family-budget-preset-refs`)
-
-Массив `PresetOwnerRef[]`:
-
-| Поле | Тип | Описание |
-|------|-----|----------|
-| `id` | `string` | ID пресета на сервере |
-| `ownerToken` | `string` | Секрет владельца |
-| `name` | `string` | Локальное имя для UI |
-
-Без `ownerToken` приватный пресет и обновление недоступны.
-
----
-
-## 5. Связи
+## 4. Связи
 
 ```mermaid
 erDiagram
-  BudgetPreset ||--|| BudgetPresetData : data
-  BudgetPresetData ||--|| BudgetSettings : settings
-  BudgetPresetData ||--o{ RecurringItem : incomes
-  BudgetPresetData ||--o{ RecurringItem : expenses
-  BudgetPresetData ||--o{ ExpenseFolder : folders
-  BudgetPresetData ||--o{ ExpenseFolder : incomeFolders
-  BudgetPresetData ||--o{ ExpenseCategory : expenseCategories
-  BudgetSettings ||--o{ ResidenceRoutePoint : residenceRoute
-  BudgetSettings ||--o{ InitialBalanceEntry : initialBalances
-  RecurringItem }o--o| ExpenseFolder : folderId
-  RecurringItem }o--o| ExpenseCategory : "category by name"
-  PresetOwnerRef }o--|| BudgetPreset : "id + ownerToken"
+  users ||--o{ sessions : has
+  users ||--o{ presets : owns
+  presets ||--|| settings_jsonb : settings
+  presets ||--o{ residence_route : residence_route
+  presets ||--o{ initial_balances : initial_balances
+  presets ||--o{ incomes : incomes
+  presets ||--o{ expenses : expenses
 ```
 
-- Расход/доход ссылается на папку по `folderId`.
-- Категория расхода — строковое `category` (имя); пользовательские имена живут в `expenseCategories`.
-- Рабочий бюджет и пресет — одна и та же форма `BudgetPresetData` (экспорт/импорт через `exportSnapshot` / `loadFromPreset`). Настройки отдельно не сохраняются — только в составе набора (пресета).
+Рабочий бюджет и пресет — одна форма `BudgetPresetData` (экспорт/импорт через `exportSnapshot` / `loadFromPreset`).
 
 ---
 
-## 6. Что не хранится
+## 5. Что не хранится
 
 - Результаты прогноза (`MonthlySnapshot` / `DailySnapshot`) — считаются на лету.
 - Курсы ЦБ — только в памяти сессии.

@@ -1,19 +1,16 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { COUNTRY_LABELS } from '../../tax/registry'
 import {
-  addOwnerRef,
   deleteSavedPreset,
   fetchOwnedPresets,
   fetchPreset,
   fetchPublicPresets,
-  findOwnerToken,
-  readOwnerRefs,
-  removeOwnerRef,
   savePreset,
   updateSavedPreset,
 } from '../../lib/presetsApi'
 import { formatDateTimeDisplay } from '../../lib/format'
 import type { BudgetPresetSummary } from '../../types/preset'
+import { useAuthStore } from '../../store/authStore'
 import { useBudgetStore } from '../../store/budgetStore'
 import { Button, Card, EmptyState, Field, Input, Select } from '../ui/FormControls'
 
@@ -21,6 +18,7 @@ type Tab = 'public' | 'mine'
 type SaveMode = 'new' | 'existing'
 
 export function PresetsPanel() {
+  const user = useAuthStore((s) => s.user)
   const exportSnapshot = useBudgetStore((s) => s.exportSnapshot)
   const loadFromPreset = useBudgetStore((s) => s.loadFromPreset)
   const activePreset = useBudgetStore((s) => s.activePreset)
@@ -44,40 +42,55 @@ export function PresetsPanel() {
   const [saving, setSaving] = useState(false)
   const [overwriteTargetId, setOverwriteTargetId] = useState('')
 
+  const ownedIds = new Set(ownedPresets.map((p) => p.id))
+  const canEditActive =
+    Boolean(user) &&
+    canUpdateActivePreset() &&
+    Boolean(activePreset?.ownerId && activePreset.ownerId === user?.id)
+
   const reload = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      const [publicList, ownedList] = await Promise.all([
-        fetchPublicPresets(),
-        fetchOwnedPresets(readOwnerRefs()),
-      ])
+      const publicList = await fetchPublicPresets()
       setPublicPresets(publicList)
-      setOwnedPresets(ownedList)
+      if (user) {
+        setOwnedPresets(await fetchOwnedPresets())
+      } else {
+        setOwnedPresets([])
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось загрузить наборы')
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [user])
 
   useEffect(() => {
-    reload()
+    void reload()
   }, [reload])
 
   useEffect(() => {
+    if (!user && tab === 'mine') setTab('public')
+  }, [user, tab])
+
+  useEffect(() => {
     if (overwriteTargetId) return
-    if (activePreset?.ownerToken && ownedPresets.some((p) => p.id === activePreset.id)) {
+    if (activePreset?.ownerId === user?.id && ownedPresets.some((p) => p.id === activePreset.id)) {
       setOverwriteTargetId(activePreset.id)
       return
     }
     if (ownedPresets.length > 0) {
-      setOverwriteTargetId(ownedPresets[0].id)
+      setOverwriteTargetId(ownedPresets[0]!.id)
     }
-  }, [activePreset, ownedPresets, overwriteTargetId])
+  }, [activePreset, ownedPresets, overwriteTargetId, user?.id])
 
   async function handleSaveNew(e: FormEvent) {
     e.preventDefault()
+    if (!user) {
+      setError('Войдите, чтобы сохранить набор')
+      return
+    }
     if (!name.trim()) return
     setSaving(true)
     setError(null)
@@ -88,11 +101,10 @@ export function PresetsPanel() {
         isPrivate,
         data: exportSnapshot(),
       })
-      addOwnerRef({ id: preset.id, ownerToken: preset.ownerToken, name: preset.name })
       setActivePreset({
         id: preset.id,
         name: preset.name,
-        ownerToken: preset.ownerToken,
+        ownerId: preset.ownerId,
       })
       markPresetSaved()
       setName('')
@@ -108,10 +120,13 @@ export function PresetsPanel() {
   }
 
   async function handleOverwriteExisting(targetId?: string) {
+    if (!user) {
+      setError('Войдите, чтобы обновить набор')
+      return
+    }
     const id = targetId ?? overwriteTargetId
     const target = ownedPresets.find((p) => p.id === id)
-    const ownerToken = findOwnerToken(id)
-    if (!target || !ownerToken) return
+    if (!target) return
 
     if (
       !confirm(
@@ -124,8 +139,8 @@ export function PresetsPanel() {
     setSaving(true)
     setError(null)
     try {
-      await updateSavedPreset(id, ownerToken, { data: exportSnapshot() })
-      setActivePreset({ id, name: target.name, ownerToken })
+      const updated = await updateSavedPreset(id, { data: exportSnapshot() })
+      setActivePreset({ id, name: target.name, ownerId: updated.ownerId })
       markPresetSaved()
       await reload()
       setTab('mine')
@@ -137,7 +152,7 @@ export function PresetsPanel() {
   }
 
   async function handleSaveToActivePreset() {
-    if (!activePreset?.ownerToken) return
+    if (!activePreset || !canEditActive) return
     await handleOverwriteExisting(activePreset.id)
   }
 
@@ -145,15 +160,14 @@ export function PresetsPanel() {
     setActionId(preset.id)
     setError(null)
     try {
-      const ownerToken = findOwnerToken(preset.id)
-      const full = await fetchPreset(preset.id, ownerToken)
+      const full = await fetchPreset(preset.id)
       if (!confirm(`Загрузить набор «${full.name}»? Текущие данные будут заменены.`)) {
         return
       }
       loadFromPreset(full.data, {
         id: full.id,
         name: full.name,
-        ownerToken,
+        ownerId: full.ownerId === user?.id ? full.ownerId : undefined,
       })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось загрузить набор')
@@ -163,12 +177,11 @@ export function PresetsPanel() {
   }
 
   async function handleTogglePrivacy(preset: BudgetPresetSummary) {
-    const ownerToken = findOwnerToken(preset.id)
-    if (!ownerToken) return
+    if (!ownedIds.has(preset.id)) return
     setActionId(preset.id)
     setError(null)
     try {
-      await updateSavedPreset(preset.id, ownerToken, { isPrivate: !preset.isPrivate })
+      await updateSavedPreset(preset.id, { isPrivate: !preset.isPrivate })
       await reload()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось обновить набор')
@@ -178,14 +191,12 @@ export function PresetsPanel() {
   }
 
   async function handleDelete(preset: BudgetPresetSummary) {
-    const ownerToken = findOwnerToken(preset.id)
-    if (!ownerToken) return
+    if (!ownedIds.has(preset.id)) return
     if (!confirm(`Удалить набор «${preset.name}»?`)) return
     setActionId(preset.id)
     setError(null)
     try {
-      await deleteSavedPreset(preset.id, ownerToken)
-      removeOwnerRef(preset.id)
+      await deleteSavedPreset(preset.id)
       if (activePreset?.id === preset.id) {
         clearActivePreset()
       }
@@ -220,7 +231,7 @@ export function PresetsPanel() {
             набор или как новую конфигурацию.
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
-            {canUpdateActivePreset() && (
+            {canEditActive && (
               <Button type="button" disabled={saving || !unsaved} onClick={handleSaveToActivePreset}>
                 Сохранить в «{activePreset.name}»
               </Button>
@@ -229,10 +240,9 @@ export function PresetsPanel() {
               Отвязать набор
             </Button>
           </div>
-          {!canUpdateActivePreset() && (
+          {!canEditActive && (
             <p className="mt-2 text-xs opacity-80">
-              Это чужой или публичный набор без ключа доступа — перезаписать нельзя, только
-              сохранить копию как новый.
+              Это чужой или публичный набор — перезаписать можно только свои после входа.
             </p>
           )}
         </div>
@@ -240,92 +250,101 @@ export function PresetsPanel() {
 
       <Card>
         <h2 className="mb-4 text-lg font-semibold">Сохранить текущие данные</h2>
-        <div className="mb-4 flex gap-2">
-          <Button
-            type="button"
-            variant={saveMode === 'new' ? 'primary' : 'secondary'}
-            onClick={() => setSaveMode('new')}
-          >
-            Новая конфигурация
-          </Button>
-          <Button
-            type="button"
-            variant={saveMode === 'existing' ? 'primary' : 'secondary'}
-            onClick={() => setSaveMode('existing')}
-          >
-            В существующий набор
-          </Button>
-        </div>
-
-        {saveMode === 'new' ? (
-          <form onSubmit={handleSaveNew} className="grid min-w-0 gap-3 [&>*]:min-w-0 md:grid-cols-2">
-            <Field label="Название">
-              <Input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Например: Семья в Барселоне"
-                required
-              />
-            </Field>
-            <Field label="Описание">
-              <Input
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Кратко о составе набора"
-              />
-            </Field>
-            <label className="flex items-center gap-2 text-sm text-slate-700 md:col-span-2">
-              <input
-                type="checkbox"
-                checked={isPrivate}
-                onChange={(e) => setIsPrivate(e.target.checked)}
-                className="rounded border-slate-300"
-              />
-              Приватный набор (не показывать в публичном каталоге)
-            </label>
-            <p className="text-xs text-slate-500 md:col-span-2">
-              Создаётся новый набор; существующие не изменяются.
-            </p>
-            <div className="md:col-span-2">
-              <Button type="submit" disabled={saving || !name.trim()}>
-                {saving ? 'Сохранение…' : 'Сохранить как новый набор'}
-              </Button>
-            </div>
-          </form>
-        ) : ownedPresets.length === 0 ? (
+        {!user ? (
           <EmptyState
-            title="Нет ваших наборов для перезаписи"
-            description="Сначала сохраните конфигурацию как новый набор или загрузите свой сохранённый ранее."
+            title="Нужен вход"
+            description="Войдите или зарегистрируйтесь, чтобы сохранять персональные наборы."
           />
         ) : (
-          <div className="grid gap-3 md:max-w-lg">
-            <Field label="Набор для перезаписи">
-              <Select
-                value={overwriteTargetId}
-                onChange={(e) => setOverwriteTargetId(e.target.value)}
+          <>
+            <div className="mb-4 flex gap-2">
+              <Button
+                type="button"
+                variant={saveMode === 'new' ? 'primary' : 'secondary'}
+                onClick={() => setSaveMode('new')}
               >
-                {ownedPresets.map((preset) => (
-                  <option key={preset.id} value={preset.id}>
-                    {preset.name}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            {overwriteTarget && (
-              <p className="text-xs text-slate-500">
-                Будет заменено: {overwriteTarget.incomeCount} доходов,{' '}
-                {overwriteTarget.expenseCount} расходов · обновлён{' '}
-                {formatDateTimeDisplay(overwriteTarget.updatedAt)}
-              </p>
+                Новая конфигурация
+              </Button>
+              <Button
+                type="button"
+                variant={saveMode === 'existing' ? 'primary' : 'secondary'}
+                onClick={() => setSaveMode('existing')}
+              >
+                В существующий набор
+              </Button>
+            </div>
+
+            {saveMode === 'new' ? (
+              <form onSubmit={handleSaveNew} className="grid min-w-0 gap-3 [&>*]:min-w-0 md:grid-cols-2">
+                <Field label="Название">
+                  <Input
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Например: Семья в Барселоне"
+                    required
+                  />
+                </Field>
+                <Field label="Описание">
+                  <Input
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="Кратко о составе набора"
+                  />
+                </Field>
+                <label className="flex items-center gap-2 text-sm text-slate-700 md:col-span-2">
+                  <input
+                    type="checkbox"
+                    checked={isPrivate}
+                    onChange={(e) => setIsPrivate(e.target.checked)}
+                    className="rounded border-slate-300"
+                  />
+                  Приватный набор (не показывать в публичном каталоге)
+                </label>
+                <p className="text-xs text-slate-500 md:col-span-2">
+                  Создаётся новый набор; существующие не изменяются.
+                </p>
+                <div className="md:col-span-2">
+                  <Button type="submit" disabled={saving || !name.trim()}>
+                    {saving ? 'Сохранение…' : 'Сохранить как новый набор'}
+                  </Button>
+                </div>
+              </form>
+            ) : ownedPresets.length === 0 ? (
+              <EmptyState
+                title="Нет ваших наборов для перезаписи"
+                description="Сначала сохраните конфигурацию как новый набор."
+              />
+            ) : (
+              <div className="grid gap-3 md:max-w-lg">
+                <Field label="Набор для перезаписи">
+                  <Select
+                    value={overwriteTargetId}
+                    onChange={(e) => setOverwriteTargetId(e.target.value)}
+                  >
+                    {ownedPresets.map((preset) => (
+                      <option key={preset.id} value={preset.id}>
+                        {preset.name}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+                {overwriteTarget && (
+                  <p className="text-xs text-slate-500">
+                    Будет заменено: {overwriteTarget.incomeCount} доходов,{' '}
+                    {overwriteTarget.expenseCount} расходов · обновлён{' '}
+                    {formatDateTimeDisplay(overwriteTarget.updatedAt)}
+                  </p>
+                )}
+                <Button
+                  type="button"
+                  disabled={saving || !overwriteTargetId}
+                  onClick={() => handleOverwriteExisting()}
+                >
+                  {saving ? 'Сохранение…' : 'Сохранить в выбранный набор'}
+                </Button>
+              </div>
             )}
-            <Button
-              type="button"
-              disabled={saving || !overwriteTargetId}
-              onClick={() => handleOverwriteExisting()}
-            >
-              {saving ? 'Сохранение…' : 'Сохранить в выбранный набор'}
-            </Button>
-          </div>
+          </>
         )}
       </Card>
 
@@ -344,6 +363,8 @@ export function PresetsPanel() {
               type="button"
               variant={tab === 'mine' ? 'primary' : 'secondary'}
               onClick={() => setTab('mine')}
+              disabled={!user}
+              title={user ? undefined : 'Войдите, чтобы увидеть свои наборы'}
             >
               Мои
             </Button>
@@ -364,7 +385,7 @@ export function PresetsPanel() {
             description={
               tab === 'public'
                 ? 'Сохраните свой набор или дождитесь появления примеров от других пользователей.'
-                : 'Сохраните текущий бюджет — он появится здесь вместе с ключом доступа.'
+                : 'Сохраните текущий бюджет — он появится здесь.'
             }
           />
         ) : (
@@ -373,7 +394,7 @@ export function PresetsPanel() {
               <PresetCard
                 key={preset.id}
                 preset={preset}
-                isMine={Boolean(findOwnerToken(preset.id))}
+                isMine={ownedIds.has(preset.id)}
                 isActive={activePreset?.id === preset.id}
                 hasUnsaved={activePreset?.id === preset.id && unsaved}
                 busy={actionId === preset.id}

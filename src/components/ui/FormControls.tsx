@@ -1,8 +1,16 @@
-import type { InputHTMLAttributes, ButtonHTMLAttributes, SelectHTMLAttributes, ReactNode, ChangeEvent } from 'react'
-import { useEffect, useState } from 'react'
+import type {
+  InputHTMLAttributes,
+  ButtonHTMLAttributes,
+  SelectHTMLAttributes,
+  ReactNode,
+  ChangeEvent,
+  MouseEvent,
+} from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import {
   DATE_RU_PLACEHOLDER,
   formatIsoToRu,
+  isValidIsoDate,
   maskRuDateInput,
   parseRuToIso,
 } from '../../lib/format'
@@ -43,8 +51,11 @@ interface DateInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'va
   onChange: (iso: string) => void
 }
 
-export function DateInput({ value, onChange, className = '', ...rest }: DateInputProps) {
+export function DateInput({ value, onChange, className = '', id, disabled, ...rest }: DateInputProps) {
+  const autoId = useId()
+  const inputId = id ?? autoId
   const [text, setText] = useState(() => formatIsoToRu(value))
+  const pickerRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     setText(value ? formatIsoToRu(value) : '')
@@ -71,24 +82,84 @@ export function DateInput({ value, onChange, className = '', ...rest }: DateInpu
     setText(value ? formatIsoToRu(value) : '')
   }
 
+  function handlePickerChange(e: ChangeEvent<HTMLInputElement>) {
+    const iso = e.target.value
+    onChange(iso)
+    setText(iso ? formatIsoToRu(iso) : '')
+  }
+
+  function openPicker(e: MouseEvent) {
+    e.preventDefault()
+    e.stopPropagation()
+    const el = pickerRef.current
+    if (!el || disabled) return
+    try {
+      if (typeof el.showPicker === 'function') {
+        el.showPicker()
+        return
+      }
+    } catch {
+      /* fall through to click() */
+    }
+    el.click()
+  }
+
   const widthClass =
     className.includes('w-') || className.includes('flex-1') || className.includes('flex-')
       ? ''
       : 'w-full'
 
+  const pickerValue = value && isValidIsoDate(value) ? value : ''
+
   return (
-    <input
-      {...rest}
-      type="text"
-      inputMode="numeric"
-      autoComplete="off"
-      placeholder={DATE_RU_PLACEHOLDER}
-      maxLength={10}
-      value={text}
-      onChange={handleChange}
-      onBlur={handleBlur}
-      className={`min-w-0 max-w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 ${widthClass} ${className}`}
-    />
+    <div className={`relative flex min-w-0 items-stretch ${widthClass}`}>
+      <input
+        {...rest}
+        id={inputId}
+        type="text"
+        inputMode="numeric"
+        autoComplete="off"
+        placeholder={DATE_RU_PLACEHOLDER}
+        maxLength={10}
+        value={text}
+        disabled={disabled}
+        onChange={handleChange}
+        onBlur={handleBlur}
+        className="min-w-0 flex-1 rounded-l-lg border border-r-0 border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-50"
+      />
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={openPicker}
+        title="Выбрать дату"
+        aria-label="Выбрать дату"
+        className="inline-flex shrink-0 items-center justify-center rounded-r-lg border border-slate-300 bg-white px-2.5 text-slate-500 hover:bg-slate-50 hover:text-slate-700 disabled:opacity-50"
+      >
+        <CalendarIcon className="h-4 w-4" />
+      </button>
+      <input
+        ref={pickerRef}
+        type="date"
+        value={pickerValue}
+        disabled={disabled}
+        tabIndex={-1}
+        aria-hidden
+        onChange={handlePickerChange}
+        className="pointer-events-none absolute h-0 w-0 opacity-0"
+      />
+    </div>
+  )
+}
+
+function CalendarIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className={className} aria-hidden>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M8 2v3M16 2v3M4 9h16M6 5h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z"
+      />
+    </svg>
   )
 }
 

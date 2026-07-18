@@ -1,6 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { getPool } from '../db/pool'
-import { newId } from '../db/mysqlClient'
 import { hashPassword, verifyPassword } from './password'
 import {
   clearSessionCookie,
@@ -18,12 +17,10 @@ function sendJson(res: ServerResponse, status: number, body: unknown): void {
 }
 
 async function readJsonBody<T>(req: IncomingMessage): Promise<T> {
-  const chunks: Uint8Array[] = []
+  let raw = ''
   for await (const chunk of req) {
-    chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk)
+    raw += typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf-8')
   }
-  // Node Buffer#toString() defaults to utf8; avoid encoding arg (Uint8Array overload clash).
-  const raw = Buffer.concat(chunks).toString()
   return JSON.parse(raw || '{}') as T
 }
 
@@ -72,14 +69,14 @@ export async function handleAuthApi(
     }
 
     const passwordHash = hashPassword(password)
-    const userId = newId()
-    await pool.query(
-      `INSERT INTO users (id, email, password_hash) VALUES ($1, $2, $3)`,
-      [userId, email, passwordHash],
+    const inserted = await pool.query<{ id: string; email: string }>(
+      `INSERT INTO users (email, password_hash) VALUES ($1, $2) RETURNING id, email`,
+      [email, passwordHash],
     )
-    const token = await createSession(userId)
+    const user = inserted.rows[0]!
+    const token = await createSession(String(user.id))
     setSessionCookie(res, token)
-    sendJson(res, 201, { user: { id: userId, email } })
+    sendJson(res, 201, { user: { id: String(user.id), email: String(user.email) } })
     return true
   }
 

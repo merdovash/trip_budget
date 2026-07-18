@@ -4,7 +4,6 @@ import { fileURLToPath } from 'node:url'
 import type { BudgetPreset } from '../../src/types/preset'
 import { hashPassword } from '../auth/password'
 import { getPool, loadEnvFile } from './pool'
-import { newId } from './mysqlClient'
 import { migrate } from './migrate'
 import { replacePresetChildren } from '../presetChildren'
 import { splitPresetData } from '../presetPayload'
@@ -25,12 +24,6 @@ function readSeedPresets(): BudgetPreset[] {
   return raw.filter((preset) => !preset.isPrivate)
 }
 
-function toMysqlDateTime(iso: string): string {
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return iso.slice(0, 19).replace('T', ' ')
-  return d.toISOString().slice(0, 23).replace('T', ' ')
-}
-
 async function ensureSeedUser(): Promise<string> {
   const pool = getPool()
   const existing = await pool.query<{ id: string }>(
@@ -39,12 +32,11 @@ async function ensureSeedUser(): Promise<string> {
   )
   if (existing.rows[0]) return String(existing.rows[0].id)
 
-  const id = newId()
-  await pool.query(
-    `INSERT INTO users (id, email, password_hash) VALUES ($1, $2, $3)`,
-    [id, SEED_EMAIL, hashPassword(SEED_PASSWORD)],
+  const inserted = await pool.query<{ id: string }>(
+    `INSERT INTO users (email, password_hash) VALUES ($1, $2) RETURNING id`,
+    [SEED_EMAIL, hashPassword(SEED_PASSWORD)],
   )
-  return id
+  return String(inserted.rows[0]!.id)
 }
 
 export async function seed(): Promise<void> {
@@ -54,7 +46,7 @@ export async function seed(): Promise<void> {
   const presets = readSeedPresets()
   const pool = getPool()
 
-  const count = await pool.query<{ count: number }>(`SELECT COUNT(*) AS count FROM presets`)
+  const count = await pool.query<{ count: number }>(`SELECT COUNT(*)::int AS count FROM presets`)
   if ((count.rows[0]?.count ?? 0) > 0) {
     console.log('Presets already present, skip seeding')
     return
@@ -67,7 +59,7 @@ export async function seed(): Promise<void> {
         `INSERT INTO presets (
           id, user_id, name, description, is_private, settings, created_at, updated_at
         ) VALUES (
-          $1, $2, $3, $4, 0, $5, $6, $7
+          $1, $2, $3, $4, false, $5, $6::timestamptz, $7::timestamptz
         )`,
         [
           preset.id,
@@ -75,8 +67,8 @@ export async function seed(): Promise<void> {
           preset.name,
           preset.description ?? '',
           cols.settings,
-          toMysqlDateTime(preset.createdAt),
-          toMysqlDateTime(preset.updatedAt),
+          preset.createdAt,
+          preset.updatedAt,
         ],
       )
       await replacePresetChildren(query, preset.id, cols)

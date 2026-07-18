@@ -1,12 +1,12 @@
 # Схема хранения данных
 
-Рабочий бюджет живёт в `localStorage` браузера. **Пресеты и пользователи** — в **MySQL 8**. Типы — в `src/types/`.
+Рабочий бюджет живёт в `localStorage` браузера. **Пресеты и пользователи** — в **PostgreSQL**. Типы — в `src/types/`.
 
 ## Обзор хранилищ
 
 | Хранилище | Где | Ключ / путь | Содержимое |
 |-----------|-----|-------------|------------|
-| Пресеты, пользователи, сессии | MySQL 8.0.25+ | `DATABASE_URL` | `users`, `sessions`, `presets` + дочерние таблицы списков |
+| Пресеты, пользователи, сессии | PostgreSQL 16+ | `DATABASE_URL` | `users`, `sessions`, `presets` + дочерние таблицы списков |
 | Сид пресетов (файл) | `data/presets.seed.json` | импорт через `npm run db:seed` | публичные наборы |
 | Рабочий бюджет | `localStorage` | `family-budget-storage` | Zustand persist: настройки, доходы, расходы, папки, категории |
 | UI сайдбара | `localStorage` | ключ сворачивания меню | `'0'` / `'1'` |
@@ -15,7 +15,7 @@
 
 ```mermaid
 flowchart TB
-  subgraph db [MySQL]
+  subgraph db [PostgreSQL]
     U[users]
     S[sessions]
     P[presets]
@@ -34,27 +34,30 @@ flowchart TB
 
 ---
 
-## 1. MySQL
+## 1. PostgreSQL
 
-Подключение: переменная `DATABASE_URL` (см. `.env.example`). Локально: `docker compose up -d`, затем `npm run db:migrate` и `npm run db:seed`.
+Подключение: `DATABASE_URL` (см. `.env.example`).
+
+- Локально с Docker: `npm run db:up`, затем `npm run db:migrate` и `npm run db:seed`.
+- Без Docker: задайте `PG_ADMIN_URL` (суперпользователь) и выполните `npm run db:setup` (создаёт роль/БД, миграции, сид). SQL вручную: `server/db/sql/00_bootstrap.sql`.
 
 ### `users`
 
 | Поле | Тип | Описание |
 |------|-----|----------|
-| `id` | CHAR(36) | PK (UUID) |
-| `email` | VARCHAR(255) UNIQUE | Email (нижний регистр) |
+| `id` | UUID | PK (UUID) |
+| `email` | TEXT UNIQUE | Email (нижний регистр) |
 | `password_hash` | TEXT | scrypt-хэш пароля |
-| `created_at` | DATETIME(3) | Создание |
+| `created_at` | TIMESTAMPTZ | Создание |
 
 ### `sessions`
 
 | Поле | Тип | Описание |
 |------|-----|----------|
-| `id` | CHAR(36) | PK |
-| `user_id` | CHAR(36) FK → users | Владелец сессии |
+| `id` | UUID | PK |
+| `user_id` | UUID FK → users | Владелец сессии |
 | `token_hash` | VARCHAR(128) UNIQUE | SHA-256 токена из cookie `session` |
-| `expires_at` | DATETIME(3) | Срок действия |
+| `expires_at` | TIMESTAMPTZ | Срок действия |
 
 ### `presets`
 
@@ -62,12 +65,12 @@ flowchart TB
 
 | Поле | Тип | Описание |
 |------|-----|----------|
-| `id` | CHAR(36) | PK |
-| `user_id` | CHAR(36) FK → users | Владелец |
+| `id` | UUID | PK |
+| `user_id` | UUID FK → users | Владелец |
 | `name` / `description` | VARCHAR / TEXT | Название и описание |
-| `is_private` | TINYINT(1) | Приватный — не в публичном списке |
-| `settings` | JSON | `BudgetSettings` **без** `residenceRoute` / `initialBalances` |
-| `created_at` / `updated_at` | DATETIME(3) | Метки времени |
+| `is_private` | BOOLEAN | Приватный — не в публичном списке |
+| `settings` | JSONB | `BudgetSettings` **без** `residenceRoute` / `initialBalances` |
+| `created_at` / `updated_at` | TIMESTAMPTZ | Метки времени |
 
 ### Дочерние таблицы (PK `(preset_id, id)`, `ON DELETE CASCADE`)
 
@@ -83,7 +86,7 @@ flowchart TB
 
 На границе API строки собираются в клиентский `BudgetPreset.data` (`server/presetPayload.ts` + `server/presetChildren.ts`).
 
-Публичный список: `is_private = 0`. «Мои»: `user_id` текущей сессии. Приватный чужой пресет — 404.
+Публичный список: `is_private = false`. «Мои»: `user_id` текущей сессии. Приватный чужой пресет — 404.
 
 Авторизация: `POST /api/auth/register|login|logout`, `GET /api/auth/me`. Cookie `session` (HttpOnly).
 

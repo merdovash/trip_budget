@@ -10,11 +10,12 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "db:up": "docker compose up -d",
+    "db:bootstrap": "node ./node_modules/vite-node/vite-node.mjs server/db/bootstrap.ts",
     "db:migrate": "node ./node_modules/vite-node/vite-node.mjs server/db/migrate.ts",
-    "db:seed": "node ./node_modules/vite-node/vite-node.mjs server/db/seed.ts"
+    "db:seed": "node ./node_modules/vite-node/vite-node.mjs server/db/seed.ts",
+    "db:setup": "node ./node_modules/vite-node/vite-node.mjs server/db/setup.ts"
   },
   "dependencies": {
-    "mysql2": "^3.23.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "recharts": "^2.15.3",
@@ -23,7 +24,6 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.8",
-    "@types/node": "^26.1.1",
     "@types/react": "^19.1.6",
     "@types/react-dom": "^19.1.5",
     "@vitejs/plugin-react": "^4.5.2",

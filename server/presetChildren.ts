@@ -7,7 +7,7 @@ import type {
   ResidenceRoutePoint,
   ThailandDeductionSettings,
 } from '../src/types/budget'
-import type { SqlQuery } from './db/mysqlClient'
+import type { SqlQuery } from './db/pgClient'
 import type { PresetListColumns } from './presetPayload'
 
 interface RecurringRow {
@@ -48,9 +48,8 @@ function optionalNumber(value: number | null | undefined): number | undefined {
   return value == null ? undefined : value
 }
 
-function optionalBool(value: boolean | number | null | undefined): boolean | undefined {
-  if (value == null) return undefined
-  return Boolean(value)
+function optionalBool(value: boolean | null | undefined): boolean | undefined {
+  return value == null ? undefined : value
 }
 
 function recurringFromRow(row: RecurringRow): RecurringItem {

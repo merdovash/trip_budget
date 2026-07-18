@@ -1,6 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { Pool } from './mysqlClient'
+import { Pool } from './pgClient'
 
 let pool: Pool | null = null
 

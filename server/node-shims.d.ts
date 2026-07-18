@@ -1,11 +1,11 @@
 declare module 'node:fs' {
-  export function readFileSync(path: string, encoding: 'utf-8'): string
-  export function writeFileSync(path: string, data: string, encoding?: 'utf-8'): void
+  export function readFileSync(path: string, encoding: 'utf-8' | 'utf8'): string
+  export function writeFileSync(path: string, data: string, encoding?: 'utf-8' | 'utf8'): void
   export function existsSync(path: string): boolean
   export function mkdirSync(path: string, options?: { recursive?: boolean }): void
   export function copyFileSync(src: string, dest: string): void
   export function unlinkSync(path: string): void
-  export function appendFileSync(path: string, data: string, encoding?: 'utf-8'): void
+  export function appendFileSync(path: string, data: string, encoding?: 'utf-8' | 'utf8'): void
   export function readdirSync(path: string): string[]
 }
 
@@ -72,8 +72,9 @@ declare module 'node:net' {
     off(event: 'error', listener: (...args: unknown[]) => void): void
   }
   export function connect(options: { host: string; port: number }): Socket
-  const net: { connect: typeof connect }
+  const net: { connect: typeof connect; Socket: Socket }
   export default net
+  export type { Socket as NetSocket }
 }
 
 declare module 'node:events' {
@@ -93,20 +94,22 @@ declare const process: {
 }
 
 interface BufferInstance extends Uint8Array {
-  toString(encoding?: 'utf-8' | 'hex'): string
-  writeInt32BE(value: number, offset: number): number
-  readInt32BE(offset: number): number
-  readInt16BE(offset: number): number
+  toString(encoding?: 'utf-8' | 'utf8' | 'hex'): string
+  copy(target: Uint8Array, targetStart?: number, sourceStart?: number, sourceEnd?: number): number
+  writeInt32BE(value: number, offset?: number): number
+  readInt32BE(offset?: number): number
+  readInt16BE(offset?: number): number
   subarray(start?: number, end?: number): BufferInstance
 }
 
 interface BufferConstructor {
   alloc(size: number): BufferInstance
   concat(buffers: Uint8Array[]): BufferInstance
-  from(data: string | Uint8Array, encoding?: 'utf-8' | 'hex'): BufferInstance
+  from(data: string | Uint8Array, encoding?: 'utf-8' | 'utf8' | 'hex'): BufferInstance
 }
 
 declare const Buffer: BufferConstructor
+type Buffer = BufferInstance
 
 declare function structuredClone<T>(value: T): T
 

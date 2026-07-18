@@ -9,7 +9,7 @@
 - Выбор страны и налогового режима (10 стран, 14 режимов)
 - Помесячный прогноз cash flow с учётом налогов
 - График доходов, расходов и накопленного баланса
-- Рабочий бюджет в localStorage; сохранённые наборы (пресеты) в MySQL
+- Рабочий бюджет в localStorage; сохранённые наборы (пресеты) в PostgreSQL
 - Регистрация / вход по email и паролю; публичные и персональные пресеты
 
 ## Поддерживаемые страны
@@ -20,27 +20,40 @@
 
 - Node.js 20+
 - npm 10+
-- MySQL 8.0.25+ (локально удобно через Docker Compose)
+- PostgreSQL 16+ (локально удобно через Docker Compose)
 
 ## Запуск
 
-1. Скопируйте `.env.example` в `.env` (уже есть шаблон `DATABASE_URL`).
-2. Поднимите БД:
+1. Скопируйте `.env.example` в `.env` (шаблон `DATABASE_URL`).
+2. Поднимите БД.
+
+**С Docker (локально):**
 
 ```bash
+npm install
 npm run db:up
 npm run db:migrate
 npm run db:seed
 ```
 
-Без Docker укажите свой `DATABASE_URL` на доступный MySQL и выполните migrate/seed.
+**Без Docker (удалённый сервер / системный PostgreSQL):**
+
+```bash
+npm install
+# В .env задайте DATABASE_URL и PG_ADMIN_URL (суперпользователь для CREATE ROLE/DB)
+# Пример: PG_ADMIN_URL=postgresql://postgres:SECRET@localhost:5432/postgres
+npm run db:setup
+```
+
+`db:setup` = создать роль/БД (`db:bootstrap`) + миграции + сид.  
+Альтернатива вручную через psql: `server/db/sql/00_bootstrap.sql`, затем `npm run db:migrate && npm run db:seed`.  
+Скрипт-обёртка: `scripts/db-setup.sh`.
 
 Ошибки API пишутся в `logs/server-error.log` (папка создаётся автоматически).
 
 3. Приложение:
 
 ```bash
-npm install
 npm run dev
 ```
 
@@ -83,5 +96,5 @@ npm run test
 - `src/tax/` — налоговый движок (расширяемый)
 - `src/engine/` — расчёт бюджета
 - `src/components/` — UI-компоненты
-- `server/` — API auth/presets, доступ к MySQL
+- `server/` — API auth/presets, доступ к PostgreSQL
 - `server/db/migrations/` — SQL-миграции

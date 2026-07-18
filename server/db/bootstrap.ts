@@ -98,6 +98,8 @@ export async function bootstrapDatabase(): Promise<void> {
   await adminOnDb.query(
     `ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO ${quoteIdent(target.user)}`,
   )
+  // pgcrypto is required for gen_random_uuid() on PG < 13; needs superuser.
+  await adminOnDb.query(`CREATE EXTENSION IF NOT EXISTS pgcrypto`)
 
   resetPool()
   console.log('Bootstrap complete')

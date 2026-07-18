@@ -1,5 +1,6 @@
 -- users, sessions, presets
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
+-- pgcrypto (gen_random_uuid) is installed by `npm run db:bootstrap` as superuser.
+-- On PostgreSQL 13+ gen_random_uuid() is in core; extension is still harmless if present.
 
 CREATE TABLE IF NOT EXISTS users (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -1,12 +1,11 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 import type { BudgetPreset } from '../../src/types/preset'
 import { hashPassword } from '../auth/password'
-import { getPool, loadEnvFile } from './pool'
-import { migrate } from './migrate'
 import { replacePresetChildren } from '../presetChildren'
 import { splitPresetData } from '../presetPayload'
+import { migrate } from './migrate'
+import { getPool, loadEnvFile } from './pool'
 
 const SEED_EMAIL = 'seed@local'
 const SEED_PASSWORD = 'seed-not-for-login'
@@ -76,15 +75,4 @@ export async function seed(): Promise<void> {
   }
 
   console.log(`Seeded ${presets.length} public presets as ${SEED_EMAIL}`)
-}
-
-const isMain =
-  process.argv[1] &&
-  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
-
-if (isMain) {
-  seed().catch((err) => {
-    console.error(err)
-    process.exit(1)
-  })
 }

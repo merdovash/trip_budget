@@ -50,14 +50,3 @@ export async function migrate(): Promise<string[]> {
   }
   return applied
 }
-
-const isMain =
-  process.argv[1] &&
-  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
-
-if (isMain) {
-  migrate().catch((err) => {
-    console.error(err)
-    process.exit(1)
-  })
-}

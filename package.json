@@ -10,10 +10,10 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "db:up": "docker compose up -d",
-    "db:bootstrap": "node ./node_modules/vite-node/vite-node.mjs server/db/bootstrap.ts",
-    "db:migrate": "node ./node_modules/vite-node/vite-node.mjs server/db/migrate.ts",
-    "db:seed": "node ./node_modules/vite-node/vite-node.mjs server/db/seed.ts",
-    "db:setup": "node ./node_modules/vite-node/vite-node.mjs server/db/setup.ts"
+    "db:bootstrap": "node ./node_modules/vite-node/vite-node.mjs server/db/cli.ts bootstrap",
+    "db:migrate": "node ./node_modules/vite-node/vite-node.mjs server/db/cli.ts migrate",
+    "db:seed": "node ./node_modules/vite-node/vite-node.mjs server/db/cli.ts seed",
+    "db:setup": "node ./node_modules/vite-node/vite-node.mjs server/db/cli.ts setup"
   },
   "dependencies": {
     "react": "^19.1.0",

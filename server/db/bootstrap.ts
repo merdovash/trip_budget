@@ -1,5 +1,3 @@
-import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { Pool, parseDatabaseUrl, toDatabaseUrl } from './pgClient'
 import type { ParsedUrl } from './pgClient'
 import { loadEnvFile, resetPool } from './pool'
@@ -103,15 +101,4 @@ export async function bootstrapDatabase(): Promise<void> {
 
   resetPool()
   console.log('Bootstrap complete')
-}
-
-const isMain =
-  process.argv[1] &&
-  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
-
-if (isMain) {
-  bootstrapDatabase().catch((err) => {
-    console.error(err)
-    process.exit(1)
-  })
 }

@@ -11,6 +11,7 @@ import {
   createResidenceRoutePoint,
   ensureExplicitResidenceRoute,
   getResidenceRoute,
+  isOpenEndedRouteDate,
   shiftIsoDate,
   syncLegacyFromRoute,
   validateResidenceRoutePoint,
@@ -22,7 +23,7 @@ import {
   suggestTaxRegimeForMode,
 } from '../../config/relocationMode'
 import type { RelocationMode } from '../../types/budget'
-import { formatDateDisplay } from '../../lib/format'
+import { formatDateDisplay, isValidIsoDate, todayIsoDate } from '../../lib/format'
 import { Button, Card, DateInput, EmptyState, Field, Select } from '../ui/FormControls'
 import { StackPanel } from '../ui/StackPanel'
 import { SwipeRow } from '../ui/SwipeRow'
@@ -43,7 +44,7 @@ function pointToForm(point: ResidenceRoutePoint): PointFormState {
     countryCode: point.countryCode,
     taxRegimeId: point.taxRegimeId,
     startDate: point.startDate,
-    endDate: point.endDate === '9999-12-31' ? '' : point.endDate,
+    endDate: isOpenEndedRouteDate(point.endDate) ? '' : point.endDate,
     regimeParams: point.regimeParams,
   }
 }
@@ -114,9 +115,9 @@ function RoutePointForm({
     if (!editingId) {
       const openPoint = [...route]
         .sort((a, b) => a.endDate.localeCompare(b.endDate))
-        .filter((p) => p.endDate === '9999-12-31')
+        .filter((p) => isOpenEndedRouteDate(p.endDate))
         .at(-1)
-      if (openPoint) {
+      if (openPoint && isValidIsoDate(form.startDate)) {
         const closedEnd = shiftIsoDate(form.startDate, -1)
         if (closedEnd >= openPoint.startDate) {
           routeForCheck = route.map((p) =>
@@ -259,16 +260,19 @@ export function ResidenceRoutePanel() {
       const nextPoint = formToPoint(form)
       const openPoint = [...base]
         .sort((a, b) => a.endDate.localeCompare(b.endDate))
-        .filter((p) => p.endDate === '9999-12-31')
+        .filter((p) => isOpenEndedRouteDate(p.endDate))
         .at(-1)
-      const closedEnd = shiftIsoDate(form.startDate, -1)
-      const closed = openPoint
-        ? base.map((point) =>
-            point.id === openPoint.id && closedEnd >= openPoint.startDate
-              ? { ...point, endDate: closedEnd }
-              : point,
-          )
-        : base
+      const closed =
+        openPoint && isValidIsoDate(form.startDate)
+          ? (() => {
+              const closedEnd = shiftIsoDate(form.startDate, -1)
+              return base.map((point) =>
+                point.id === openPoint.id && closedEnd >= openPoint.startDate
+                  ? { ...point, endDate: closedEnd }
+                  : point,
+              )
+            })()
+          : base
       commit([...closed, nextPoint])
     }
     closePanel()
@@ -294,12 +298,19 @@ export function ResidenceRoutePanel() {
   const createDefaults = (() => {
     const base = workingRoute()
     const last = base.at(-1)
-    let startDate = settings.relocationDate ?? settings.initialBalanceDate
+    const today = todayIsoDate()
+    let startDate =
+      (settings.relocationDate && isValidIsoDate(settings.relocationDate)
+        ? settings.relocationDate
+        : undefined) ??
+      (settings.initialBalanceDate && isValidIsoDate(settings.initialBalanceDate)
+        ? settings.initialBalanceDate
+        : undefined) ??
+      today
     if (last) {
-      if (last.endDate === '9999-12-31') {
-        const today = new Date().toISOString().slice(0, 10)
-        startDate =
-          today > last.startDate ? today : shiftIsoDate(last.startDate, 1)
+      if (isOpenEndedRouteDate(last.endDate) || !isValidIsoDate(last.endDate)) {
+        const anchor = isValidIsoDate(last.startDate) ? last.startDate : today
+        startDate = today > anchor ? today : shiftIsoDate(anchor, 1)
       } else {
         startDate = shiftIsoDate(last.endDate, 1)
       }
@@ -334,7 +345,7 @@ export function ResidenceRoutePanel() {
               {route.map((point, index) => {
                 const regime = getTaxCalculator(point.taxRegimeId)
                 const endLabel =
-                  point.endDate === '9999-12-31' ? '…' : formatDateDisplay(point.endDate)
+                  isOpenEndedRouteDate(point.endDate) ? '…' : formatDateDisplay(point.endDate)
                 return (
                   <SwipeRow
                     key={point.id}
@@ -373,7 +384,7 @@ export function ResidenceRoutePanel() {
                   {route.map((point) => {
                     const regime = getTaxCalculator(point.taxRegimeId)
                     const endLabel =
-                      point.endDate === '9999-12-31' ? '…' : formatDateDisplay(point.endDate)
+                      isOpenEndedRouteDate(point.endDate) ? '…' : formatDateDisplay(point.endDate)
                     return (
                       <tr
                         key={point.id}

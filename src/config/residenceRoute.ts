@@ -1,17 +1,37 @@
 import type { BudgetSettings, ResidenceRoutePoint } from '../types/budget'
 import { getAvailableCountries, getCalculatorsByCountry } from '../tax/registry'
+import { isValidIsoDate, todayIsoDate } from '../lib/format'
 
 const OPEN_END = '9999-12-31'
+const ISO_DATE_RE = /^(\d{4})-(\d{2})-(\d{2})$/
 
 function legacyRelocationDate(settings: BudgetSettings): string {
   return settings.relocationDate ?? settings.initialBalanceDate
 }
 
+export function isOpenEndedRouteDate(iso: string | undefined | null): boolean {
+  return !iso || iso === OPEN_END
+}
+
 /** Сдвиг ISO-даты (YYYY-MM-DD) на N календарных дней. */
 export function shiftIsoDate(iso: string, days: number): string {
-  const date = new Date(`${iso}T12:00:00.000Z`)
+  const match = ISO_DATE_RE.exec(iso)
+  if (!match) {
+    throw new RangeError(`Invalid ISO date: ${iso}`)
+  }
+  const year = Number(match[1])
+  const month = Number(match[2])
+  const day = Number(match[3])
+  const date = new Date(Date.UTC(year, month - 1, day))
+  if (Number.isNaN(date.getTime())) {
+    throw new RangeError(`Invalid ISO date: ${iso}`)
+  }
   date.setUTCDate(date.getUTCDate() + days)
-  return date.toISOString().slice(0, 10)
+  // Не используем toISOString(): год вне 0–9999 даёт RangeError.
+  const y = date.getUTCFullYear()
+  const m = String(date.getUTCMonth() + 1).padStart(2, '0')
+  const d = String(date.getUTCDate()).padStart(2, '0')
+  return `${String(y).padStart(4, '0')}-${m}-${d}`
 }
 
 /** Порядок точек: по дате начала, затем по окончанию. */
@@ -65,10 +85,17 @@ export function validateResidenceRoute(route: ResidenceRoutePoint[]): string | n
   return null
 }
 
+function normalizeRoutePoint(point: ResidenceRoutePoint): ResidenceRoutePoint {
+  return {
+    ...point,
+    endDate: isOpenEndedRouteDate(point.endDate) ? OPEN_END : point.endDate,
+  }
+}
+
 /** Эффективный маршрут: явный residenceRoute или одна точка из legacy-настроек (по датам). */
 export function getResidenceRoute(settings: BudgetSettings): ResidenceRoutePoint[] {
   if (settings.residenceRoute && settings.residenceRoute.length > 0) {
-    return sortResidenceRoute(settings.residenceRoute)
+    return sortResidenceRoute(settings.residenceRoute.map(normalizeRoutePoint))
   }
   return [
     {
@@ -88,7 +115,7 @@ export function hasExplicitResidenceRoute(settings: BudgetSettings): boolean {
 /** Гарантирует явный маршрут (миграция с legacy countryCode + taxRegimeId). */
 export function ensureExplicitResidenceRoute(settings: BudgetSettings): ResidenceRoutePoint[] {
   if (hasExplicitResidenceRoute(settings)) {
-    return sortResidenceRoute(settings.residenceRoute!)
+    return sortResidenceRoute(settings.residenceRoute!.map(normalizeRoutePoint))
   }
   return [
     createResidenceRoutePoint({
@@ -164,7 +191,7 @@ export function syncLegacyFromRoute(
     residenceRoute: sorted,
     countryCode: first?.countryCode ?? 'ES',
     taxRegimeId: first?.taxRegimeId ?? 'es-employed',
-    relocationDate: first?.startDate ?? new Date().toISOString().slice(0, 10),
+    relocationDate: first?.startDate ?? todayIsoDate(),
   }
 }
 
@@ -173,13 +200,21 @@ export function createResidenceRoutePoint(
 ): ResidenceRoutePoint {
   const countryCode = partial?.countryCode ?? getAvailableCountries()[0] ?? 'ES'
   const regime = getCalculatorsByCountry(countryCode)[0]
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayIsoDate()
+  const startDate =
+    partial?.startDate && isValidIsoDate(partial.startDate) ? partial.startDate : today
+  const rawEnd = partial?.endDate
+  const endDate = isOpenEndedRouteDate(rawEnd)
+    ? OPEN_END
+    : isValidIsoDate(rawEnd!)
+      ? rawEnd!
+      : startDate
   return {
     id: partial?.id ?? `route-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     countryCode,
     taxRegimeId: partial?.taxRegimeId ?? regime?.id ?? 'es-employed',
-    startDate: partial?.startDate ?? today,
-    endDate: partial?.endDate ?? today,
+    startDate,
+    endDate,
     ...(partial?.regimeParams ? { regimeParams: partial.regimeParams } : {}),
   }
 }
@@ -188,7 +223,7 @@ export function describeResidenceRoute(settings: BudgetSettings): string {
   const route = getResidenceRoute(settings)
   return route
     .map((p) => {
-      const end = p.endDate === OPEN_END ? '…' : p.endDate
+      const end = isOpenEndedRouteDate(p.endDate) ? '…' : p.endDate
       return `${p.countryCode}: ${p.startDate}–${end}`
     })
     .join(' → ')

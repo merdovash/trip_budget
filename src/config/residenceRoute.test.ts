@@ -137,6 +137,27 @@ describe('residenceRoute', () => {
     expect(shiftIsoDate('2026-07-01', -1)).toBe('2026-06-30')
   })
 
+  it('rejects invalid ISO dates in shiftIsoDate', () => {
+    expect(() => shiftIsoDate('', 1)).toThrow(RangeError)
+    expect(() => shiftIsoDate('not-a-date', 1)).toThrow(RangeError)
+  })
+
+  it('normalizes empty route endDate to open-ended', () => {
+    const settings = {
+      ...DEFAULT_SETTINGS,
+      residenceRoute: [
+        {
+          id: 'a',
+          countryCode: 'ES',
+          taxRegimeId: 'es-employed',
+          startDate: '2026-01-01',
+          endDate: '',
+        },
+      ],
+    }
+    expect(getResidenceRoute(settings)[0]?.endDate).toBe('9999-12-31')
+  })
+
   it('returns sorted route from getResidenceRoute', () => {
     const settings = {
       ...DEFAULT_SETTINGS,

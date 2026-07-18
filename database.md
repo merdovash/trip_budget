@@ -6,7 +6,7 @@
 
 | Хранилище | Где | Ключ / путь | Содержимое |
 |-----------|-----|-------------|------------|
-| Пресеты, пользователи, сессии | PostgreSQL | `DATABASE_URL` | таблицы `users`, `sessions`, `presets` |
+| Пресеты, пользователи, сессии | PostgreSQL | `DATABASE_URL` | `users`, `sessions`, `presets` + дочерние таблицы списков |
 | Сид пресетов (файл) | `data/presets.seed.json` | импорт через `npm run db:seed` | публичные наборы |
 | Рабочий бюджет | `localStorage` | `family-budget-storage` | Zustand persist: настройки, доходы, расходы, папки, категории |
 | UI сайдбара | `localStorage` | ключ сворачивания меню | `'0'` / `'1'` |
@@ -18,13 +18,15 @@ flowchart TB
   subgraph db [PostgreSQL]
     U[users]
     S[sessions]
-    P[presets JSONB columns]
+    P[presets]
+    C[preset_* child tables]
   end
   subgraph browser [Браузер localStorage]
     BS["family-budget-storage\nрабочий бюджет"]
   end
   UI[UI] --> BS
   UI -->|API /api/presets + cookie| P
+  P --> C
   UI -->|API /api/auth| U
   U --> S
   U --> P
@@ -56,7 +58,7 @@ flowchart TB
 
 ### `presets`
 
-Метаданные + **отдельные JSONB-колонки** (не один blob `data`):
+Метаданные + настройки (списки — в дочерних таблицах):
 
 | Поле | Тип | Описание |
 |------|-----|----------|
@@ -65,16 +67,21 @@ flowchart TB
 | `name` / `description` | TEXT | Название и описание |
 | `is_private` | BOOLEAN | Приватный — не в публичном списке |
 | `settings` | JSONB | `BudgetSettings` **без** `residenceRoute` / `initialBalances` |
-| `residence_route` | JSONB | `ResidenceRoutePoint[]` |
-| `initial_balances` | JSONB | `InitialBalanceEntry[]` |
-| `incomes` | JSONB | `RecurringItem[]` |
-| `expenses` | JSONB | `RecurringItem[]` |
-| `folders` | JSONB | `ExpenseFolder[]` |
-| `income_folders` | JSONB | `ExpenseFolder[]` |
-| `expense_categories` | JSONB | `ExpenseCategory[]` |
 | `created_at` / `updated_at` | TIMESTAMPTZ | Метки времени |
 
-На границе API колонки собираются в клиентский `BudgetPreset.data` (`server/presetPayload.ts`).
+### Дочерние таблицы (PK `(preset_id, id)`, `ON DELETE CASCADE`)
+
+| Таблица | Содержимое |
+|--------|------------|
+| `preset_folders` | папки расходов (`name`, `sort_order`, `excluded`) |
+| `preset_income_folders` | папки доходов |
+| `preset_expense_categories` | пользовательские категории расходов |
+| `preset_residence_route` | точки маршрута (`country_code`, `tax_regime_id`, даты, `regime_params` JSONB) |
+| `preset_initial_balances` | начальные остатки |
+| `preset_incomes` | доходы (`RecurringItem` → колонки; `payments` JSONB) |
+| `preset_expenses` | расходы (тот же набор колонок) |
+
+На границе API строки собираются в клиентский `BudgetPreset.data` (`server/presetPayload.ts` + `server/presetChildren.ts`).
 
 Публичный список: `is_private = false`. «Мои»: `user_id` текущей сессии. Приватный чужой пресет — 404.
 
@@ -117,9 +124,9 @@ Zustand persist (`src/store/budgetStore.ts`). Сохраняется:
 | `relocationProgramId?` | `string` | Программа переезда |
 | `relocationMode?` | `remote_employment` \| `sole_proprietorship` | Способ переезда |
 | `employmentCountryCode?` | `string` | **deprecated** — страна зарплаты в доходах |
-| `residenceRoute?` | `ResidenceRoutePoint[]` | Маршрут проживания (в БД — колонка `residence_route`) |
+| `residenceRoute?` | `ResidenceRoutePoint[]` | Маршрут проживания → `preset_residence_route` |
 | `horizonMonths` | `number` | Горизонт планирования, мес. |
-| `initialBalances?` | `InitialBalanceEntry[]` | Начальные остатки (в БД — `initial_balances`) |
+| `initialBalances?` | `InitialBalanceEntry[]` | Начальные остатки → `preset_initial_balances` |
 | `initialBalance` | `number` | **deprecated** |
 | `initialBalanceCurrency` | `string` | **deprecated** |
 | `initialBalanceDate` | ISO date | Дата начального остатка |
@@ -193,11 +200,13 @@ Zustand persist (`src/store/budgetStore.ts`). Сохраняется:
 erDiagram
   users ||--o{ sessions : has
   users ||--o{ presets : owns
-  presets ||--|| settings_jsonb : settings
-  presets ||--o{ residence_route : residence_route
-  presets ||--o{ initial_balances : initial_balances
-  presets ||--o{ incomes : incomes
-  presets ||--o{ expenses : expenses
+  presets ||--o{ preset_folders : has
+  presets ||--o{ preset_income_folders : has
+  presets ||--o{ preset_expense_categories : has
+  presets ||--o{ preset_residence_route : has
+  presets ||--o{ preset_initial_balances : has
+  presets ||--o{ preset_incomes : has
+  presets ||--o{ preset_expenses : has
 ```
 
 Рабочий бюджет и пресет — одна форма `BudgetPresetData` (экспорт/импорт через `exportSnapshot` / `loadFromPreset`).

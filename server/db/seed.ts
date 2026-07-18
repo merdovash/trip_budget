@@ -1,10 +1,11 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import type { BudgetPreset } from '../src/types/preset'
+import type { BudgetPreset } from '../../src/types/preset'
 import { hashPassword } from '../auth/password'
 import { getPool, loadEnvFile } from './pool'
 import { migrate } from './migrate'
+import { replacePresetChildren } from '../presetChildren'
 import { splitPresetData } from '../presetPayload'
 
 const SEED_EMAIL = 'seed@local'
@@ -53,35 +54,25 @@ export async function seed(): Promise<void> {
 
   for (const preset of presets) {
     const cols = splitPresetData(preset.data)
-    await pool.query(
-      `INSERT INTO presets (
-        id, user_id, name, description, is_private,
-        settings, residence_route, initial_balances, incomes, expenses,
-        folders, income_folders, expense_categories,
-        created_at, updated_at
-      ) VALUES (
-        $1, $2, $3, $4, false,
-        $5, $6, $7, $8, $9,
-        $10, $11, $12,
-        $13::timestamptz, $14::timestamptz
-      )`,
-      [
-        preset.id,
-        userId,
-        preset.name,
-        preset.description ?? '',
-        cols.settings,
-        cols.residenceRoute,
-        cols.initialBalances,
-        cols.incomes,
-        cols.expenses,
-        cols.folders,
-        cols.incomeFolders,
-        cols.expenseCategories,
-        preset.createdAt,
-        preset.updatedAt,
-      ],
-    )
+    await pool.transaction(async (query) => {
+      await query(
+        `INSERT INTO presets (
+          id, user_id, name, description, is_private, settings, created_at, updated_at
+        ) VALUES (
+          $1, $2, $3, $4, false, $5, $6::timestamptz, $7::timestamptz
+        )`,
+        [
+          preset.id,
+          userId,
+          preset.name,
+          preset.description ?? '',
+          cols.settings,
+          preset.createdAt,
+          preset.updatedAt,
+        ],
+      )
+      await replacePresetChildren(query, preset.id, cols)
+    })
   }
 
   console.log(`Seeded ${presets.length} public presets as ${SEED_EMAIL}`)

@@ -297,6 +297,11 @@ class PgConnection {
   }
 }
 
+export type SqlQuery = <T = Record<string, unknown>>(
+  sql: string,
+  params?: unknown[],
+) => Promise<QueryResult<T>>
+
 /** Lightweight pool: one short-lived connection per query (no npm `pg` dependency). */
 export class Pool {
   private url: string
@@ -312,14 +317,43 @@ export class Pool {
     sql: string,
     params: unknown[] = [],
   ): Promise<QueryResult<T>> {
+    return this.withConnection((query) => query<T>(sql, params))
+  }
+
+  /** Run multiple queries on one connection (for transactions). */
+  async withConnection<T>(fn: (query: SqlQuery) => Promise<T>): Promise<T> {
     const auth = parseDatabaseUrl(this.url)
     const conn = new PgConnection(auth)
     await conn.connect()
-    try {
+    const query: SqlQuery = async <R = Record<string, unknown>>(
+      sql: string,
+      params: unknown[] = [],
+    ) => {
       const result = await conn.query(formatSql(sql, params))
-      return result as QueryResult<T>
+      return result as QueryResult<R>
+    }
+    try {
+      return await fn(query)
     } finally {
       conn.end()
     }
+  }
+
+  async transaction<T>(fn: (query: SqlQuery) => Promise<T>): Promise<T> {
+    return this.withConnection(async (query) => {
+      await query('BEGIN')
+      try {
+        const result = await fn(query)
+        await query('COMMIT')
+        return result
+      } catch (err) {
+        try {
+          await query('ROLLBACK')
+        } catch {
+          /* ignore rollback errors */
+        }
+        throw err
+      }
+    })
   }
 }

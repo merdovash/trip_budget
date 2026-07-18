@@ -19,6 +19,8 @@ export interface PresetColumns {
   expenseCategories: ExpenseCategory[]
 }
 
+export type PresetListColumns = Omit<PresetColumns, 'settings'>
+
 export interface PresetRow {
   id: string
   user_id: string
@@ -26,22 +28,21 @@ export interface PresetRow {
   description: string
   is_private: boolean
   settings: BudgetSettings
-  residence_route: ResidenceRoutePoint[]
-  initial_balances: InitialBalanceEntry[]
-  incomes: RecurringItem[]
-  expenses: RecurringItem[]
-  folders: ExpenseFolder[]
-  income_folders: ExpenseFolder[]
-  expense_categories: ExpenseCategory[]
   created_at: Date | string
   updated_at: Date | string
+}
+
+export interface PresetSummaryRow extends PresetRow {
+  income_count: number
+  expense_count: number
+  once_count: number
 }
 
 function asArray<T>(value: unknown): T[] {
   return Array.isArray(value) ? (value as T[]) : []
 }
 
-/** Split client `BudgetPresetData` into DB JSONB columns. */
+/** Split client `BudgetPresetData` into settings + list columns. */
 export function splitPresetData(data: BudgetPresetData): PresetColumns {
   const {
     residenceRoute = [],
@@ -61,7 +62,7 @@ export function splitPresetData(data: BudgetPresetData): PresetColumns {
   }
 }
 
-/** Merge DB columns back into client `BudgetPresetData`. */
+/** Merge settings + list columns back into client `BudgetPresetData`. */
 export function mergePresetData(cols: PresetColumns): BudgetPresetData {
   return {
     settings: {
@@ -83,16 +84,10 @@ function toIso(value: Date | string): string {
   return new Date(value).toISOString()
 }
 
-export function rowToPreset(row: PresetRow): BudgetPreset {
+export function rowToPreset(row: PresetRow, lists: PresetListColumns): BudgetPreset {
   const data = mergePresetData({
     settings: row.settings,
-    residenceRoute: asArray(row.residence_route),
-    initialBalances: asArray(row.initial_balances),
-    incomes: asArray(row.incomes),
-    expenses: asArray(row.expenses),
-    folders: asArray(row.folders),
-    incomeFolders: asArray(row.income_folders),
-    expenseCategories: asArray(row.expense_categories),
+    ...lists,
   })
 
   return {
@@ -107,21 +102,23 @@ export function rowToPreset(row: PresetRow): BudgetPreset {
   }
 }
 
-export function toPresetSummary(preset: BudgetPreset): BudgetPresetSummary {
-  const { settings, incomes, expenses } = preset.data
+export function toPresetSummary(
+  row: PresetSummaryRow,
+): BudgetPresetSummary {
+  const settings = row.settings
   return {
-    id: preset.id,
-    name: preset.name,
-    description: preset.description,
-    isPrivate: preset.isPrivate,
-    createdAt: preset.createdAt,
-    updatedAt: preset.updatedAt,
+    id: row.id,
+    name: row.name,
+    description: row.description,
+    isPrivate: row.is_private,
+    createdAt: toIso(row.created_at),
+    updatedAt: toIso(row.updated_at),
     countryCode: settings.countryCode,
     baseCurrency: settings.baseCurrency,
     familySize: settings.familySize,
-    incomeCount: incomes.length,
-    expenseCount: expenses.length,
-    oneTimeCount: expenses.filter((item) => item.frequency === 'once').length,
+    incomeCount: Number(row.income_count) || 0,
+    expenseCount: Number(row.expense_count) || 0,
+    oneTimeCount: Number(row.once_count) || 0,
   }
 }
 

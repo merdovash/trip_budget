@@ -1,27 +1,38 @@
 import type { BudgetPreset, BudgetPresetData, BudgetPresetSummary, CreatePresetInput } from '../src/types/preset'
 import { getPool } from './db/pool'
+import { loadPresetChildren, replacePresetChildren } from './presetChildren'
 import {
-  PresetRow,
   rowToPreset,
   splitPresetData,
   toPresetSummary,
 } from './presetPayload'
+import type { PresetRow, PresetSummaryRow } from './presetPayload'
+
+const SUMMARY_SELECT = `
+  SELECT
+    p.id, p.user_id, p.name, p.description, p.is_private, p.settings,
+    p.created_at, p.updated_at,
+    (SELECT COUNT(*)::int FROM preset_incomes i WHERE i.preset_id = p.id) AS income_count,
+    (SELECT COUNT(*)::int FROM preset_expenses e WHERE e.preset_id = p.id) AS expense_count,
+    (SELECT COUNT(*)::int FROM preset_expenses e WHERE e.preset_id = p.id AND e.frequency = 'once') AS once_count
+  FROM presets p
+`
 
 export async function listPublicPresets(): Promise<BudgetPresetSummary[]> {
   const pool = getPool()
-  const result = await pool.query<PresetRow>(
-    `SELECT * FROM presets WHERE is_private = false ORDER BY updated_at DESC`,
+  const result = await pool.query<PresetSummaryRow>(
+    `${SUMMARY_SELECT} WHERE p.is_private = false ORDER BY p.updated_at DESC`,
   )
-  return result.rows.map((row) => toPresetSummary(rowToPreset(normalizeRow(row))))
+  return result.rows.map((row) => toPresetSummary(normalizeSummaryRow(row)))
 }
 
 export async function listOwnedPresets(userId: string): Promise<BudgetPresetSummary[]> {
   const pool = getPool()
-  const result = await pool.query<PresetRow>(
-    `SELECT * FROM presets WHERE user_id = $1 ORDER BY updated_at DESC`,
+  const result = await pool.query<PresetSummaryRow>(
+    `${SUMMARY_SELECT} WHERE p.user_id = $1 ORDER BY p.updated_at DESC`,
     [userId],
   )
-  return result.rows.map((row) => toPresetSummary(rowToPreset(normalizeRow(row))))
+  return result.rows.map((row) => toPresetSummary(normalizeSummaryRow(row)))
 }
 
 export async function getPresetById(
@@ -29,12 +40,15 @@ export async function getPresetById(
   viewerUserId?: string | null,
 ): Promise<BudgetPreset | null> {
   const pool = getPool()
-  const result = await pool.query<PresetRow>(`SELECT * FROM presets WHERE id = $1`, [id])
-  const row = result.rows[0]
-  if (!row) return null
-  const preset = rowToPreset(normalizeRow(row))
-  if (preset.isPrivate && preset.ownerId !== viewerUserId) return null
-  return preset
+  return pool.withConnection(async (query) => {
+    const result = await query<PresetRow>(`SELECT * FROM presets WHERE id = $1`, [id])
+    const row = result.rows[0]
+    if (!row) return null
+    const normalized = normalizeRow(row)
+    if (normalized.is_private && normalized.user_id !== viewerUserId) return null
+    const lists = await loadPresetChildren(query, normalized.id)
+    return rowToPreset(normalized, lists)
+  })
 }
 
 export async function createPreset(
@@ -43,32 +57,24 @@ export async function createPreset(
 ): Promise<BudgetPreset> {
   const cols = splitPresetData(input.data)
   const pool = getPool()
-  const result = await pool.query<PresetRow>(
-    `INSERT INTO presets (
-      user_id, name, description, is_private,
-      settings, residence_route, initial_balances, incomes, expenses,
-      folders, income_folders, expense_categories
-    ) VALUES (
-      $1, $2, $3, $4,
-      $5, $6, $7, $8, $9,
-      $10, $11, $12
-    ) RETURNING *`,
-    [
-      userId,
-      input.name.trim(),
-      input.description?.trim() ?? '',
-      input.isPrivate ?? false,
-      cols.settings,
-      cols.residenceRoute,
-      cols.initialBalances,
-      cols.incomes,
-      cols.expenses,
-      cols.folders,
-      cols.incomeFolders,
-      cols.expenseCategories,
-    ],
-  )
-  return rowToPreset(normalizeRow(result.rows[0]!))
+  return pool.transaction(async (query) => {
+    const result = await query<PresetRow>(
+      `INSERT INTO presets (user_id, name, description, is_private, settings)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING *`,
+      [
+        userId,
+        input.name.trim(),
+        input.description?.trim() ?? '',
+        input.isPrivate ?? false,
+        cols.settings,
+      ],
+    )
+    const row = normalizeRow(result.rows[0]!)
+    await replacePresetChildren(query, row.id, cols)
+    const lists = await loadPresetChildren(query, row.id)
+    return rowToPreset(row, lists)
+  })
 }
 
 export async function updatePreset(
@@ -86,40 +92,25 @@ export async function updatePreset(
   const isPrivate = patch.isPrivate ?? existing.isPrivate
 
   const pool = getPool()
-  const result = await pool.query<PresetRow>(
-    `UPDATE presets SET
-      name = $1,
-      description = $2,
-      is_private = $3,
-      settings = $4,
-      residence_route = $5,
-      initial_balances = $6,
-      incomes = $7,
-      expenses = $8,
-      folders = $9,
-      income_folders = $10,
-      expense_categories = $11,
-      updated_at = now()
-     WHERE id = $12 AND user_id = $13
-     RETURNING *`,
-    [
-      name,
-      description,
-      isPrivate,
-      cols.settings,
-      cols.residenceRoute,
-      cols.initialBalances,
-      cols.incomes,
-      cols.expenses,
-      cols.folders,
-      cols.incomeFolders,
-      cols.expenseCategories,
-      id,
-      userId,
-    ],
-  )
-  const row = result.rows[0]
-  return row ? rowToPreset(normalizeRow(row)) : null
+  return pool.transaction(async (query) => {
+    const result = await query<PresetRow>(
+      `UPDATE presets SET
+        name = $1,
+        description = $2,
+        is_private = $3,
+        settings = $4,
+        updated_at = now()
+       WHERE id = $5 AND user_id = $6
+       RETURNING *`,
+      [name, description, isPrivate, cols.settings, id, userId],
+    )
+    const row = result.rows[0]
+    if (!row) return null
+    const normalized = normalizeRow(row)
+    await replacePresetChildren(query, normalized.id, cols)
+    const lists = await loadPresetChildren(query, normalized.id)
+    return rowToPreset(normalized, lists)
+  })
 }
 
 export async function deletePreset(id: string, userId: string): Promise<boolean> {
@@ -131,21 +122,22 @@ export async function deletePreset(id: string, userId: string): Promise<boolean>
   return result.rowCount > 0
 }
 
-/** pg text protocol may leave uuid fields as strings; ensure JSON fields are objects. */
 function normalizeRow(row: PresetRow): PresetRow {
   return {
     ...row,
     id: String(row.id),
     user_id: String(row.user_id),
     settings: asJsonObject(row.settings),
-    residence_route: asJsonArray(row.residence_route),
-    initial_balances: asJsonArray(row.initial_balances),
-    incomes: asJsonArray(row.incomes),
-    expenses: asJsonArray(row.expenses),
-    folders: asJsonArray(row.folders),
-    income_folders: asJsonArray(row.income_folders),
-    expense_categories: asJsonArray(row.expense_categories),
-  } as PresetRow
+  }
+}
+
+function normalizeSummaryRow(row: PresetSummaryRow): PresetSummaryRow {
+  return {
+    ...normalizeRow(row),
+    income_count: Number(row.income_count) || 0,
+    expense_count: Number(row.expense_count) || 0,
+    once_count: Number(row.once_count) || 0,
+  }
 }
 
 function asJsonObject<T extends object>(value: unknown): T {
@@ -158,19 +150,6 @@ function asJsonObject<T extends object>(value: unknown): T {
     }
   }
   return {} as T
-}
-
-function asJsonArray<T>(value: unknown): T[] {
-  if (Array.isArray(value)) return value as T[]
-  if (typeof value === 'string') {
-    try {
-      const parsed = JSON.parse(value)
-      return Array.isArray(parsed) ? (parsed as T[]) : []
-    } catch {
-      return []
-    }
-  }
-  return []
 }
 
 export { clonePresetData } from './presetPayload'

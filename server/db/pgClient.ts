@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import net from 'node:net'
 import type { Socket } from 'node:net'
 
@@ -52,6 +53,13 @@ function passwordMessage(password: string): Buffer {
   writeInt32(buf, 1, 4 + body.length)
   body.copy(buf, 5)
   return buf
+}
+
+/** Postgres AuthenticationMD5Password response: md5(md5(password+user)+salt). */
+export function md5PasswordResponse(user: string, password: string, salt: Buffer): string {
+  const inner = createHash('md5').update(password + user, 'utf8').digest('hex')
+  const outer = createHash('md5').update(inner, 'utf8').update(salt).digest('hex')
+  return `md5${outer}`
 }
 
 function queryMessage(sql: string): Buffer {
@@ -217,13 +225,31 @@ class PgConnection {
       case 'R': {
         const authType = body.readInt32BE(0)
         if (authType === 0) return
+        // AuthenticationCleartextPassword
         if (authType === 3) {
           this.socket.write(passwordMessage(this.auth.password))
           return
         }
-        const err = new Error(
-          `Unsupported Postgres auth type ${authType}. Configure password (cleartext) or trust auth.`,
-        )
+        // AuthenticationMD5Password (4-byte salt follows)
+        if (authType === 5) {
+          if (body.length < 8) {
+            const err = new Error('Malformed MD5 auth challenge from Postgres')
+            this.connectReject?.(err)
+            this.connectResolve = null
+            this.connectReject = null
+            this.socket.destroy()
+            return
+          }
+          const salt = body.subarray(4, 8)
+          const token = md5PasswordResponse(this.auth.user, this.auth.password, salt)
+          this.socket.write(passwordMessage(token))
+          return
+        }
+        const hint =
+          authType === 10
+            ? ' Server uses SCRAM-SHA-256; set pg_hba.conf to md5 for 127.0.0.1 or use trust for local bootstrap.'
+            : ' Configure password (cleartext/md5) or trust auth in pg_hba.conf.'
+        const err = new Error(`Unsupported Postgres auth type ${authType}.${hint}`)
         this.connectReject?.(err)
         this.connectResolve = null
         this.connectReject = null

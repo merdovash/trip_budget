@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatSql } from './pgClient'
+import { formatSql, md5PasswordResponse } from './pgClient'
 
 describe('formatSql', () => {
   it('binds scalars and jsonb', () => {
@@ -11,5 +11,15 @@ describe('formatSql', () => {
 
   it('binds null', () => {
     expect(formatSql('SELECT $1', [null])).toBe('SELECT NULL')
+  })
+})
+
+describe('md5PasswordResponse', () => {
+  it('matches Postgres MD5 password formula', () => {
+    const salt = Buffer.from([1, 2, 3, 4])
+    const result = md5PasswordResponse('user', 'secret', salt)
+    expect(result.startsWith('md5')).toBe(true)
+    expect(result).toHaveLength(3 + 32)
+    expect(result).toBe(md5PasswordResponse('user', 'secret', salt))
   })
 })

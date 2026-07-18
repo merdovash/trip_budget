@@ -146,3 +146,5 @@
 70. [выполнено] Пресеты в MySQL + auth по email/паролю
 
 71. [выполнено] Логи ошибок API в файл logs/server-error.log
+
+72. [выполнено] Починить ошибки `tsc -b` / `vite build`: сужение типов RU/ES зарплаты в IncomePanel, null-check в PresetsPanel, неиспользуемые параметры/импорты, путь импортов в presetPayload, Buffer.toString в auth/presetsApi (конфликт с Uint8Array в node-shims).

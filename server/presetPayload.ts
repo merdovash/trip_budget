@@ -5,8 +5,8 @@ import type {
   InitialBalanceEntry,
   RecurringItem,
   ResidenceRoutePoint,
-} from '../../src/types/budget'
-import type { BudgetPreset, BudgetPresetData, BudgetPresetSummary } from '../../src/types/preset'
+} from '../src/types/budget'
+import type { BudgetPreset, BudgetPresetData, BudgetPresetSummary } from '../src/types/preset'
 
 export interface PresetColumns {
   settings: BudgetSettings

@@ -14,8 +14,6 @@ import {
 import type { AdjustedResidenceTax } from './residenceTaxAdjust'
 import { isForeignSalaryInResidenceBase } from './doubleTaxation'
 import {
-  isIncludedInResidenceTax,
-  isSalaryFrom,
   sumAnnualGrossIncomes,
   summarizeSourceSalaries,
 } from './incomeSourceTax'

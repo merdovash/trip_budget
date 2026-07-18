@@ -6,8 +6,6 @@ import {
 } from './countries/georgia'
 import type { AdjustedResidenceTax } from './residenceTaxAdjust'
 import {
-  isIncludedInResidenceTax,
-  isSalaryFrom,
   sumAnnualGrossIncomes,
   summarizeSourceSalaries,
 } from './incomeSourceTax'

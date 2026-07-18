@@ -1265,7 +1265,7 @@ export interface YearTaxSummary {
 }
 export function taxSummaryTotalInBase(
   summary: FullTaxSummary,
-  settings: BudgetSettings,
+  _settings: BudgetSettings,
   includeSourceTaxes: boolean,
 ): number {
   const residence =
@@ -1275,7 +1275,7 @@ export function taxSummaryTotalInBase(
 }
 export function yearTaxTotalInBase(
   yearSummary: YearTaxSummary,
-  settings: BudgetSettings,
+  _settings: BudgetSettings,
   includeSourceTaxes: boolean,
 ): number {
   let total = 0

@@ -76,7 +76,11 @@ export function PresetsPanel() {
 
   useEffect(() => {
     if (overwriteTargetId) return
-    if (activePreset?.ownerId === user?.id && ownedPresets.some((p) => p.id === activePreset.id)) {
+    if (
+      activePreset &&
+      activePreset.ownerId === user?.id &&
+      ownedPresets.some((p) => p.id === activePreset.id)
+    ) {
       setOverwriteTargetId(activePreset.id)
       return
     }

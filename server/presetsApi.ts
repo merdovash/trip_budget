@@ -17,10 +17,12 @@ function sendJson(res: ServerResponse, status: number, body: unknown): void {
 }
 
 async function readJsonBody<T>(req: IncomingMessage): Promise<T> {
-  let raw = ''
+  const chunks: Uint8Array[] = []
   for await (const chunk of req) {
-    raw += typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf-8')
+    chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk)
   }
+  // Node Buffer#toString() defaults to utf8; avoid encoding arg (Uint8Array overload clash).
+  const raw = Buffer.concat(chunks).toString()
   return JSON.parse(raw || '{}') as T
 }
 

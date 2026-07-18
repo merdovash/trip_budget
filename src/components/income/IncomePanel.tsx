@@ -110,8 +110,10 @@ function IncomeForm({ initialItem, onSubmit, formId = 'income-form' }: IncomeFor
   const salaryDisplay = hasWithholdingPreview
     ? getSalaryMonthlyDisplay(form.salaryCountryCode, paymentPreviewRows, settings.dependents)
     : null
-  const sourceSalaryDisplay = isSourceSalaryRu ? salaryDisplay : null
-  const residenceSalaryDisplay = isSourceSalaryEs ? salaryDisplay : null
+  const sourceSalaryDisplay =
+    isSourceSalaryRu && salaryDisplay && 'totalNdfl' in salaryDisplay ? salaryDisplay : null
+  const residenceSalaryDisplay =
+    isSourceSalaryEs && salaryDisplay && 'totalSocial' in salaryDisplay ? salaryDisplay : null
   function handleCategoryChange(categoryId: string) {
     const def = getIncomeCategoryDef(categoryId)
     const salaryCountryCode = def?.showSalaryCountry
@@ -317,7 +319,7 @@ function IncomeForm({ initialItem, onSubmit, formId = 'income-form' }: IncomeFor
               const amountError = errors[`payment_${field.id}`]
               const dayError = errors[`day_${field.id}`]
               const combinedError = [amountError, dayError].filter(Boolean).join(' · ')
-              const paymentTax = salaryDisplay?.byId[field.id]
+              const paymentTax = sourceSalaryDisplay?.byId[field.id]
               const spainPaymentTax = residenceSalaryDisplay?.byId[field.id]
 
               return (
@@ -363,7 +365,7 @@ function IncomeForm({ initialItem, onSubmit, formId = 'income-form' }: IncomeFor
                       net={paymentTax.net}
                       currency={form.currency}
                       showEmployerSocial={!hasMultiplePayments}
-                      employerSocial={salaryDisplay?.employerSocialMonthly}
+                      employerSocial={sourceSalaryDisplay?.employerSocialMonthly}
                     />
                   )}
                   {spainPaymentTax && spainPaymentTax.gross > 0 && (
@@ -400,35 +402,35 @@ function IncomeForm({ initialItem, onSubmit, formId = 'income-form' }: IncomeFor
                   side="income"
                 />
               )}
-              {isSourceSalaryRu && salaryDisplay ? (
+              {sourceSalaryDisplay ? (
                 <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
                   <p className="font-medium text-slate-800">Итого за месяц</p>
                   <dl className="mt-2 space-y-1 text-slate-600">
                     <div className="flex justify-between gap-4">
                       <dt>Gross (до вычетов)</dt>
-                      <dd className="font-medium">{formatCurrency(salaryDisplay.totalGross, form.currency)}</dd>
+                      <dd className="font-medium">{formatCurrency(sourceSalaryDisplay.totalGross, form.currency)}</dd>
                     </div>
                     <div className="flex justify-between gap-4 text-red-700">
                       <dt>НДФЛ</dt>
-                      <dd>−{formatCurrency(salaryDisplay.totalNdfl, form.currency)}</dd>
+                      <dd>−{formatCurrency(sourceSalaryDisplay.totalNdfl, form.currency)}</dd>
                     </div>
                     <div className="flex justify-between gap-4 border-t border-slate-200 pt-1 font-medium text-emerald-700">
                       <dt>На руки</dt>
-                      <dd>{formatCurrency(salaryDisplay.totalNet, form.currency)}</dd>
+                      <dd>{formatCurrency(sourceSalaryDisplay.totalNet, form.currency)}</dd>
                     </div>
                     <div className="flex justify-between gap-4 text-slate-500">
                       <dt>Соцвзносы работодателя</dt>
-                      <dd>{formatCurrency(salaryDisplay.employerSocialMonthly, form.currency)}/мес.</dd>
+                      <dd>{formatCurrency(sourceSalaryDisplay.employerSocialMonthly, form.currency)}/мес.</dd>
                     </div>
                   </dl>
                   <CurrencyConversionHint
-                    amount={salaryDisplay.totalNet}
+                    amount={sourceSalaryDisplay.totalNet}
                     currency={form.currency}
                     baseCurrency={settings.baseCurrency}
                     side="income"
                   />
                 </div>
-              ) : isSourceSalaryEs && residenceSalaryDisplay ? (
+              ) : residenceSalaryDisplay ? (
                 <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
                   <p className="font-medium text-slate-800">Итого nómina за месяц</p>
                   <dl className="mt-2 space-y-1 text-slate-600">

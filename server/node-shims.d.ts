@@ -103,7 +103,7 @@ interface BufferInstance extends Uint8Array {
 interface BufferConstructor {
   alloc(size: number): BufferInstance
   concat(buffers: Uint8Array[]): BufferInstance
-  from(data: string, encoding?: 'utf-8' | 'hex'): BufferInstance
+  from(data: string | Uint8Array, encoding?: 'utf-8' | 'hex'): BufferInstance
 }
 
 declare const Buffer: BufferConstructor

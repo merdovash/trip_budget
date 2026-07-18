@@ -10,11 +10,11 @@ const MIGRATIONS_DIR = path.resolve(
 
 async function ensureMigrationsTable(): Promise<void> {
   const pool = getPool()
-  await pool.query(`
+  await pool.exec(`
     CREATE TABLE IF NOT EXISTS schema_migrations (
-      id TEXT PRIMARY KEY,
-      applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
-    )
+      id VARCHAR(255) NOT NULL PRIMARY KEY,
+      applied_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `)
 }
 
@@ -39,7 +39,7 @@ export async function migrate(): Promise<string[]> {
   for (const file of files) {
     if (done.has(file)) continue
     const sql = fs.readFileSync(path.join(MIGRATIONS_DIR, file), 'utf8')
-    await pool.query(sql)
+    await pool.exec(sql)
     await pool.query('INSERT INTO schema_migrations (id) VALUES ($1)', [file])
     applied.push(file)
     console.log(`Applied ${file}`)

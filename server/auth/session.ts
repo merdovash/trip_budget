@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { createSessionToken, hashToken } from './password'
 import { getPool } from '../db/pool'
+import { newId } from '../db/mysqlClient'
 
 export const SESSION_COOKIE = 'session'
 const SESSION_DAYS = 30
@@ -49,8 +50,8 @@ export async function createSession(userId: string): Promise<string> {
   const expires = new Date(Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000)
   const pool = getPool()
   await pool.query(
-    `INSERT INTO sessions (user_id, token_hash, expires_at) VALUES ($1, $2, $3::timestamptz)`,
-    [userId, tokenHash, expires.toISOString()],
+    `INSERT INTO sessions (id, user_id, token_hash, expires_at) VALUES ($1, $2, $3, $4)`,
+    [newId(), userId, tokenHash, expires.toISOString().slice(0, 23).replace('T', ' ')],
   )
   return token
 }
@@ -69,7 +70,7 @@ export async function getUserFromRequest(req: IncomingMessage): Promise<AuthUser
     `SELECT u.id, u.email
      FROM sessions s
      JOIN users u ON u.id = s.user_id
-     WHERE s.token_hash = $1 AND s.expires_at > now()`,
+     WHERE s.token_hash = $1 AND s.expires_at > UTC_TIMESTAMP(3)`,
     [hashToken(token)],
   )
   const row = result.rows[0]

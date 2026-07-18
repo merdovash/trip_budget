@@ -1,23 +1,26 @@
 services:
   db:
-    image: postgres:16-alpine
+    image: mysql:8.0.25
     container_name: finance-db
     restart: unless-stopped
     environment:
-      POSTGRES_USER: finance
-      POSTGRES_PASSWORD: finance
-      POSTGRES_DB: finance
-      # Local/dev: no password challenge (custom Node client). Do not use in production.
-      POSTGRES_HOST_AUTH_METHOD: trust
+      MYSQL_ROOT_PASSWORD: finance
+      MYSQL_DATABASE: finance
+      MYSQL_USER: finance
+      MYSQL_PASSWORD: finance
     ports:
-      - '5432:5432'
+      - '3306:3306'
     volumes:
-      - finance_pg_data:/var/lib/postgresql/data
+      - finance_mysql_data:/var/lib/mysql
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-authentication-plugin=caching_sha2_password
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U finance -d finance']
+      test: ['CMD', 'mysqladmin', 'ping', '-h', '127.0.0.1', '-ufinance', '-pfinance']
       interval: 5s
       timeout: 5s
-      retries: 10
+      retries: 20
 
 volumes:
-  finance_pg_data:
+  finance_mysql_data:

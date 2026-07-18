@@ -3,7 +3,7 @@ import { isDbConnectionError, publicErrorMessage } from './logger'
 
 describe('logger helpers', () => {
   it('detects connection refused', () => {
-    const err = Object.assign(new Error('connect ECONNREFUSED 127.0.0.1:5432'), {
+    const err = Object.assign(new Error('connect ECONNREFUSED 127.0.0.1:3306'), {
       code: 'ECONNREFUSED',
     })
     expect(isDbConnectionError(err)).toBe(true)

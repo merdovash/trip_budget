@@ -52,7 +52,7 @@ export function publicErrorMessage(err: unknown): { status: number; error: strin
     return {
       status: 503,
       error:
-        'База данных недоступна. Запустите PostgreSQL (npm run db:up), затем npm run db:migrate.',
+        'База данных недоступна. Запустите MySQL (npm run db:up), затем npm run db:migrate.',
     }
   }
   return { status: 500, error: 'Внутренняя ошибка сервера' }

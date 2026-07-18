@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { getPool } from '../db/pool'
+import { newId } from '../db/mysqlClient'
 import { hashPassword, verifyPassword } from './password'
 import {
   clearSessionCookie,
@@ -69,14 +70,14 @@ export async function handleAuthApi(
     }
 
     const passwordHash = hashPassword(password)
-    const inserted = await pool.query<{ id: string; email: string }>(
-      `INSERT INTO users (email, password_hash) VALUES ($1, $2) RETURNING id, email`,
-      [email, passwordHash],
+    const userId = newId()
+    await pool.query(
+      `INSERT INTO users (id, email, password_hash) VALUES ($1, $2, $3)`,
+      [userId, email, passwordHash],
     )
-    const user = inserted.rows[0]!
-    const token = await createSession(String(user.id))
+    const token = await createSession(userId)
     setSessionCookie(res, token)
-    sendJson(res, 201, { user: { id: String(user.id), email: String(user.email) } })
+    sendJson(res, 201, { user: { id: userId, email } })
     return true
   }
 

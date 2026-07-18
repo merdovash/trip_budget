@@ -1,5 +1,6 @@
 import type { BudgetPreset, BudgetPresetData, BudgetPresetSummary, CreatePresetInput } from '../src/types/preset'
 import { getPool } from './db/pool'
+import { newId } from './db/mysqlClient'
 import { loadPresetChildren, replacePresetChildren } from './presetChildren'
 import {
   rowToPreset,
@@ -12,16 +13,16 @@ const SUMMARY_SELECT = `
   SELECT
     p.id, p.user_id, p.name, p.description, p.is_private, p.settings,
     p.created_at, p.updated_at,
-    (SELECT COUNT(*)::int FROM preset_incomes i WHERE i.preset_id = p.id) AS income_count,
-    (SELECT COUNT(*)::int FROM preset_expenses e WHERE e.preset_id = p.id) AS expense_count,
-    (SELECT COUNT(*)::int FROM preset_expenses e WHERE e.preset_id = p.id AND e.frequency = 'once') AS once_count
+    (SELECT COUNT(*) FROM preset_incomes i WHERE i.preset_id = p.id) AS income_count,
+    (SELECT COUNT(*) FROM preset_expenses e WHERE e.preset_id = p.id) AS expense_count,
+    (SELECT COUNT(*) FROM preset_expenses e WHERE e.preset_id = p.id AND e.frequency = 'once') AS once_count
   FROM presets p
 `
 
 export async function listPublicPresets(): Promise<BudgetPresetSummary[]> {
   const pool = getPool()
   const result = await pool.query<PresetSummaryRow>(
-    `${SUMMARY_SELECT} WHERE p.is_private = false ORDER BY p.updated_at DESC`,
+    `${SUMMARY_SELECT} WHERE p.is_private = 0 ORDER BY p.updated_at DESC`,
   )
   return result.rows.map((row) => toPresetSummary(normalizeSummaryRow(row)))
 }
@@ -56,13 +57,14 @@ export async function createPreset(
   input: CreatePresetInput,
 ): Promise<BudgetPreset> {
   const cols = splitPresetData(input.data)
+  const id = newId()
   const pool = getPool()
   return pool.transaction(async (query) => {
-    const result = await query<PresetRow>(
-      `INSERT INTO presets (user_id, name, description, is_private, settings)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING *`,
+    await query(
+      `INSERT INTO presets (id, user_id, name, description, is_private, settings)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
       [
+        id,
         userId,
         input.name.trim(),
         input.description?.trim() ?? '',
@@ -70,8 +72,9 @@ export async function createPreset(
         cols.settings,
       ],
     )
+    await replacePresetChildren(query, id, cols)
+    const result = await query<PresetRow>(`SELECT * FROM presets WHERE id = $1`, [id])
     const row = normalizeRow(result.rows[0]!)
-    await replacePresetChildren(query, row.id, cols)
     const lists = await loadPresetChildren(query, row.id)
     return rowToPreset(row, lists)
   })
@@ -93,21 +96,22 @@ export async function updatePreset(
 
   const pool = getPool()
   return pool.transaction(async (query) => {
-    const result = await query<PresetRow>(
+    const result = await query(
       `UPDATE presets SET
         name = $1,
         description = $2,
         is_private = $3,
         settings = $4,
-        updated_at = now()
-       WHERE id = $5 AND user_id = $6
-       RETURNING *`,
+        updated_at = CURRENT_TIMESTAMP(3)
+       WHERE id = $5 AND user_id = $6`,
       [name, description, isPrivate, cols.settings, id, userId],
     )
-    const row = result.rows[0]
+    if (result.rowCount === 0) return null
+    await replacePresetChildren(query, id, cols)
+    const loaded = await query<PresetRow>(`SELECT * FROM presets WHERE id = $1`, [id])
+    const row = loaded.rows[0]
     if (!row) return null
     const normalized = normalizeRow(row)
-    await replacePresetChildren(query, normalized.id, cols)
     const lists = await loadPresetChildren(query, normalized.id)
     return rowToPreset(normalized, lists)
   })
@@ -127,6 +131,7 @@ function normalizeRow(row: PresetRow): PresetRow {
     ...row,
     id: String(row.id),
     user_id: String(row.user_id),
+    is_private: Boolean(row.is_private),
     settings: asJsonObject(row.settings),
   }
 }
@@ -141,7 +146,17 @@ function normalizeSummaryRow(row: PresetSummaryRow): PresetSummaryRow {
 }
 
 function asJsonObject<T extends object>(value: unknown): T {
-  if (value && typeof value === 'object' && !Array.isArray(value)) return value as T
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    // mysql2 may return Buffer for JSON in some configs
+    if (Buffer.isBuffer(value)) {
+      try {
+        return JSON.parse(value.toString('utf8')) as T
+      } catch {
+        return {} as T
+      }
+    }
+    return value as T
+  }
   if (typeof value === 'string') {
     try {
       return JSON.parse(value) as T

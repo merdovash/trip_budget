@@ -9,7 +9,7 @@
 - Выбор страны и налогового режима (10 стран, 14 режимов)
 - Помесячный прогноз cash flow с учётом налогов
 - График доходов, расходов и накопленного баланса
-- Рабочий бюджет в localStorage; сохранённые наборы (пресеты) в PostgreSQL
+- Рабочий бюджет в localStorage; сохранённые наборы (пресеты) в MySQL
 - Регистрация / вход по email и паролю; публичные и персональные пресеты
 
 ## Поддерживаемые страны
@@ -20,7 +20,7 @@
 
 - Node.js 20+
 - npm 10+
-- PostgreSQL 16+ (локально удобно через Docker Compose)
+- MySQL 8.0.25+ (локально удобно через Docker Compose)
 
 ## Запуск
 
@@ -33,7 +33,7 @@ npm run db:migrate
 npm run db:seed
 ```
 
-Без Docker укажите свой `DATABASE_URL` на доступный PostgreSQL и выполните migrate/seed.
+Без Docker укажите свой `DATABASE_URL` на доступный MySQL и выполните migrate/seed.
 
 Ошибки API пишутся в `logs/server-error.log` (папка создаётся автоматически).
 
@@ -56,6 +56,22 @@ npm run build
 npm run test
 ```
 
+## Деплой на REG.RU (GitHub Actions)
+
+По push в `main` (или вручную через Actions → Deploy to REG.RU) собирается `dist` и заливается по FTP.
+
+В репозитории: **Settings → Secrets and variables → Actions** добавьте:
+
+| Secret | Пример |
+|--------|--------|
+| `FTP_HOST` | `server276.hosting.reg.ru` (хост из панели FTP) |
+| `FTP_USER` | логин FTP |
+| `FTP_PASSWORD` | пароль FTP |
+| `FTP_SERVER_DIR` | `./public_html/` или `./www/ваш-домен.ru/` |
+| `FTP_PROTOCOL` | опционально: `ftp` (по умолчанию) или `ftps` |
+
+На shared-хостинге работают только статика и localStorage; API (`/api/...`) без Node на сервере недоступен.
+
 ## Ограничения
 
 Расчёты носят ознакомительный характер и не являются налоговой консультацией. Налоговые модули упрощены и предназначены для сравнительного планирования.
@@ -67,5 +83,5 @@ npm run test
 - `src/tax/` — налоговый движок (расширяемый)
 - `src/engine/` — расчёт бюджета
 - `src/components/` — UI-компоненты
-- `server/` — API auth/presets, доступ к PostgreSQL
+- `server/` — API auth/presets, доступ к MySQL
 - `server/db/migrations/` — SQL-миграции

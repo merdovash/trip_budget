@@ -1,12 +1,12 @@
 # Схема хранения данных
 
-Рабочий бюджет живёт в `localStorage` браузера. **Пресеты и пользователи** — в **PostgreSQL**. Типы — в `src/types/`.
+Рабочий бюджет живёт в `localStorage` браузера. **Пресеты и пользователи** — в **MySQL 8**. Типы — в `src/types/`.
 
 ## Обзор хранилищ
 
 | Хранилище | Где | Ключ / путь | Содержимое |
 |-----------|-----|-------------|------------|
-| Пресеты, пользователи, сессии | PostgreSQL | `DATABASE_URL` | `users`, `sessions`, `presets` + дочерние таблицы списков |
+| Пресеты, пользователи, сессии | MySQL 8.0.25+ | `DATABASE_URL` | `users`, `sessions`, `presets` + дочерние таблицы списков |
 | Сид пресетов (файл) | `data/presets.seed.json` | импорт через `npm run db:seed` | публичные наборы |
 | Рабочий бюджет | `localStorage` | `family-budget-storage` | Zustand persist: настройки, доходы, расходы, папки, категории |
 | UI сайдбара | `localStorage` | ключ сворачивания меню | `'0'` / `'1'` |
@@ -15,7 +15,7 @@
 
 ```mermaid
 flowchart TB
-  subgraph db [PostgreSQL]
+  subgraph db [MySQL]
     U[users]
     S[sessions]
     P[presets]
@@ -34,7 +34,7 @@ flowchart TB
 
 ---
 
-## 1. PostgreSQL
+## 1. MySQL
 
 Подключение: переменная `DATABASE_URL` (см. `.env.example`). Локально: `docker compose up -d`, затем `npm run db:migrate` и `npm run db:seed`.
 
@@ -42,19 +42,19 @@ flowchart TB
 
 | Поле | Тип | Описание |
 |------|-----|----------|
-| `id` | UUID | PK |
-| `email` | TEXT UNIQUE | Email (нижний регистр) |
+| `id` | CHAR(36) | PK (UUID) |
+| `email` | VARCHAR(255) UNIQUE | Email (нижний регистр) |
 | `password_hash` | TEXT | scrypt-хэш пароля |
-| `created_at` | TIMESTAMPTZ | Создание |
+| `created_at` | DATETIME(3) | Создание |
 
 ### `sessions`
 
 | Поле | Тип | Описание |
 |------|-----|----------|
-| `id` | UUID | PK |
-| `user_id` | UUID FK → users | Владелец сессии |
-| `token_hash` | TEXT UNIQUE | SHA-256 токена из cookie `session` |
-| `expires_at` | TIMESTAMPTZ | Срок действия |
+| `id` | CHAR(36) | PK |
+| `user_id` | CHAR(36) FK → users | Владелец сессии |
+| `token_hash` | VARCHAR(128) UNIQUE | SHA-256 токена из cookie `session` |
+| `expires_at` | DATETIME(3) | Срок действия |
 
 ### `presets`
 
@@ -62,12 +62,12 @@ flowchart TB
 
 | Поле | Тип | Описание |
 |------|-----|----------|
-| `id` | UUID | PK |
-| `user_id` | UUID FK → users | Владелец |
-| `name` / `description` | TEXT | Название и описание |
-| `is_private` | BOOLEAN | Приватный — не в публичном списке |
-| `settings` | JSONB | `BudgetSettings` **без** `residenceRoute` / `initialBalances` |
-| `created_at` / `updated_at` | TIMESTAMPTZ | Метки времени |
+| `id` | CHAR(36) | PK |
+| `user_id` | CHAR(36) FK → users | Владелец |
+| `name` / `description` | VARCHAR / TEXT | Название и описание |
+| `is_private` | TINYINT(1) | Приватный — не в публичном списке |
+| `settings` | JSON | `BudgetSettings` **без** `residenceRoute` / `initialBalances` |
+| `created_at` / `updated_at` | DATETIME(3) | Метки времени |
 
 ### Дочерние таблицы (PK `(preset_id, id)`, `ON DELETE CASCADE`)
 
@@ -76,14 +76,14 @@ flowchart TB
 | `preset_folders` | папки расходов (`name`, `sort_order`, `excluded`) |
 | `preset_income_folders` | папки доходов |
 | `preset_expense_categories` | пользовательские категории расходов |
-| `preset_residence_route` | точки маршрута (`country_code`, `tax_regime_id`, даты, `regime_params` JSONB) |
+| `preset_residence_route` | точки маршрута (`country_code`, `tax_regime_id`, даты, `regime_params` JSON) |
 | `preset_initial_balances` | начальные остатки |
-| `preset_incomes` | доходы (`RecurringItem` → колонки; `payments` JSONB) |
+| `preset_incomes` | доходы (`RecurringItem` → колонки; `payments` JSON) |
 | `preset_expenses` | расходы (тот же набор колонок) |
 
 На границе API строки собираются в клиентский `BudgetPreset.data` (`server/presetPayload.ts` + `server/presetChildren.ts`).
 
-Публичный список: `is_private = false`. «Мои»: `user_id` текущей сессии. Приватный чужой пресет — 404.
+Публичный список: `is_private = 0`. «Мои»: `user_id` текущей сессии. Приватный чужой пресет — 404.
 
 Авторизация: `POST /api/auth/register|login|logout`, `GET /api/auth/me`. Cookie `session` (HttpOnly).
 

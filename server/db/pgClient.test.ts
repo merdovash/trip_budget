@@ -16,7 +16,7 @@ describe('formatSql', () => {
 
 describe('md5PasswordResponse', () => {
   it('matches Postgres MD5 password formula', () => {
-    const salt = Buffer.from([1, 2, 3, 4])
+    const salt = Buffer.from(Uint8Array.from([1, 2, 3, 4]))
     const result = md5PasswordResponse('user', 'secret', salt)
     expect(result.startsWith('md5')).toBe(true)
     expect(result).toHaveLength(3 + 32)

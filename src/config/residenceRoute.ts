@@ -1,6 +1,6 @@
 import type { BudgetSettings, ResidenceRoutePoint } from '../types/budget'
-import { getAvailableCountries, getCalculatorsByCountry } from '../tax/registry'
-import { isValidIsoDate, todayIsoDate } from '../lib/format'
+import { getAvailableCountries, getCalculatorsByCountry, COUNTRY_LABELS } from '../tax/registry'
+import { formatDateDisplay, isValidIsoDate, todayIsoDate } from '../lib/format'
 
 const OPEN_END = '9999-12-31'
 const ISO_DATE_RE = /^(\d{4})-(\d{2})-(\d{2})$/
@@ -50,6 +50,27 @@ function rangesOverlap(
   return a.startDate <= b.endDate && b.startDate <= a.endDate
 }
 
+function formatRoutePeriod(point: Pick<ResidenceRoutePoint, 'startDate' | 'endDate'>): string {
+  const start = formatDateDisplay(point.startDate)
+  const end = isOpenEndedRouteDate(point.endDate) ? 'бессрочно' : formatDateDisplay(point.endDate)
+  return `${start}–${end}`
+}
+
+/** Краткое описание точки маршрута для сообщений об ошибках. */
+export function describeResidenceRoutePoint(
+  point: Pick<ResidenceRoutePoint, 'countryCode' | 'startDate' | 'endDate'>,
+): string {
+  const country = COUNTRY_LABELS[point.countryCode] ?? point.countryCode
+  return `${country} (${formatRoutePeriod(point)})`
+}
+
+export function findOverlappingRoutePoints(
+  point: Pick<ResidenceRoutePoint, 'id' | 'startDate' | 'endDate'>,
+  route: ResidenceRoutePoint[],
+): ResidenceRoutePoint[] {
+  return route.filter((other) => other.id !== point.id && rangesOverlap(point, other))
+}
+
 /** Проверка одной точки относительно остальных (даты включительно, пересечения запрещены). */
 export function validateResidenceRoutePoint(
   point: Pick<ResidenceRoutePoint, 'id' | 'startDate' | 'endDate'>,
@@ -59,13 +80,12 @@ export function validateResidenceRoutePoint(
   if (point.endDate < point.startDate) {
     return 'Дата окончания не может быть раньше даты начала'
   }
-  for (const other of route) {
-    if (other.id === point.id) continue
-    if (rangesOverlap(point, other)) {
-      return 'Период пересекается с другой точкой маршрута'
-    }
-  }
-  return null
+  const overlaps = findOverlappingRoutePoints(point, route)
+  if (overlaps.length === 0) return null
+  const details = overlaps.map(describeResidenceRoutePoint).join('; ')
+  return overlaps.length === 1
+    ? `Период пересекается с точкой маршрута: ${details}`
+    : `Период пересекается с точками маршрута: ${details}`
 }
 
 export function validateResidenceRoute(route: ResidenceRoutePoint[]): string | null {
@@ -74,15 +94,24 @@ export function validateResidenceRoute(route: ResidenceRoutePoint[]): string | n
       return 'Дата окончания не может быть раньше даты начала'
     }
   }
-  const sorted = sortResidenceRoute(route)
-  for (let i = 1; i < sorted.length; i++) {
-    const prev = sorted[i - 1]!
-    const curr = sorted[i]!
-    if (rangesOverlap(prev, curr)) {
-      return 'Периоды точек маршрута пересекаются'
-    }
+  const messages: string[] = []
+  for (const point of route) {
+    const overlaps = findOverlappingRoutePoints(point, route)
+    if (overlaps.length === 0) continue
+    // Сообщение только для «левой» точки пары, чтобы не дублировать A↔B.
+    const laterOverlaps = overlaps.filter((other) => {
+      const byStart = point.startDate.localeCompare(other.startDate)
+      if (byStart !== 0) return byStart < 0
+      return point.id.localeCompare(other.id) < 0
+    })
+    if (laterOverlaps.length === 0) continue
+    const details = laterOverlaps.map(describeResidenceRoutePoint).join('; ')
+    messages.push(
+      `${describeResidenceRoutePoint(point)} пересекается с: ${details}`,
+    )
   }
-  return null
+  if (messages.length === 0) return null
+  return messages.join('. ')
 }
 
 function normalizeRoutePoint(point: ResidenceRoutePoint): ResidenceRoutePoint {

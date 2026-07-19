@@ -96,10 +96,42 @@ describe('residenceRoute', () => {
         endDate: '2026-12-31',
       },
     ]
-    expect(validateResidenceRoute(route)).toMatch(/пересека/)
-    expect(
-      validateResidenceRoutePoint(route[1]!, [route[0]!]),
-    ).toMatch(/пересека/)
+    expect(validateResidenceRoute(route)).toMatch(/Грузия/)
+    expect(validateResidenceRoute(route)).toMatch(/Таиланд/)
+    expect(validateResidenceRoute(route)).toMatch(/01\.01\.2026/)
+    expect(validateResidenceRoutePoint(route[1]!, [route[0]!])).toMatch(/Грузия/)
+    expect(validateResidenceRoutePoint(route[1]!, [route[0]!])).toMatch(/01\.01\.2026–30\.06\.2026/)
+  })
+
+  it('lists all overlapping points in validation message', () => {
+    const route = [
+      {
+        id: 'a',
+        countryCode: 'GE',
+        taxRegimeId: 'ge-standard',
+        startDate: '2026-01-01',
+        endDate: '2026-12-31',
+      },
+      {
+        id: 'b',
+        countryCode: 'TH',
+        taxRegimeId: 'th-standard',
+        startDate: '2026-03-01',
+        endDate: '2026-06-30',
+      },
+      {
+        id: 'c',
+        countryCode: 'ES',
+        taxRegimeId: 'es-employed',
+        startDate: '2026-05-01',
+        endDate: '2026-08-31',
+      },
+    ]
+    const message = validateResidenceRoutePoint(route[0]!, route)
+    expect(message).toMatch(/Таиланд/)
+    expect(message).toMatch(/Испания/)
+    expect(message).toMatch(/01\.03\.2026–30\.06\.2026/)
+    expect(message).toMatch(/01\.05\.2026–31\.08\.2026/)
   })
 
   it('allows contiguous non-overlapping periods', () => {

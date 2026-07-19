@@ -37,7 +37,7 @@ export function StackPanel({ open, title, onClose, children, headerActions }: St
   }
 
   return (
-    <div className="fixed inset-0 z-[60] flex flex-col justify-end">
+    <div className="fixed inset-0 z-[60]">
       <button
         type="button"
         className="absolute inset-0 bg-slate-900/40"
@@ -48,7 +48,7 @@ export function StackPanel({ open, title, onClose, children, headerActions }: St
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="relative z-10 flex max-h-[92vh] w-full flex-col rounded-t-2xl border border-slate-200 bg-white shadow-2xl"
+        className="absolute inset-x-0 bottom-0 z-10 flex max-h-[92vh] w-full flex-col rounded-t-2xl border border-b-0 border-slate-200 bg-white pb-[env(safe-area-inset-bottom,0px)] shadow-2xl"
         style={{ animation: 'stack-panel-up 200ms ease-out' }}
       >
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">

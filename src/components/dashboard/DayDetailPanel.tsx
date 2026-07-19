@@ -41,7 +41,7 @@ function LineList({
   title: string
   lines: DayLedgerLine[]
   currency: string
-  tone: 'income' | 'expense' | 'inflow'
+  tone: 'income' | 'expense'
 }) {
   if (lines.length === 0) {
     return (
@@ -52,8 +52,7 @@ function LineList({
     )
   }
 
-  const amountClass =
-    tone === 'expense' ? 'text-red-700' : tone === 'income' ? 'text-emerald-700' : 'text-sky-700'
+  const amountClass = tone === 'expense' ? 'text-red-700' : 'text-emerald-700'
 
   return (
     <section>
@@ -93,6 +92,8 @@ export function DayDetailPanel({
   onClose,
 }: DayDetailPanelProps) {
   const title = ledger ? formatDateDisplay(ledger.date) : 'День'
+  const incomeLines = ledger ? [...ledger.incomes, ...ledger.inflows] : []
+  const incomeTotal = ledger ? ledger.incomeTotal + ledger.inflowTotal : 0
 
   return (
     <StackPanel open={open} title={title} onClose={onClose}>
@@ -117,11 +118,11 @@ export function DayDetailPanel({
             </button>
           </div>
 
-          <div className="grid grid-cols-3 gap-2 text-center text-xs sm:text-sm">
+          <div className="grid grid-cols-2 gap-2 text-center text-xs sm:text-sm">
             <div className="rounded-lg bg-emerald-50 px-2 py-2">
               <p className="text-emerald-800/70">Доходы</p>
               <p className="font-semibold text-emerald-800">
-                {formatCurrency(ledger.incomeTotal, currency)}
+                {formatCurrency(incomeTotal, currency)}
               </p>
             </div>
             <div className="rounded-lg bg-red-50 px-2 py-2">
@@ -130,24 +131,10 @@ export function DayDetailPanel({
                 {formatCurrency(ledger.expenseTotal, currency)}
               </p>
             </div>
-            <div className="rounded-lg bg-sky-50 px-2 py-2">
-              <p className="text-sky-800/70">Притоки</p>
-              <p className="font-semibold text-sky-800">
-                {formatCurrency(ledger.inflowTotal, currency)}
-              </p>
-            </div>
           </div>
 
-          <LineList title="Доходы" lines={ledger.incomes} currency={currency} tone="income" />
+          <LineList title="Доходы" lines={incomeLines} currency={currency} tone="income" />
           <LineList title="Расходы" lines={ledger.expenses} currency={currency} tone="expense" />
-          {ledger.inflows.length > 0 && (
-            <LineList
-              title="Притоки (кредиты)"
-              lines={ledger.inflows}
-              currency={currency}
-              tone="inflow"
-            />
-          )}
         </div>
       )}
     </StackPanel>

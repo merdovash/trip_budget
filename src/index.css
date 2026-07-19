@@ -18,3 +18,12 @@ body {
     opacity: 1;
   }
 }
+
+@keyframes mobile-drawer-in {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}

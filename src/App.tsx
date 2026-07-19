@@ -76,7 +76,7 @@ export default function App() {
           onCollapsedChange={setSidebarCollapsed}
         />
         <main
-          className={`min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-3 transition-[margin] duration-200 sm:p-4 md:p-6 ${
+          className={`min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-3 pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] transition-[margin] duration-200 sm:p-4 md:p-6 md:pb-6 ${
             sidebarCollapsed ? 'md:ml-14' : 'md:ml-56'
           }`}
         >

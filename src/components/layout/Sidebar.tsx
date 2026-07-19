@@ -1,4 +1,4 @@
-import type { MouseEvent, SVGProps } from 'react'
+import { useEffect, useState, type MouseEvent, type SVGProps } from 'react'
 import { sectionToPath } from '../../lib/appRoutes'
 import type { AppSection } from '../../types/budget'
 
@@ -23,11 +23,43 @@ interface SidebarProps {
 }
 
 export function Sidebar({ active, onChange, collapsed, onCollapsedChange }: SidebarProps) {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+
+  useEffect(() => {
+    if (!mobileMenuOpen) return
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setMobileMenuOpen(false)
+    }
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.body.style.overflow = prev
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [mobileMenuOpen])
+
+  function selectSection(id: AppSection) {
+    onChange(id)
+    setMobileMenuOpen(false)
+  }
+
   return (
     <div className="shrink-0 md:contents">
-      {/* Mobile: горизонтальная навигация */}
-      <aside className="z-50 border-b border-slate-200 bg-white md:hidden">
-        <nav className="flex gap-1 overflow-x-auto p-2">
+      {/* Mobile: нижняя панель иконок */}
+      <aside className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white pb-[env(safe-area-inset-bottom,0px)] md:hidden">
+        <nav className="flex items-stretch gap-0.5 overflow-x-auto px-1 py-1.5">
+          <button
+            type="button"
+            onClick={() => setMobileMenuOpen(true)}
+            title="Меню"
+            aria-label="Открыть меню"
+            aria-expanded={mobileMenuOpen}
+            className="flex min-w-[3rem] shrink-0 flex-col items-center justify-center gap-0.5 rounded-lg px-2 py-1.5 text-slate-600 hover:bg-slate-100"
+          >
+            <MenuIcon className="h-5 w-5" aria-hidden />
+            <span className="text-[10px] font-medium leading-none">Меню</span>
+          </button>
           {NAV_ITEMS.map(({ id, label, Icon }) => (
             <NavButton
               key={id}
@@ -35,12 +67,53 @@ export function Sidebar({ active, onChange, collapsed, onCollapsedChange }: Side
               label={label}
               Icon={Icon}
               isActive={active === id}
-              collapsed={false}
-              onChange={onChange}
+              mode="icon"
+              onChange={selectSection}
             />
           ))}
         </nav>
       </aside>
+
+      {/* Mobile: выезжающее слева полное меню */}
+      {mobileMenuOpen && (
+        <div className="fixed inset-0 z-[55] md:hidden">
+          <button
+            type="button"
+            className="absolute inset-0 bg-slate-900/40"
+            aria-label="Закрыть меню"
+            onClick={() => setMobileMenuOpen(false)}
+          />
+          <aside
+            className="absolute inset-y-0 left-0 flex w-[min(18rem,85vw)] flex-col border-r border-slate-200 bg-white shadow-xl"
+            style={{ animation: 'mobile-drawer-in 180ms ease-out' }}
+            aria-label="Навигация"
+          >
+            <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+              <p className="text-sm font-semibold text-slate-900">Меню</p>
+              <button
+                type="button"
+                onClick={() => setMobileMenuOpen(false)}
+                className="rounded-lg px-2 py-1 text-sm text-slate-500 hover:bg-slate-100"
+              >
+                Закрыть
+              </button>
+            </div>
+            <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-3">
+              {NAV_ITEMS.map(({ id, label, Icon }) => (
+                <NavButton
+                  key={id}
+                  id={id}
+                  label={label}
+                  Icon={Icon}
+                  isActive={active === id}
+                  mode="full"
+                  onChange={selectSection}
+                />
+              ))}
+            </nav>
+          </aside>
+        </div>
+      )}
 
       {/* Desktop: фиксированная колонка поверх контента */}
       <aside
@@ -60,7 +133,7 @@ export function Sidebar({ active, onChange, collapsed, onCollapsedChange }: Side
               label={label}
               Icon={Icon}
               isActive={active === id}
-              collapsed={collapsed}
+              mode={collapsed ? 'icon' : 'full'}
               onChange={onChange}
             />
           ))}
@@ -96,14 +169,14 @@ function NavButton({
   label,
   Icon,
   isActive,
-  collapsed,
+  mode,
   onChange,
 }: {
   id: AppSection
   label: string
   Icon: NavIcon
   isActive: boolean
-  collapsed: boolean
+  mode: 'icon' | 'full'
   onChange: (section: AppSection) => void
 }) {
   function handleClick(e: MouseEvent<HTMLAnchorElement>) {
@@ -112,22 +185,45 @@ function NavButton({
     onChange(id)
   }
 
+  if (mode === 'icon') {
+    return (
+      <a
+        href={sectionToPath(id)}
+        onClick={handleClick}
+        title={label}
+        aria-label={label}
+        aria-current={isActive ? 'page' : undefined}
+        className={`flex min-w-[3rem] shrink-0 flex-col items-center justify-center gap-0.5 rounded-lg px-2 py-1.5 text-[10px] font-medium leading-none transition md:min-w-0 md:flex-row md:gap-0 md:p-2.5 md:text-sm ${
+          isActive ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-100'
+        }`}
+      >
+        <Icon className="h-5 w-5 shrink-0" aria-hidden />
+        <span className="max-w-[4.5rem] truncate md:hidden">{label}</span>
+      </a>
+    )
+  }
+
   return (
     <a
       href={sectionToPath(id)}
       onClick={handleClick}
-      title={collapsed ? label : undefined}
       aria-label={label}
       aria-current={isActive ? 'page' : undefined}
-      className={`flex items-center rounded-lg text-sm font-medium transition ${
-        collapsed ? 'justify-center p-2.5 md:w-full' : 'gap-2.5 whitespace-nowrap px-3 py-2 text-left md:w-full'
-      } ${
+      className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm font-medium transition ${
         isActive ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-100'
       }`}
     >
       <Icon className="h-5 w-5 shrink-0" aria-hidden />
-      <span className={collapsed ? 'md:hidden' : undefined}>{label}</span>
+      <span>{label}</span>
     </a>
+  )
+}
+
+function MenuIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" {...props}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4 7h16M4 12h16M4 17h16" />
+    </svg>
   )
 }
 

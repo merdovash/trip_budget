@@ -124,12 +124,14 @@ export function Dashboard() {
         annualTaxes={annualTaxes}
         initialBalance={initialBalance}
       />
-      <CashFlowChart
-        dailySnapshots={dailySnapshots}
-        monthlySnapshots={snapshots}
-        currency={settings.baseCurrency}
-        onDayClick={setSelectedDay}
-      />
+      <div className="max-md:-mx-3">
+        <CashFlowChart
+          dailySnapshots={dailySnapshots}
+          monthlySnapshots={snapshots}
+          currency={settings.baseCurrency}
+          onDayClick={setSelectedDay}
+        />
+      </div>
       <DayDetailPanel
         open={selectedDay != null}
         ledger={dayLedger}

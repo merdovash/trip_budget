@@ -80,7 +80,7 @@ export function CashFlowChart({
   const tickInterval = Math.max(1, Math.floor(chartRows.length / 12))
 
   return (
-    <Card className="overflow-hidden p-4 max-md:-mx-4 max-md:rounded-none max-md:border-x-0 sm:p-5 md:mx-0">
+    <Card className="overflow-hidden p-4 max-md:rounded-none max-md:border-x-0 sm:p-5">
       <h2 className="mb-1 text-lg font-semibold">
         {useMonthly ? 'Cash flow по месяцам' : 'Cash flow по дням'}
       </h2>
@@ -89,12 +89,11 @@ export function CashFlowChart({
           ? 'Горизонт большой — график агрегирован по месяцам для скорости. Клик открывает первый день месяца.'
           : 'Накопленный баланс по дням — помогает увидеть кассовый разрыв между поступлениями и расходами. «Еда» начисляется ежедневно (сумма ÷ 30). Клик по точке открывает статьи дня.'}
       </p>
-      {/* На мобильном выходим за отступы карточки — область графика шире. */}
-      <div className="-mx-4 h-80 sm:mx-0 sm:h-96">
+      <div className="-mx-4 h-80 w-[calc(100%+2rem)] sm:mx-0 sm:h-96 sm:w-full">
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart
             data={chartRows}
-            margin={{ top: 8, right: 4, left: 0, bottom: 4 }}
+            margin={{ top: 8, right: 8, left: 4, bottom: 4 }}
             onClick={(state) => {
               if (!onDayClick) return
               const date = state?.activePayload?.[0]?.payload?.date as string | undefined

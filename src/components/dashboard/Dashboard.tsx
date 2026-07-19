@@ -159,7 +159,7 @@ export function Dashboard() {
         </div>
       )}
       {hasTaxContent && (
-        <CollapsibleSection title="Налоги">
+        <CollapsibleSection title="Налоги" storageKey="dashboard-taxes">
           <TaxesOverviewPanel
             yearSummaries={yearTaxSummaries}
             settings={settings}
@@ -169,14 +169,17 @@ export function Dashboard() {
         </CollapsibleSection>
       )}
       {regimeComparisons.length > 0 && (
-        <CollapsibleSection title="Сравнение налоговых режимов">
+        <CollapsibleSection
+          title="Сравнение налоговых режимов"
+          storageKey="dashboard-regime-comparison"
+        >
           <RegimeComparisonPanel
             comparisons={regimeComparisons}
             baseCurrency={settings.baseCurrency}
           />
         </CollapsibleSection>
       )}
-      <CollapsibleSection title="Помесячная таблица">
+      <CollapsibleSection title="Помесячная таблица" storageKey="dashboard-monthly-table">
         <MonthlyTable snapshots={snapshots} currency={settings.baseCurrency} embedded />
       </CollapsibleSection>
     </div>

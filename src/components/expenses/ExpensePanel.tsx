@@ -10,6 +10,7 @@ import { datesFromRoutePoint } from '../../lib/expenseRouteBinding'
 import { useExchangeRateStore } from '../../store/exchangeRateStore'
 import { expenseFormSchema, type ExpenseFormData } from '../../lib/validation'
 import { useBudgetStore } from '../../store/budgetStore'
+import { usePersistedRecord } from '../../lib/uiPreferences'
 import {
   FREQUENCY_LABELS,
   LOAN_EXPENSE_CATEGORY,
@@ -805,7 +806,7 @@ function ExpenseList({
   const folders = useBudgetStore((s) => s.folders)
   const updateFolder = useBudgetStore((s) => s.updateFolder)
   const settings = useBudgetStore((s) => s.settings)
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
+  const [collapsed, setCollapsed] = usePersistedRecord('expense-folder-collapsed')
 
   const grouped = useMemo(() => {
     const sortedFolders = [...folders].sort(

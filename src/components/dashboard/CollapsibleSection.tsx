@@ -1,18 +1,22 @@
-import { useState, type ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { Card } from '../ui/FormControls'
+import { usePersistedFlag } from '../../lib/uiPreferences'
 
 interface CollapsibleSectionProps {
   title: string
+  /** When set, open/closed state is kept in localStorage across visits. */
+  storageKey?: string
   defaultOpen?: boolean
   children: ReactNode
 }
 
 export function CollapsibleSection({
   title,
+  storageKey,
   defaultOpen = false,
   children,
 }: CollapsibleSectionProps) {
-  const [open, setOpen] = useState(defaultOpen)
+  const [open, setOpen] = usePersistedFlag(storageKey, defaultOpen)
 
   return (
     <Card className="overflow-hidden p-0">

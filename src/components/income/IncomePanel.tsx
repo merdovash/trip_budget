@@ -19,6 +19,7 @@ import {
 import { getRelocationMode } from '../../config/relocationMode'
 import { isIncludedInResidenceTax } from '../../tax/incomeSourceTax'
 import { useBudgetStore } from '../../store/budgetStore'
+import { usePersistedRecord } from '../../lib/uiPreferences'
 import { FREQUENCY_LABELS, type Frequency, type IncomePayment, type RecurringItem } from '../../types/budget'
 import { Button, Card, EmptyState, Field, Input, Select, DateInput } from '../ui/FormControls'
 import { CurrencySelect } from '../ui/CurrencySelect'
@@ -867,7 +868,7 @@ function IncomeList({
   const incomes = useBudgetStore((s) => s.incomes)
   const incomeFolders = useBudgetStore((s) => s.incomeFolders)
   const settings = useBudgetStore((s) => s.settings)
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
+  const [collapsed, setCollapsed] = usePersistedRecord('income-folder-collapsed')
 
   const grouped = useMemo(() => {
     const sortedFolders = [...incomeFolders].sort(

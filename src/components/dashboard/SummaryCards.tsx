@@ -1,4 +1,4 @@
-import { formatCurrency, formatPercent } from '../../lib/format'
+import { formatCurrency, formatPercent, todayIsoDate } from '../../lib/format'
 import { computeSummaryAverages } from '../../engine/budgetEngine'
 import type { DailySnapshot, MonthlySnapshot } from '../../types/budget'
 import { Card } from '../ui/FormControls'
@@ -76,6 +76,35 @@ function ChartIcon() {
   )
 }
 
+function TodayIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5" aria-hidden>
+      <path
+        fillRule="evenodd"
+        d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm.75-13a.75.75 0 0 0-1.5 0v5c0 .414.336.75.75.75h4a.75.75 0 0 0 0-1.5h-3.25V5Z"
+        clipRule="evenodd"
+      />
+    </svg>
+  )
+}
+
+/** Остаток на указанную дату по дневным снимкам (включительно). */
+export function balanceAsOfDate(
+  dailySnapshots: DailySnapshot[],
+  initialBalance: number,
+  asOfDate: string = todayIsoDate(),
+): number {
+  if (dailySnapshots.length === 0) return initialBalance
+  const first = dailySnapshots[0]!
+  if (asOfDate < first.date) return initialBalance
+  let balance = initialBalance
+  for (const snapshot of dailySnapshots) {
+    if (snapshot.date > asOfDate) break
+    balance = snapshot.cumulativeBalance
+  }
+  return balance
+}
+
 export function SummaryCards({
   snapshots,
   dailySnapshots,
@@ -85,6 +114,7 @@ export function SummaryCards({
 }: SummaryCardsProps) {
   const { avgInflow, avgExpenses } = computeSummaryAverages(snapshots)
   const lastBalance = snapshots.at(-1)?.cumulativeBalance ?? 0
+  const todayBalance = balanceAsOfDate(dailySnapshots, initialBalance)
   const minDailyBalance =
     dailySnapshots.length > 0
       ? Math.min(...dailySnapshots.map((d) => d.cumulativeBalance))
@@ -101,6 +131,13 @@ export function SummaryCards({
       label: 'Начальный остаток',
       value: formatCurrency(initialBalance, currency),
       icon: <WalletIcon />,
+    },
+    {
+      label: 'Остаток на сегодня',
+      value: formatCurrency(todayBalance, currency),
+      hint: 'Накопленный баланс на текущую дату — для сравнения с фактическим',
+      warn: todayBalance < 0,
+      icon: <TodayIcon />,
     },
     {
       label: 'Средний приток / мес.',
@@ -133,7 +170,7 @@ export function SummaryCards({
   ]
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
+    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
       {cards.map((card) => (
         <Card key={card.label}>
           <p className="text-sm text-slate-500">{card.label}</p>

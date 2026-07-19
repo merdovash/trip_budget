@@ -34,11 +34,11 @@ export function AuthControls() {
 
   if (user) {
     return (
-      <div className="flex items-center gap-2 text-sm">
-        <span className="hidden max-w-[12rem] truncate text-slate-600 sm:inline" title={user.email}>
+      <div className="space-y-2">
+        <p className="truncate px-1 text-xs text-slate-500" title={user.email}>
           {user.email}
-        </span>
-        <Button type="button" variant="secondary" disabled={loading} onClick={() => logout()}>
+        </p>
+        <Button type="button" variant="secondary" disabled={loading} onClick={() => logout()} className="w-full">
           Выйти
         </Button>
       </div>
@@ -46,12 +46,13 @@ export function AuthControls() {
   }
 
   return (
-    <div className="relative">
-      <Button type="button" variant="secondary" onClick={() => setOpen((v) => !v)}>
-        Войти
-      </Button>
-      {open && (
-        <div className="absolute right-0 z-50 mt-2 w-72 rounded-xl border border-slate-200 bg-white p-4 shadow-lg">
+    <div className="space-y-2">
+      {!open ? (
+        <Button type="button" variant="secondary" onClick={() => setOpen(true)} className="w-full">
+          Войти
+        </Button>
+      ) : (
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
           <div className="mb-3 flex gap-2">
             <Button
               type="button"
@@ -91,9 +92,23 @@ export function AuthControls() {
               />
             </Field>
             {error && <p className="text-xs text-red-600">{error}</p>}
-            <Button type="submit" disabled={loading || !email.trim() || password.length < 6} className="w-full">
-              {loading ? '…' : mode === 'login' ? 'Войти' : 'Зарегистрироваться'}
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                className="flex-1"
+                onClick={() => setOpen(false)}
+              >
+                Отмена
+              </Button>
+              <Button
+                type="submit"
+                disabled={loading || !email.trim() || password.length < 6}
+                className="flex-1"
+              >
+                {loading ? '…' : mode === 'login' ? 'Войти' : 'Создать'}
+              </Button>
+            </div>
           </form>
         </div>
       )}

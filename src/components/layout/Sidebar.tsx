@@ -1,6 +1,8 @@
 import { useEffect, useState, type MouseEvent, type SVGProps } from 'react'
 import { sectionToPath } from '../../lib/appRoutes'
 import type { AppSection } from '../../types/budget'
+import { AuthControls } from './AuthControls'
+import { Disclaimer } from './Disclaimer'
 
 type NavIcon = (props: SVGProps<SVGSVGElement>) => React.ReactElement
 
@@ -111,6 +113,10 @@ export function Sidebar({ active, onChange, collapsed, onCollapsedChange }: Side
                 />
               ))}
             </nav>
+            <div className="shrink-0 space-y-3 border-t border-slate-200 p-3">
+              <AuthControls />
+              <Disclaimer />
+            </div>
           </aside>
         </div>
       )}
@@ -139,7 +145,13 @@ export function Sidebar({ active, onChange, collapsed, onCollapsedChange }: Side
           ))}
         </nav>
 
-        <div className="shrink-0 border-t border-slate-200 bg-white p-2">
+        <div className="shrink-0 space-y-2 border-t border-slate-200 bg-white p-2">
+          {!collapsed && (
+            <>
+              <AuthControls />
+              <Disclaimer />
+            </>
+          )}
           <button
             type="button"
             onClick={() => onCollapsedChange(!collapsed)}

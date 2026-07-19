@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Dashboard } from './components/dashboard/Dashboard'
 import { ExpensePanel } from './components/expenses/ExpensePanel'
-import { Header } from './components/layout/Header'
 import { Sidebar } from './components/layout/Sidebar'
 import { IncomePanel } from './components/income/IncomePanel'
 import { PresetsPanel } from './components/presets/PresetsPanel'
@@ -67,7 +66,6 @@ export default function App() {
 
   return (
     <div className="flex h-screen flex-col overflow-hidden">
-      <Header />
       <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <Sidebar
           active={section}

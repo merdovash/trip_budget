@@ -470,13 +470,16 @@ function ExpenseForm({ initialItem, onSubmit, formId = 'expense-form' }: Expense
     const scope = currentScope(form)
     const name = form.name
     const folderId = form.folderId ?? ''
+    const amount = form.kind === 'loan' ? 0 : form.amount
+    const currency = form.kind === 'loan' ? settings.baseCurrency : form.currency
+    const category = form.kind === 'loan' ? '' : (form.category ?? '')
     setAnnualRateInput('0')
     if (kind === 'loan') {
       setForm({
         kind: 'loan',
         name,
-        principal: 0,
-        currency: settings.baseCurrency,
+        principal: form.kind === 'loan' ? form.principal : amount || 0,
+        currency,
         termMonths: 12,
         annualRate: 0,
         folderId,
@@ -487,9 +490,9 @@ function ExpenseForm({ initialItem, onSubmit, formId = 'expense-form' }: Expense
       setForm({
         kind: 'once',
         name,
-        amount: 0,
-        currency: settings.baseCurrency,
-        category: '',
+        amount,
+        currency,
+        category,
         folderId,
         expenseCountryScope: scope,
         startDate: todayIsoDate(),
@@ -498,6 +501,9 @@ function ExpenseForm({ initialItem, onSubmit, formId = 'expense-form' }: Expense
       setForm({
         ...blankRegularForm(settings.baseCurrency),
         name,
+        amount,
+        currency,
+        category,
         folderId,
         expenseCountryScope: scope,
       })

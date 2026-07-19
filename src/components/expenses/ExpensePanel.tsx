@@ -423,13 +423,12 @@ function ExpenseForm({ initialItem, onSubmit, formId = 'expense-form' }: Expense
   function handleCategoryChange(category: string) {
     if (form.kind !== 'regular' && form.kind !== 'once') return
     if (form.kind === 'regular' && category === FOOD_EXPENSE_CATEGORY) {
-      const amount = getTypicalFoodBudget(settings.countryCode, settings.familySize)
-      const currency = getCountryLocalCurrency(settings.countryCode)
+      const hasAmount = form.amount > 0
       setForm({
         ...form,
         category,
-        amount,
-        currency,
+        amount: hasAmount ? form.amount : getTypicalFoodBudget(settings.countryCode, settings.familySize),
+        currency: hasAmount ? form.currency : getCountryLocalCurrency(settings.countryCode),
         frequency: 'monthly',
         name: form.name.trim() ? form.name : FOOD_EXPENSE_CATEGORY,
       })

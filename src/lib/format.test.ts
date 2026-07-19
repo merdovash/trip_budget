@@ -5,6 +5,7 @@ import {
   formatDateTimeDisplay,
   formatIsoToRu,
   isValidIsoDate,
+  caretPosAfterRuDateDigits,
   maskRuDateInput,
   parseRuToIso,
 } from './format'
@@ -25,6 +26,13 @@ describe('date format', () => {
 
   it('masks digits while typing', () => {
     expect(maskRuDateInput('11072026')).toBe('11.07.2026')
+  })
+
+  it('maps digit count to caret position in masked date', () => {
+    expect(caretPosAfterRuDateDigits('11.07.2026', 2)).toBe(2)
+    expect(caretPosAfterRuDateDigits('11.07.2026', 3)).toBe(4)
+    expect(caretPosAfterRuDateDigits('11.0', 3)).toBe(4)
+    expect(caretPosAfterRuDateDigits('11.07', 4)).toBe(5)
   })
 
   it('formats stored ISO for display', () => {

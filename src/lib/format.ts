@@ -92,6 +92,19 @@ export function maskRuDateInput(raw: string): string {
   return `${digits.slice(0, 2)}.${digits.slice(2, 4)}.${digits.slice(4)}`
 }
 
+/** Cursor index in a masked RU date after `digitCount` digits (for caret restore). */
+export function caretPosAfterRuDateDigits(masked: string, digitCount: number): number {
+  if (digitCount <= 0) return 0
+  let seen = 0
+  for (let i = 0; i < masked.length; i++) {
+    if (/\d/.test(masked[i])) {
+      seen += 1
+      if (seen === digitCount) return i + 1
+    }
+  }
+  return masked.length
+}
+
 export function formatDateDisplay(value: string): string {
   if (!value) return '—'
   if (ISO_DATE_RE.test(value)) return formatIsoToRu(value)

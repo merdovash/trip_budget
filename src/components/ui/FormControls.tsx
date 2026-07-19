@@ -6,9 +6,10 @@ import type {
   ChangeEvent,
   MouseEvent,
 } from 'react'
-import { useEffect, useId, useRef, useState } from 'react'
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import {
   DATE_RU_PLACEHOLDER,
+  caretPosAfterRuDateDigits,
   formatIsoToRu,
   isValidIsoDate,
   maskRuDateInput,
@@ -56,19 +57,36 @@ export function DateInput({ value, onChange, className = '', id, disabled, ...re
   const inputId = id ?? autoId
   const [text, setText] = useState(() => formatIsoToRu(value))
   const pickerRef = useRef<HTMLInputElement>(null)
+  const textInputRef = useRef<HTMLInputElement>(null)
+  const caretRef = useRef<number | null>(null)
+  const focusedRef = useRef(false)
 
   useEffect(() => {
+    if (focusedRef.current) return
     setText(value ? formatIsoToRu(value) : '')
   }, [value])
 
+  useLayoutEffect(() => {
+    const el = textInputRef.current
+    const caret = caretRef.current
+    if (!el || caret === null) return
+    el.setSelectionRange(caret, caret)
+    caretRef.current = null
+  }, [text])
+
   function handleChange(e: ChangeEvent<HTMLInputElement>) {
-    const masked = maskRuDateInput(e.target.value)
+    const raw = e.target.value
+    const selectionStart = e.target.selectionStart ?? raw.length
+    const digitsBeforeCaret = raw.slice(0, selectionStart).replace(/\D/g, '').length
+    const masked = maskRuDateInput(raw)
+    caretRef.current = caretPosAfterRuDateDigits(masked, digitsBeforeCaret)
     setText(masked)
     const iso = parseRuToIso(masked)
     if (iso !== null) onChange(iso)
   }
 
   function handleBlur() {
+    focusedRef.current = false
     if (!text.trim()) {
       onChange('')
       return
@@ -115,6 +133,7 @@ export function DateInput({ value, onChange, className = '', id, disabled, ...re
     <div className={`relative flex min-w-0 items-stretch ${widthClass}`}>
       <input
         {...rest}
+        ref={textInputRef}
         id={inputId}
         type="text"
         inputMode="numeric"
@@ -123,6 +142,9 @@ export function DateInput({ value, onChange, className = '', id, disabled, ...re
         maxLength={10}
         value={text}
         disabled={disabled}
+        onFocus={() => {
+          focusedRef.current = true
+        }}
         onChange={handleChange}
         onBlur={handleBlur}
         className="min-w-0 flex-1 rounded-l-lg border border-r-0 border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-50"

@@ -16,6 +16,35 @@ export function formatPercent(rate: number): string {
   return `${(rate * 100).toFixed(1)}%`
 }
 
+/**
+ * Компактная подпись оси: 8_000_000 → «8М», 12_500 → «12,5тыс», 800 → «800».
+ */
+export function formatCompactAxisValue(value: number): string {
+  if (!Number.isFinite(value)) return '—'
+  const sign = value < 0 ? '−' : ''
+  const abs = Math.abs(value)
+
+  if (abs >= 1_000_000) {
+    const millions = abs / 1_000_000
+    return `${sign}${formatCompactCoefficient(millions)}М`
+  }
+  if (abs >= 1_000) {
+    const thousands = abs / 1_000
+    return `${sign}${formatCompactCoefficient(thousands)}тыс`
+  }
+  return `${sign}${Math.round(abs).toLocaleString('ru-RU')}`
+}
+
+function formatCompactCoefficient(value: number): string {
+  if (Number.isInteger(value) || Math.abs(value - Math.round(value)) < 1e-9) {
+    return String(Math.round(value))
+  }
+  return value
+    .toFixed(1)
+    .replace(/\.0$/, '')
+    .replace('.', ',')
+}
+
 export const DATE_RU_PLACEHOLDER = 'ДД.ММ.ГГГГ'
 
 const ISO_DATE_RE = /^(\d{4})-(\d{2})-(\d{2})$/

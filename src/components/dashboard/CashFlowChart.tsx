@@ -11,7 +11,13 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { formatCurrency, formatDateDisplay, formatMonth, formatShortDate } from '../../lib/format'
+import {
+  formatCompactAxisValue,
+  formatCurrency,
+  formatDateDisplay,
+  formatMonth,
+  formatShortDate,
+} from '../../lib/format'
 import type { DailySnapshot, MonthlySnapshot } from '../../types/budget'
 import { Card } from '../ui/FormControls'
 
@@ -74,7 +80,7 @@ export function CashFlowChart({
   const tickInterval = Math.max(1, Math.floor(chartRows.length / 12))
 
   return (
-    <Card>
+    <Card className="overflow-hidden p-4 max-md:-mx-4 max-md:rounded-none max-md:border-x-0 sm:p-5 md:mx-0">
       <h2 className="mb-1 text-lg font-semibold">
         {useMonthly ? 'Cash flow по месяцам' : 'Cash flow по дням'}
       </h2>
@@ -83,10 +89,12 @@ export function CashFlowChart({
           ? 'Горизонт большой — график агрегирован по месяцам для скорости. Клик открывает первый день месяца.'
           : 'Накопленный баланс по дням — помогает увидеть кассовый разрыв между поступлениями и расходами. «Еда» начисляется ежедневно (сумма ÷ 30). Клик по точке открывает статьи дня.'}
       </p>
-      <div className="h-96">
+      {/* На мобильном выходим за отступы карточки — область графика шире. */}
+      <div className="-mx-4 h-80 sm:mx-0 sm:h-96">
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart
             data={chartRows}
+            margin={{ top: 8, right: 4, left: 0, bottom: 4 }}
             onClick={(state) => {
               if (!onDayClick) return
               const date = state?.activePayload?.[0]?.payload?.date as string | undefined
@@ -97,13 +105,19 @@ export function CashFlowChart({
             <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
             <XAxis
               dataKey="label"
-              tick={{ fontSize: 11 }}
+              tick={{ fontSize: 10 }}
               interval={tickInterval}
               angle={-45}
               textAnchor="end"
-              height={56}
+              height={48}
+              minTickGap={8}
             />
-            <YAxis tick={{ fontSize: 12 }} />
+            <YAxis
+              width={44}
+              tick={{ fontSize: 11 }}
+              tickFormatter={formatCompactAxisValue}
+              tickMargin={4}
+            />
             <Tooltip
               formatter={(value: number) => formatCurrency(value, currency)}
               labelFormatter={(_, payload) => {
@@ -112,7 +126,7 @@ export function CashFlowChart({
               }}
               labelStyle={{ color: '#334155' }}
             />
-            <Legend />
+            <Legend wrapperStyle={{ fontSize: 12 }} />
             <ReferenceLine y={0} stroke="#94a3b8" strokeDasharray="4 4" />
             {showBars && (
               <Bar

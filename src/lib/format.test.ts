@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  formatCompactAxisValue,
   formatDateDisplay,
   formatDateTimeDisplay,
   formatIsoToRu,
@@ -36,5 +37,23 @@ describe('date format', () => {
     expect(formatted).toMatch(/15\.01\.2026/)
     expect(formatted).toMatch(/\d{2}:\d{2}/)
     expect(formatDateTimeDisplay('')).toBe('—')
+  })
+})
+
+describe('formatCompactAxisValue', () => {
+  it('formats millions as М', () => {
+    expect(formatCompactAxisValue(8_000_000)).toBe('8М')
+    expect(formatCompactAxisValue(1_500_000)).toBe('1,5М')
+    expect(formatCompactAxisValue(-2_000_000)).toBe('−2М')
+  })
+
+  it('formats thousands as тыс', () => {
+    expect(formatCompactAxisValue(12_500)).toBe('12,5тыс')
+    expect(formatCompactAxisValue(8_000)).toBe('8тыс')
+  })
+
+  it('keeps small values as numbers', () => {
+    expect(formatCompactAxisValue(800)).toBe('800')
+    expect(formatCompactAxisValue(0)).toBe('0')
   })
 })
